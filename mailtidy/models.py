@@ -75,9 +75,14 @@ class Message:
 
 @dataclass
 class Decision:
-    """Where a message should go and why."""
+    """Where a message should go and why.
 
-    category: str                 # key in AppConfig.categories, or INBOX
+    The target folder is `folder or config.folder_for(category)`. A user "folder:<name>" rule gives
+    category INBOX with `folder=name`; a learned rule for one of the user's own folders gives
+    category "folder" with `folder` set. `folder` is used as-is (no folder_prefix).
+    """
+
+    category: str                 # key in AppConfig.categories, INBOX, or "folder" (see above)
     confidence: float             # 0..1
     source: str                   # one of SOURCES
     reason: str                   # plain English, shown in reports ("List-Unsubscribe header")
@@ -174,6 +179,7 @@ class AppConfig:
     ai: AIConfig = field(default_factory=AIConfig)
     interval_minutes: int = 15
     max_moves_per_run: int = 500          # safety cap per account per run
+    learn_sample: int = 300               # messages read per folder when learning the user's scheme
     data_dir: str = ""                    # "" = platform default
 
     def folder_for(self, category: str) -> str | None:
@@ -223,6 +229,7 @@ class RunReport:
     learned: int = 0                      # corrections picked up this run
     moves: list[MoveRecord] = field(default_factory=list)    # planned moves when dry_run
     errors: list[str] = field(default_factory=list)          # per-account problems, plain English
+    skipped: bool = False                 # another run held the lock; nothing was done (not an error)
 
 
 @dataclass

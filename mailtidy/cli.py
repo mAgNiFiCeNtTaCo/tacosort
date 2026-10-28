@@ -293,11 +293,14 @@ def do_run(ctx: Ctx, accounts: list[AccountConfig], *, dry_run: bool, backlog: b
         accounts = allowed
     store = open_store(cfg)
     try:
+        if not dry_run and not backlog:
+            # Plain `run` (and the schedule) sorts only mail that arrives from now on; --backlog sorts the rest.
+            _engine().start_from_now(_only(cfg, accounts), store, _backends(accounts), log=ctx.log)
         rep = _engine().run_once(_only(cfg, accounts), store, _backends(accounts),
                                  dry_run=dry_run, backlog=backlog, log=ctx.log)
     finally:
         _close(store)
-    if not rep.run_id:   # another run (the schedule or `watch`) holds the lock: nothing to do
+    if rep.skipped or not rep.run_id:   # another run (the schedule or `watch`) holds the lock: nothing to do
         ctx.log("Another MailTidy run is busy right now, so this one was skipped. That's fine.")
         return EXIT_OK
     if not dry_run and yes:
@@ -612,10 +615,8 @@ def cmd_undo(args: argparse.Namespace, ctx: Ctx) -> int:
                            log=ctx.log)
     finally:
         _close(store)
-    if n:
-        say(f"Put {n} message{'s' if n != 1 else ''} back where they were. MailTidy won't move them again.")
-    else:
-        say("Nothing to undo.")
+    if n:   # the engine already said how many were put back (or that there was nothing to undo)
+        say("MailTidy won't move them again.")
     return EXIT_OK
 
 
@@ -627,6 +628,7 @@ def cmd_watch(args: argparse.Namespace, ctx: Ctx) -> int:
     store = open_store(cfg)
     say("Watching for new mail and sorting it as it arrives. Press Ctrl+C to stop.")
     try:
+        _engine().start_from_now(_only(cfg, accounts), store, _backends(accounts), log=ctx.log)
         _engine().watch(_only(cfg, accounts), store, lambda: _backends(accounts), log=ctx.log)
     except KeyboardInterrupt:
         say("Stopped watching.")
@@ -783,7 +785,8 @@ def cmd_rules(args: argparse.Namespace, ctx: Ctx) -> int:
     if decision.keeps or not target:
         say("Result: it stays in the Inbox.")
     else:
-        say(f"Result: it goes to {target} (category: {decision.category}).")
+        kind = "" if decision.folder else f" (category: {decision.category})"
+        say(f"Result: it goes to {target}{kind}.")
     say(f"Why: {decision.reason}")
     say(f"Decided by: {decision.source.replace('-', ' ')} (confidence {decision.confidence:.2f}; "
         f"MailTidy only moves mail at {cfg.min_confidence:.2f} or more)")
@@ -982,7 +985,19 @@ def build_parser() -> argparse.ArgumentParser:
     co.add_parser("edit", help="open the settings file in an editor, then check it")
     co.add_parser("check", help="look for mistakes in the settings file")
     s.set_defaults(func=cmd_config)
+    _accept_config_everywhere(p)
     return p
+
+
+def _accept_config_everywhere(parser: argparse.ArgumentParser) -> None:
+    """Let `--config PATH` also come after the command (`mailtidy run --config PATH`): the background
+    schedule runs it that way, and people type it that way too."""
+    for action in parser._actions:
+        if isinstance(action, argparse._SubParsersAction):
+            for child in action.choices.values():
+                child.add_argument("--config", metavar="PATH", default=argparse.SUPPRESS,
+                                   help="use this settings file instead of the usual one")
+                _accept_config_everywhere(child)
 
 
 def _safe_console() -> None:

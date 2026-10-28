@@ -378,6 +378,9 @@ def collect_signals(msg: Message, own_addresses: Iterable[str] = ()) -> list[Sig
         hit = domain_in(domain, domains)
         if hit:
             sigs.append(Signal(cat, weight, f"sender is {hit}"))
+            if cat == "receipts":
+                # Shops send sales as well as receipts: a shop's domain must not argue against "promotions".
+                sigs.append(Signal("promotions", 0.1, f"sender is {hit}"))
 
     # Sender local part.
     for cat, weight, words in LOCAL_PARTS:

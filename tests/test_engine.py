@@ -407,3 +407,26 @@ def test_ai_without_key_is_skipped_with_a_plain_message(store, fb, monkeypatch):
     lines.clear()
     engine.run_once(config, store, {"a": fb}, dry_run=True, log=lines.append)
     assert made["ai"] is None and not any("AI" in line for line in lines)
+
+
+def test_start_from_now_sorts_only_mail_that_arrives_later(store, fb):
+    lines = []
+    assert engine.start_from_now(cfg(), store, {"a": fb}, log=lines.append) == ["a"]
+    assert any("--backlog" in line for line in lines)
+    assert run(cfg(), store, {"a": fb}).moved == 0                 # the old mail stays put
+    fb.add("INBOX", make_message("order@shop.example.com", "Your order #3"))
+    assert run(cfg(), store, {"a": fb}).moved == 1
+    assert "Your order #3" in fb.subjects("Receipts") and "Your order #1" in fb.subjects("INBOX")
+    # Already started: a second call changes nothing, and --backlog still sorts the rest.
+    assert engine.start_from_now(cfg(), store, {"a": fb}, log=lines.append) == []
+    assert run(cfg(), store, {"a": fb}, backlog=True).moved == 3
+
+
+def test_busy_run_is_marked_skipped(store, fb, tmp_path):
+    lock = engine.RunLock(tmp_path)
+    assert lock.acquire()
+    try:
+        report = run(cfg(), store, {"a": fb})
+    finally:
+        lock.release()
+    assert report.skipped and report.run_id == "" and fb.subjects("Receipts") == []

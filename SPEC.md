@@ -68,12 +68,15 @@ A decision below `min_confidence` (default 0.75) is treated as inbox.
   - `learn_from_folders(config, store, backends, *, log=print) -> LearnReport` (bootstrap from existing folders + Sent contacts)
   - `undo(config, store, backends, *, run_id: str|None=None, last: int|None=None, log=print) -> int`
   - `watch(config, store, backends_factory, *, log=print)` (IDLE loop, reconnects, calls run_once)
+  - `start_from_now(config, store, backends, *, log=print)` marks never-sorted folders as handled up to
+    now, so a plain `run` / `watch` / the schedule sorts only NEW mail (the backlog needs `--backlog`)
+  - A run that finds another run holding the lock returns `RunReport(skipped=True)` (not an error).
   - `Store(path)` (store.py) owns SQLite; `store.learned` implements `LearnedRules`.
 - Scheduler (schedule.py): `install(interval_minutes: int, config_path: Path) -> str`, `uninstall() -> str`,
   `status() -> str`. Windows schtasks (per-user, at logon + every N minutes, `pythonw -m mailtidy run`),
   macOS launchd agent, Linux systemd --user timer (cron fallback).
 - Credentials (imap/auth.py): `get_secret(account_id) / set_secret(account_id, value) / delete_secret(account_id)`
-  via keyring, service name `mailtidy`. OAuth2 (XOAUTH2) for Gmail and Microsoft is optional; app
+  via keyring, service name `mailtidy` (failures raise `auth.CredentialError`, a `BackendError`). OAuth2 (XOAUTH2) for Gmail and Microsoft is optional; app
   passwords are the main path. Outlook.com/Hotmail need OAuth2 (Microsoft removed basic auth):
   device-code flow with a user-supplied client id, documented in docs/.
 - Config (config.py): YAML at the platform config dir (`platformdirs` not used; Windows

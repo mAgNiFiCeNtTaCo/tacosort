@@ -237,13 +237,16 @@ def run_once(config: AppConfig, store: Store, backends: dict[str, MailBackend], 
     server and no progress is saved: `report.moves` lists what would happen. With `backlog`, the
     whole watched folder is sorted (newest first), not just new mail.
 
-    If another run is working, returns at once with `run_id == ""` and does nothing."""
+    A folder with no watermark yet is sorted completely; call `start_from_now` first to sort only mail
+    that arrives later. If another run is working, returns at once with `run_id == ""` and
+    `skipped=True`, and does nothing."""
     data_dir = data_dir_for(config, store)
     setup_logging(data_dir)
     report = RunReport(run_id="", dry_run=dry_run, started=utcnow())
     lock = RunLock(data_dir)
     if not lock.acquire():
         _say(log, "Another MailTidy run is working right now, so this one did nothing.")
+        report.skipped = True
         report.finished = utcnow()
         return report
     try:
@@ -423,6 +426,40 @@ def _run_folder(config: AppConfig, store: Store, backend: MailBackend, account: 
     new_last = max([old, *handled]) if handled else old
     if reset or mark is None or new_last != old:
         store.set_watermark(account.id, folder, state.uidvalidity, new_last)
+
+
+# ---- start from now -------------------------------------------------------------------------------
+def start_from_now(config: AppConfig, store: Store, backends: dict[str, MailBackend], *,
+                   log: Log = print) -> list[str]:
+    """For watched folders MailTidy has never sorted, remember the newest message as "already handled",
+    so the next run only sorts mail that arrives after this (`backlog=True` still sorts everything).
+    Folders that already have a watermark are left alone. Returns the ids of accounts that were set."""
+    started: list[str] = []
+    for account in config.accounts:
+        backend = backends.get(account.id)
+        if not account.enabled or backend is None:
+            continue
+        missing = [f for f in account.watch_folders if store.get_watermark(account.id, f) is None]
+        if not missing:
+            continue
+        try:
+            backend.connect()
+            names = {_norm(f.name): f for f in backend.list_folders()}
+            for folder in missing:
+                info = names.get(_norm(folder))
+                if info is None or info.flags & NEVER_TOUCH:
+                    continue
+                state = backend.folder_state(info.name)
+                store.set_watermark(account.id, folder, state.uidvalidity, max(state.uidnext - 1, 0))
+            started.append(account.id)
+        except Exception as e:  # noqa: BLE001 - run_once reports the account's problem properly
+            logger.warning("start_from_now %s: %s", account.id, e)
+        finally:
+            _close(backend)
+    if started:
+        _say(log, f"{', '.join(started)}: from now on MailTidy sorts new mail as it arrives. The mail already "
+                  "in your Inbox stays put; `mailtidy run --backlog` sorts that too.")
+    return started
 
 
 # ---- learn ----------------------------------------------------------------------------------------
@@ -606,6 +643,7 @@ __all__ = [
     "learn_from_folders",
     "run_once",
     "setup_logging",
+    "start_from_now",
     "undo",
     "watch",
 ]

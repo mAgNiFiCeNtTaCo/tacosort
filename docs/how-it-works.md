@@ -9,6 +9,8 @@ Every run (from the schedule, `mailtidy run` or `mailtidy watch`) does this for 
    moved it back to the Inbox or to another folder, it learns from that (see *Learning* below).
 3. **Look at new mail** in the watched folders (normally just the Inbox). It remembers the last message
    it saw in each folder, so each run only reads what's new. `--backlog` also looks at older mail.
+   The very first run starts counting from that moment: mail already in your Inbox is sorted only
+   with `mailtidy run --backlog`, or when you answer yes to "Sort now?" in `mailtidy setup`.
 4. **Decide** where each message belongs (see *How a decision is made*).
 5. **Move** the messages that belong in a folder, creating the folder the first time it's needed.
    It moves at most `max_moves_per_run` (500) per account per run, as a safety cap.

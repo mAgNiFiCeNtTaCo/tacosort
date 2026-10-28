@@ -232,7 +232,8 @@ Undone messages go back to where they were, and MailTidy won't move them again.
 **Gmail has labels, not folders. Does this work?**
 Yes. In Gmail a folder is shown as a label. When MailTidy moves a message out of the Inbox it gets
 the "Receipts" (etc.) label and loses the "Inbox" label, exactly as if you'd dragged it there in Gmail.
-Gmail's own tabs (Promotions, Social...) are separate and unaffected; MailTidy uses them as a hint.
+Gmail's own tabs (Promotions, Social...) are separate and unaffected; when Gmail shows them to mail
+programs, MailTidy uses them as a hint.
 
 **Will my phone's mail app see the folders?**
 Yes. The folders live on your mail server, so every app and device sees the same thing. Nothing

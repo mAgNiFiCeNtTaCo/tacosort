@@ -57,6 +57,11 @@ class FakeEngine:
         self.calls: list[tuple] = []
         self.run_id = "r1"
         self.errors: list[str] = []
+        self.started: list[list[str]] = []    # start_from_now calls (kept apart so `calls` stays simple)
+
+    def start_from_now(self, config, store, backends, *, log=print):
+        self.started.append([a.id for a in config.accounts])
+        return []
 
     def run_once(self, config, store, backends, *, dry_run, backlog=False, log=print):
         self.calls.append(("run_once", [a.id for a in config.accounts], sorted(backends), dry_run, backlog))
@@ -70,6 +75,7 @@ class FakeEngine:
 
     def undo(self, config, store, backends, *, run_id=None, last=None, log=print):
         self.calls.append(("undo", run_id, last))
+        log("Put 3 message(s) back.")
         return 3
 
     def watch(self, config, store, backends_factory, *, log=print):
@@ -461,7 +467,8 @@ def test_undo(env, capsys) -> None:
     with_accounts(env, "gmail")
     assert cli.main(["undo", "--last", "3"]) == 0
     assert env.engine.calls == [("undo", None, 3)]
-    assert "Put 3 messages back" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert out.count("Put 3 message") == 1 and "won't move them again" in out
 
 
 def test_rules_list(env, capsys) -> None:

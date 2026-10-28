@@ -53,6 +53,12 @@ def last_run(store: Any) -> Any:
     return _call(store, ("last_run", "latest_run"))
 
 
+def runs_with_moves(store: Any, limit: int = 30) -> list[Any]:
+    """Recent real runs that moved something (newest first): their ids are what `undo --run` takes."""
+    rows = _call(store, ("runs",), 200, dry_run=False) or []
+    return [r for r in rows if _field(r, "moved", 0) and not _field(r, "dry_run", False)][:limit]
+
+
 def learned_rules(store: Any) -> list[Any]:
     rows = _call(store, ("learned_rules", "list_learned"))
     if rows is None:
@@ -225,6 +231,13 @@ def build_report(store: Any, config: AppConfig) -> str:
             _e(_field(m, "reason")),
         ])
 
+    run_rows = [[
+        _e(_date(_field(r, "started"))),
+        f"<code>{_e(_field(r, 'run_id'))}</code>",
+        _e(_field(r, "moved", 0)),
+        _e(_field(r, "scanned", 0)),
+    ] for r in runs_with_moves(store)]
+
     fix_rows = [[
         _e(_date(_field(c, "at"))),
         _e(_field(c, "account")),
@@ -253,6 +266,11 @@ def build_report(store: Any, config: AppConfig) -> str:
         _table(["When", "Account", "From", "Subject", "Moved to", "Why"], move_rows,
                empty="No moves yet. Run `mailtidy preview` to see what would happen.",
                classes=["", "", "", "subj", "", ""]),
+        "<h2>Runs</h2>",
+        ('<p class="sub">Runs that moved mail. To put one run\'s mail back: '
+         "<code>mailtidy undo --run RUN-ID</code>, with the id from this table.</p>"),
+        _table(["When", "Run id", "Moved", "Checked"], run_rows, empty="No runs have moved mail yet.",
+               classes=["", "", "num", "num"]),
         "<h2>Your corrections</h2>",
         ('<p class="sub">Mail you moved somewhere else after MailTidy sorted it. MailTidy learns from these '
          "and never moves those messages again.</p>"),
