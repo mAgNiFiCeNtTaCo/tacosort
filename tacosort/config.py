@@ -324,6 +324,10 @@ def config_from_dict(data: Any, warnings: list[str] | None = None) -> AppConfig:
         cfg.interval_minutes = _to_int(data["interval_minutes"], "interval_minutes")
     if "max_moves_per_run" in data:
         cfg.max_moves_per_run = _to_int(data["max_moves_per_run"], "max_moves_per_run")
+    if "company_folders" in data:
+        cfg.company_folders = _to_bool(data["company_folders"], "company_folders")
+    if "company_folder_min" in data:
+        cfg.company_folder_min = _to_int(data["company_folder_min"], "company_folder_min")
     if "data_dir" in data:
         cfg.data_dir = str(data["data_dir"] or "")
     return cfg
@@ -408,6 +412,8 @@ def config_to_dict(cfg: AppConfig) -> dict:
         "learn_from_corrections": cfg.learn_from_corrections,
         "interval_minutes": cfg.interval_minutes,
         "max_moves_per_run": cfg.max_moves_per_run,
+        "company_folders": cfg.company_folders,
+        "company_folder_min": cfg.company_folder_min,
         "ai": {
             "enabled": cfg.ai.enabled,
             "model": cfg.ai.model,
@@ -523,6 +529,9 @@ def config_problems(cfg: AppConfig) -> list[str]:
         problems.append("interval_minutes must be between 1 and 1439 (just under a day); 15 is a good value.")
     if cfg.max_moves_per_run < 1:
         problems.append("max_moves_per_run must be at least 1.")
+    if cfg.company_folder_min < 1:
+        problems.append("company_folder_min must be at least 1 (3 is a good value); use company_folders: no "
+                        "to turn company folders off.")
     if cfg.ai.max_per_run < 0:
         problems.append("ai: max_per_run can't be negative.")
     ids = {a.id for a in cfg.accounts}

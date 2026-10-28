@@ -189,12 +189,20 @@ KEYWORDS: tuple[tuple[str, float, tuple[str, ...]], ...] = (
     )),
     ("notifications", 0.55, (
         "[jira]", "jira", "[github]", "[gitlab]", "ci build", "workflow run", "release",
-        "notification", "reminder", "your account", "account update", "has been updated",
+        "notification", "reminder", "has been updated",
         "was updated", "has been changed", "was changed", "pull request", "merge request",
-        "build failed", "build succeeded", "deployment", "pipeline", "invited you", "shared with you",
-        "welcome to", "confirm your", "verify your email", "terms of service", "privacy policy",
-        "subscription", "your plan", "trial", "renewal", "accepted:", "declined:", "tentative:",
+        "build failed", "build succeeded", "run failed", "deployment", "pipeline", "invited you",
+        "shared with you", "confirm your", "verify your email",
+        "subscription", "trial", "renewal", "accepted:", "declined:", "tentative:",
         "canceled event", "cancelled event", "storage", "backup", "status update",
+    )),
+    ("accounts", 0.75, (
+        "terms of service", "terms of use", "terms and conditions", "privacy policy", "privacy notice",
+        "user agreement", "updating our terms", "updates to our terms", "updated our terms",
+        "changes to our terms", "policy update", "policy changes", "account update", "account settings",
+        "account information", "account changes", "updated you to", "welcome to", "your plan",
+        "plan change", "your membership", "membership update", "data processing", "cookie policy",
+        "nutzungsbedingungen", "datenschutz", "conditions d'utilisation", "términos de servicio",
     )),
 )
 
@@ -441,6 +449,7 @@ def collect_signals(msg: Message, own_addresses: Iterable[str] = ()) -> list[Sig
     if "noreply" in sender.local.lower() or "no-reply" in sender.local.lower() \
             or "donotreply" in sender.local.lower() or "do-not-reply" in sender.local.lower():
         sigs.append(Signal("notifications", 0.3, "sent from a no-reply address"))
+        sigs.append(Signal("accounts", 0.3, "sent from a no-reply address"))   # account notices are too
 
     # Subject and snippet keywords (one signal per keyword group, the first phrase found).
     subject = msg.subject.lower()
@@ -470,6 +479,7 @@ def collect_signals(msg: Message, own_addresses: Iterable[str] = ()) -> list[Sig
     auto = h.get("auto-submitted", "").strip().lower()
     if auto and auto != "no":
         sigs.append(Signal("notifications", 0.45, "marked as automatically sent"))
+        sigs.append(Signal("accounts", 0.45, "marked as automatically sent"))
     if any(k in h for k in NOTIFICATION_HEADERS):
         sigs.append(Signal("notifications", 0.9, "sent by a developer tool"))
     if any(k in h for k in SOCIAL_HEADERS) or "discourse" in h.get("x-mailer", "").lower():
@@ -482,6 +492,8 @@ def collect_signals(msg: Message, own_addresses: Iterable[str] = ()) -> list[Sig
     gcat = _gmail_category(msg)
     if gcat:
         sigs.append(Signal(gcat, 0.7, f"Gmail files it under {gcat.title()}"))
+        if gcat == "notifications":
+            sigs.append(Signal("accounts", 0.7, f"Gmail files it under {gcat.title()}"))
 
     # Looks like a person wrote it. A reply counts even from a role address such as support@
     # (a company's support agent answering you), as long as it has no bulk headers.

@@ -81,6 +81,12 @@ keep_contacts: yes                # people you have written to always stay in th
 learn_from_corrections: yes       # when you move something back, TacoSort remembers
 max_moves_per_run: 500            # safety cap per account per run
 
+# ---- A folder per company -----------------------------------------------------------------------------
+# Once a company has sent this many emails of one kind, they get their own folder inside that kind's
+# folder (Promotions/Crunchyroll). Mail TacoSort filed earlier is moved in; your own rules are not.
+company_folders: yes
+company_folder_min: 3
+
 # ---- Background schedule ----------------------------------------------------------------------------
 interval_minutes: 15              # used by `tacosort schedule on`
 

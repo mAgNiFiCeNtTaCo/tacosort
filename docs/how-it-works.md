@@ -13,7 +13,9 @@ Every run (from the schedule, `tacosort run` or `tacosort watch`) does this for 
    with `tacosort run --backlog`, or when you answer yes to "Sort now?" in `tacosort setup`.
 4. **Decide** where each message belongs (see *How a decision is made*).
 5. **Move** the messages that belong in a folder, creating the folder the first time it's needed.
-   It moves at most `max_moves_per_run` (500) per account per run, as a safety cap.
+   A company with 3 or more emails of one kind goes into its own folder inside it
+   (`Promotions/Crunchyroll`); when a company first gets one, the mail TacoSort filed for it earlier
+   is moved in too. It moves at most `max_moves_per_run` (500) per account per run, as a safety cap.
 6. **Write down** every move in its memory, so `undo`, `status` and `report` can show and reverse it.
 
 If one account has a problem (wrong password, server down), the others still run, and the problem

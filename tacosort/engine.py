@@ -20,12 +20,14 @@ import os
 import secrets
 import threading
 import time
+from collections import Counter
 from collections.abc import Callable
 from datetime import datetime, timedelta
 from pathlib import Path
 
 from . import learner
 from .backend import BackendError, MailBackend
+from .companies import CompanyFolders, company_key, pick_name
 from .models import (
     INBOX,
     AccountConfig,
@@ -350,6 +352,7 @@ def _run_account(config: AppConfig, store: Store, backend: MailBackend, account:
         report.learned += found
     dest_cache: dict[str, str] = {}
     moves_left = [config.max_moves_per_run]
+    companies = _company_planner(config, store, account.id)
     for folder in account.watch_folders:
         info = _find_folder(folders, folder)
         if info is None:
@@ -360,9 +363,14 @@ def _run_account(config: AppConfig, store: Store, backend: MailBackend, account:
                                  "TacoSort never sorts it, so it was skipped.")
             continue
         _run_folder(config, store, backend, account, info.name, folders, clf, report, dest_cache, moves_left,
-                    dry_run=dry_run, backlog=backlog, log=log, config_name=folder)
+                    dry_run=dry_run, backlog=backlog, log=log, config_name=folder, companies=companies)
         if moves_left[0] <= 0:
             break
+    if moves_left[0] > 0:
+        _tidy_companies(config, store, backend, account, folders, companies, report, dest_cache, moves_left,
+                        dry_run=dry_run, log=log)
+    elif not dry_run:
+        _save_companies(store, account.id, companies)
 
 
 def _destination(config: AppConfig, decision: Decision) -> str | None:
@@ -374,7 +382,7 @@ def _destination(config: AppConfig, decision: Decision) -> str | None:
 def _run_folder(config: AppConfig, store: Store, backend: MailBackend, account: AccountConfig, folder: str,
                 folders: dict[str, FolderInfo], clf, report: RunReport, dest_cache: dict[str, str],
                 moves_left: list[int], *, dry_run: bool, backlog: bool, log: Log,
-                config_name: str = "") -> None:
+                config_name: str = "", companies: CompanyFolders | None = None) -> None:
     state = backend.folder_state(folder)
     mark = store.get_watermark(account.id, folder)
     legacy = False
@@ -444,12 +452,18 @@ def _run_folder(config: AppConfig, store: Store, backend: MailBackend, account: 
         if not todo:
             continue
         decisions = _classify(clf, todo)
+        if companies is not None:
+            companies.note((m, d) for m, d in zip(todo, decisions)
+                           if not (config.keep_flagged and m.is_flagged))
         groups: dict[str, list[tuple[Message, Decision]]] = {}
         for m, d in zip(todo, decisions):
             if moves_left[0] <= 0:
                 break
             report.scanned += 1
             dest = None if d is None else _destination(config, d)
+            sub = companies.folder_for(m, d) if companies is not None and dest else None
+            if sub:
+                dest = sub
             target = by_name.get(_norm(dest)) if dest else None
             if target is not None:
                 dest = target.name                 # the server's own spelling ("receipts" stays "receipts")
@@ -515,6 +529,110 @@ def _run_folder(config: AppConfig, store: Store, backend: MailBackend, account: 
     new_last = max([old, *handled]) if handled else old
     if reset or mark is None or legacy or new_last != old:
         store.set_watermark(account.id, folder, state.uidvalidity, new_last)
+
+
+# ---- company folders ------------------------------------------------------------------------------
+TIDY_NAME_SAMPLE = 20       # messages read to name a company folder made for mail already filed
+TIDY_SOURCES = ("heuristic", "ai")   # only mail TacoSort filed by its own judgement is tidied
+
+
+def _company_planner(config: AppConfig, store: Store, account_id: str) -> CompanyFolders:
+    assigned = {k: folder for k, (folder, _tidied) in store.company_folders(account_id).items()}
+    counts = Counter((mv.category, company_key(mv.sender)) for mv in store.filed_senders(account_id))
+    return CompanyFolders(config, assigned, counts)
+
+
+def _save_companies(store: Store, account_id: str, companies: CompanyFolders) -> None:
+    for category, company, folder in companies.new:
+        store.add_company_folder(account_id, category, company, folder)
+    companies.new.clear()
+
+
+def _tidy_companies(config: AppConfig, store: Store, backend: MailBackend, account: AccountConfig,
+                    folders: dict[str, FolderInfo], companies: CompanyFolders, report: RunReport,
+                    dest_cache: dict[str, str], moves_left: list[int], *, dry_run: bool, log: Log) -> None:
+    """Move mail TacoSort filed in a category folder into its company's folder once the company has one
+    (or has just reached `company_folder_min`). Only TacoSort's own moves that are still in place are
+    touched; the original move record is updated, so undo still puts the message back where it was."""
+    if not companies.enabled:
+        if not dry_run:
+            _save_companies(store, account.id, companies)
+        return
+    stored = store.company_folders(account.id)
+    pending: dict[tuple[str, str], list] = {}
+    for mv in store.filed_senders(account.id):
+        base = config.folder_for(mv.category)
+        info = folders.get(mv.to_folder)
+        if not base or info is None or _folder_key(info) != _norm(base):
+            continue                      # already in a company folder (or a folder of the user's)
+        if mv.source not in TIDY_SOURCES:
+            continue                      # a rule or correction put it exactly there
+        k = (mv.category, company_key(mv.sender))
+        if not k[1] or stored.get(k, ("", False))[1]:
+            continue                      # tidied before: whatever is left there, the user wanted there
+        if k in companies.assigned or companies.counts[k] >= config.company_folder_min:
+            pending.setdefault(k, []).append(mv)
+    by_name = {_folder_key(f): f for f in folders.values()}
+    for k, moves in pending.items():
+        if moves_left[0] <= 0:
+            break
+        found = []                         # (uid, move) still in the category folder
+        for mv in moves:
+            uids = backend.find_message_id(mv.to_folder, mv.message_id)
+            if uids:
+                found.append((uids[0], mv))
+        if k not in companies.assigned:
+            src = moves[0].to_folder
+            sample = backend.fetch(src, [u for u, _ in found[:TIDY_NAME_SAMPLE]]) if found else []
+            sub = f"{config.folder_for(k[0])}/{pick_name([m.from_.name for m in sample], k[1])}"
+            companies.assigned[k] = sub
+            companies.new.append((k[0], k[1], sub))
+        sub = companies.assigned[k]
+        found = found[: moves_left[0]]
+        if not found:
+            if not dry_run:
+                _save_companies(store, account.id, companies)
+                store.mark_company_tidied(account.id, *k)
+            continue
+        moves_left[0] -= len(found)
+        target = by_name.get(_norm(sub))
+        server_sub = target.name if target is not None else dest_cache.get(sub)
+        tidied = 0
+        by_src: dict[str, list] = {}
+        for uid, mv in found:
+            by_src.setdefault(mv.to_folder, []).append((uid, mv))
+        for src, items in by_src.items():
+            records = [MoveRecord(run_id=report.run_id, account=account.id, message_id=mv.message_id,
+                                  sender=mv.sender, subject=mv.subject, from_folder=src, to_folder=server_sub or sub,
+                                  category=mv.category, source="company",
+                                  reason=f"Tidied into its company folder {sub}", at=utcnow())
+                       for _, mv in items]
+            if dry_run:
+                report.moves.extend(records)
+                report.moved += len(records)
+                continue
+            if server_sub is None:
+                server_sub = backend.ensure_folder(sub)
+                dest_cache[sub] = server_sub
+            result = backend.move(src, [u for u, _ in items], server_sub)
+            done = []
+            for (uid, mv), rec in zip(items, records):
+                if uid in result:
+                    store.refile_move(mv.id, server_sub, result[uid])
+                    rec.to_folder = server_sub
+                    rec.new_uid = result[uid]
+                    done.append(rec)
+            store.mark_seen_many(account.id, [(r.message_id, f"moved:{server_sub}") for r in done])
+            report.moves.extend(done)
+            report.moved += len(done)
+            tidied += len(done)
+            logger.info("%s: tidied %d message(s) from %s into %s", account.id, len(done), src, server_sub)
+        if not dry_run:
+            _save_companies(store, account.id, companies)
+            if tidied == len(moves):
+                store.mark_company_tidied(account.id, *k)
+    if not dry_run:
+        _save_companies(store, account.id, companies)
 
 
 def _same_message(store: Store, account_id: str, msg: Message) -> bool:

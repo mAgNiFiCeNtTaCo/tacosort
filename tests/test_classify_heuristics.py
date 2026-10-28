@@ -178,7 +178,7 @@ CASES = [
      "notifications"),
     ("jira", m("jira@example.atlassian.net", "[JIRA] (PROJ-12) Update the docs"), "notifications"),
     ("account update", m("no-reply@app.example.com", "Your account settings were changed", headers=AUTO),
-     "notifications"),
+     "accounts"),
     ("gmail updates label", m("no-reply@tool.example.com", "Weekly usage report",
                               labels={"\\Category/Updates"}, headers=AUTO), "notifications"),
 ]

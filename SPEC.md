@@ -29,7 +29,16 @@ Defined in `tacosort/models.py` as `DEFAULT_CATEGORIES`. `inbox` means "leave it
 | newsletters | Newsletters | subscribed content (List-Id/List-Unsubscribe, Substack, digests) |
 | promotions | Promotions | marketing, sales, coupons, deals |
 | social | Social | social networks, forums, community notifications |
-| notifications | Notifications | automated app/service notices, account updates, calendar, dev tools |
+| notifications | Notifications | automated app/service notices, calendar, dev tools |
+| accounts | Accounts | terms-of-service / privacy-policy updates, account changes, welcome and plan notices |
+
+Company folders (`tacosort/companies.py`, `company_folders`, `company_folder_min` = 3): mail filed by
+category (heuristic or AI, not a user rule, correction or folder rule) goes to `<category folder>/<Company>`
+once that company (registrable sender domain) has `company_folder_min` such messages. The name is
+chosen once (display name that belongs to the domain, else a known spelling, else the domain) and
+stored in the `company_folders` table. When a company gets a folder, TacoSort's own earlier moves of
+that kind that are still in the category folder are moved in and their move records updated (undo
+still returns them to where they came from).
 
 Config can rename folders, add a parent (`folder_prefix: "TacoSort"` -> `TacoSort/Receipts`), disable
 categories, or add custom ones that user rules target.

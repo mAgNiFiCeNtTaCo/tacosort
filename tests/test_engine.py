@@ -59,6 +59,7 @@ class Always:
 
 
 def cfg(*ids, **kw) -> AppConfig:
+    kw.setdefault("company_folders", False)     # covered by test_companies.py
     return AppConfig(accounts=[AccountConfig(id=i, email=f"me@{i}.example.com") for i in (ids or ("a",))], **kw)
 
 

@@ -21,7 +21,9 @@ DEFAULT_CATEGORIES: dict[str, tuple[str, str]] = {
     "newsletters": ("Newsletters", "Newsletters and subscribed content"),
     "promotions": ("Promotions", "Marketing, sales, coupons and deals"),
     "social": ("Social", "Social networks, forums and community notifications"),
-    "notifications": ("Notifications", "Automated notices from apps and services, account updates"),
+    "notifications": ("Notifications", "Automated notices from apps and services"),
+    "accounts": ("Accounts", ("Terms-of-service and privacy-policy updates, account changes, welcome and "
+                              "plan notices (security alerts and codes stay in the Inbox)")),
 }
 
 # Where a decision came from, strongest first.
@@ -183,6 +185,8 @@ class AppConfig:
     ai: AIConfig = field(default_factory=AIConfig)
     interval_minutes: int = 15
     max_moves_per_run: int = 500          # safety cap per account per run
+    company_folders: bool = True          # a sub-folder per company ("Promotions/Crunchyroll")...
+    company_folder_min: int = 3           # ...once it has sent this many messages of that kind
     learn_sample: int = 300               # messages read per folder when learning the user's scheme
     data_dir: str = ""                    # "" = platform default
 

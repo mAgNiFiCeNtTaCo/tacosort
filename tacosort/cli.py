@@ -275,7 +275,7 @@ def do_preview(ctx: Ctx, accounts: list[AccountConfig], limit: int = 50) -> int:
     say("")
     if moves:
         rows = [[m.account, m.sender, m.subject, f"-> {m.to_folder}", m.reason] for m in moves[:limit]]
-        print_table(["Account", "From", "Subject", "Would go to", "Why"], rows, [16, 28, 40, 18, 34])
+        print_table(["Account", "From", "Subject", "Would go to", "Why"], rows, [16, 26, 36, 30, 30])
         if len(moves) > limit:
             say(f"...and {len(moves) - limit} more (show more with --limit {len(moves)}).")
         say("")

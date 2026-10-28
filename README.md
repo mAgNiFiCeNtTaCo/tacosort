@@ -13,18 +13,23 @@ Before                                   After
 INBOX (2,341)                            INBOX (37)        <- people, replies, security alerts, starred
   Mom: Sunday lunch?                       Mom: Sunday lunch?
   Amazon: Your order has shipped         Receipts          <- orders, invoices, deliveries
-  Chase: Your statement is ready         Finance           <- statements, bills, payments
-  Delta: Your boarding pass              Travel            <- flights, hotels, bookings
-  The Weekly Digest #212                 Newsletters       <- things you subscribed to
-  50% off everything this weekend!       Promotions        <- sales and marketing
-  LinkedIn: You appeared in 9 searches   Social            <- social networks, forums
-  GitHub: [repo] New issue opened        Notifications     <- automated notices from apps
-  ...
+  Chase: Your statement is ready           Amazon          <- a folder per company with 3+ emails
+  Delta: Your boarding pass              Finance           <- statements, bills, payments
+  The Weekly Digest #212                 Travel            <- flights, hotels, bookings
+  50% off everything this weekend!       Newsletters       <- things you subscribed to
+  LinkedIn: You appeared in 9 searches   Promotions        <- sales and marketing
+  GitHub: [repo] New issue opened        Social            <- social networks, forums
+  eBay: We're updating our Terms of Use  Notifications     <- automated notices from apps
+  ...                                      GitHub
+                                         Accounts          <- terms of service, account changes
 ```
 
 ## What it does
 
 - **One scheme for all your accounts.** Add as many mailboxes as you like; each gets the same folders.
+- **A folder per company.** Once a company has sent you 3 emails of one kind, they get their own
+  folder inside it: Promotions/Crunchyroll, Receipts/Google Play, Notifications/GitHub. Mail TacoSort
+  filed before that is moved in too, and new mail follows.
 - **Keeps your Inbox for people.** Mail from people you've written to, replies, security codes,
   password resets, sign-in alerts and starred mail always stay in the Inbox.
 - **Keeps running.** Turn on the background schedule (Windows, macOS, Linux) and new mail is sorted
@@ -190,15 +195,25 @@ How each decision is made is explained in [docs/how-it-works.md](docs/how-it-wor
 | Newsletters | newsletters and subscribed content |
 | Promotions | marketing, sales, coupons, deals |
 | Social | social networks, forums, community notifications |
-| Notifications | automated notices from apps and services, account updates |
+| Notifications | automated notices from apps and services |
+| Accounts | terms-of-service and privacy-policy updates, account changes, welcome and plan notices |
 
-Folders are created the first time they are needed. To change them, run `tacosort config edit`:
+Folders are created the first time they are needed. Inside each one, a company that has sent 3 or more
+emails of that kind gets its own folder (`Promotions/Crunchyroll`). The name comes from the sender
+("Google Play") and never changes once made. If you move a message out of a company folder, TacoSort
+leaves it where you put it. Mail sorted by one of your own rules goes exactly where the rule says.
+On Gmail these show as nested labels in the left sidebar (Gmail's own tabs are fixed by Google and
+can't be added to).
+
+To change them, run `tacosort config edit`:
 
 ```yaml
 categories:
   finance: Money          # rename a folder
   notifications: "off"    # keep this kind of mail in the Inbox
 folder_prefix: TacoSort   # put everything inside one parent: TacoSort/Receipts, TacoSort/Money, ...
+company_folders: no       # no folder per company
+company_folder_min: 5     # or: a company needs 5 emails of a kind first (default 3)
 ```
 
 A fully commented example is in [examples/config.example.yaml](examples/config.example.yaml).

@@ -24,7 +24,7 @@ from pathlib import Path
 from .models import INBOX, Decision, MoveRecord, RunReport
 
 # Bump when MIGRATIONS gets a new entry. Each entry upgrades the file from the previous version.
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 MIGRATIONS: dict[int, list[str]] = {
     1: [
@@ -98,6 +98,19 @@ MIGRATIONS: dict[int, list[str]] = {
     2: [
         # When a move is due for its next correction check (NULL = at the next run).
         "ALTER TABLE moves ADD COLUMN next_check TEXT",
+    ],
+    3: [
+        # A company's own sub-folder for one category ("Promotions/Crunchyroll"). `tidied` = the mail
+        # TacoSort had already put in the category folder has been moved into it.
+        """CREATE TABLE company_folders (
+            account TEXT NOT NULL,
+            category TEXT NOT NULL,
+            company TEXT NOT NULL,
+            folder TEXT NOT NULL,
+            created TEXT NOT NULL,
+            tidied INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (account, category, company)
+        )""",
     ],
 }
 
@@ -482,6 +495,37 @@ class Store:
         rows = self._query("SELECT account, to_folder, COUNT(*) AS n FROM moves WHERE undone = 0 "
                            "GROUP BY account, to_folder")
         return {(r["account"], r["to_folder"]): r["n"] for r in rows}
+
+    def filed_senders(self, account: str) -> list[StoredMove]:
+        """Moves into a category folder that are still in place (not undone, not corrected or gone):
+        what company folders count and tidy."""
+        return [_move(r) for r in self._query(
+            "SELECT * FROM moves WHERE account = ? AND undone = 0 AND check_state = '' AND message_id != '' "
+            "AND category NOT IN (?, 'folder') ORDER BY id", (account, INBOX))]
+
+    def refile_move(self, move_id: int, to_folder: str, new_uid: int | None) -> None:
+        """TacoSort moved this message on into a company folder: the move now ends there, so undo and
+        the correction check look for it in the right place."""
+        with self._tx() as c:
+            c.execute("UPDATE moves SET to_folder = ?, new_uid = ?, next_check = NULL WHERE id = ?",
+                      (to_folder, new_uid, move_id))
+
+    # ---- company folders ------------------------------------------------------------------------
+    def company_folders(self, account: str) -> dict[tuple[str, str], tuple[str, bool]]:
+        """(category, company) -> (folder, tidied) for this account."""
+        rows = self._query("SELECT category, company, folder, tidied FROM company_folders WHERE account = ?",
+                           (account,))
+        return {(r["category"], r["company"]): (r["folder"], bool(r["tidied"])) for r in rows}
+
+    def add_company_folder(self, account: str, category: str, company: str, folder: str) -> None:
+        with self._tx() as c:
+            c.execute("INSERT OR IGNORE INTO company_folders (account, category, company, folder, created) "
+                      "VALUES (?, ?, ?, ?, ?)", (account, category, company, folder, _ts(utcnow())))
+
+    def mark_company_tidied(self, account: str, category: str, company: str) -> None:
+        with self._tx() as c:
+            c.execute("UPDATE company_folders SET tidied = 1 WHERE account = ? AND category = ? AND company = ?",
+                      (account, category, company))
 
     def moved_by_us(self, account: str, message_id: str) -> bool:
         if not message_id:

@@ -237,5 +237,5 @@ def test_a_first_version_state_file_is_upgraded(tmp_path):
     conn.commit()
     conn.close()
     with Store(path) as s:
-        assert s.schema_version == SCHEMA_VERSION == 2
+        assert s.schema_version == SCHEMA_VERSION == 3
         assert [m.message_id for m in s.moves_to_check("a", NOW - timedelta(days=1), now=NOW)] == ["<1@example.com>"]
