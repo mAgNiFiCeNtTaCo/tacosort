@@ -9,9 +9,8 @@ server, Outlook through OAuth2) into one shared folder scheme and keeps it sorte
 - Start: `tacosort setup` → `tacosort preview` → `tacosort run --backlog --yes` (old mail) →
   `tacosort schedule on` (keeps new mail sorted).
 - Tests: `.venv\Scripts\python -m pytest -q`: 593 passed, 2 skipped (POSIX-only), ruff clean.
-  GitHub CI: Windows + Linux green; the macOS jobs never got a runner ("job was not acquired by Runner",
-  3 runs on 2026-10-28), so they did not run. The owner's GitHub account also mailed "used 100% of the
-  included Actions minutes": not yet checked whether that is the cause.
+  GitHub CI green on Windows, macOS and Linux (run 40741390253; the Mac jobs got no runner 3 times on
+  2026-10-28, a GitHub-side shortage: a re-run the same day passed).
 - In real use on the owner's Gmail since 2026-10-28 (app password, background schedule every 15 min):
   Inbox 59 -> 14 (security alerts, codes and a few unsure ones stay).
 - Untested for real: Outlook/Google OAuth, AI sorting against the live API, the Windows at-logon trigger.
@@ -44,7 +43,7 @@ server, Outlook through OAuth2) into one shared folder scheme and keeps it sorte
 - `tacosort run --backlog --yes` (owner said yes): 31 moved (PlayFame 8, Github 8, Crunchyroll 6,
   Samsung 3, Accounts 3, Notifications 2, Promotions 1); 14 stay; a new preview finds nothing to move.
 - Preview's folder column widened (was cut at 18 characters). 593 tests pass.
-- **Open:** the macOS CI runner problem (Actions minutes?), the owner moving the OAuth alert back.
+- **Open:** the owner moving the OAuth alert back.
 - **Resources (2026-10-28 13:02):** TacoSort idle between scheduled runs (0 processes, 89 MB on disk);
   whole PC CPU 18% of 32 threads, RAM 27.0 of 64 GB, GPU 38%.
 
