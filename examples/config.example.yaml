@@ -1,0 +1,98 @@
+# MailTidy example settings
+#
+# Copy this file to your settings location (run `mailtidy config path` to see where), or just run
+# `mailtidy setup`, which writes the file for you. Lines starting with # are comments.
+# Check your edits with:  mailtidy config check
+#
+# Passwords are NEVER written here. `mailtidy setup` keeps them in your computer's keychain.
+
+# ---- Your mailboxes ---------------------------------------------------------------------------------
+accounts:
+  - id: gmail                     # a short name you pick; used in commands like `--account gmail`
+    email: alice@example.com
+    provider: gmail               # gmail, outlook, yahoo, icloud, aol, fastmail, zoho, gmx, gmx-net,
+                                  # protonmail-bridge or custom
+    auth: password                # an app password (see docs/providers.md)
+    watch_folders: [INBOX]        # folders MailTidy sorts (almost always just the Inbox)
+
+  - id: work
+    email: alice@work.example.com
+    provider: custom              # any other provider: give its IMAP server
+    host: imap.work.example.com
+    port: 993
+    ssl: yes                      # yes = SSL/TLS (port 993); no = STARTTLS (port 143)
+    username: alice               # only when the login name isn't your email address
+    auth: password
+    watch_folders: [INBOX]
+    enabled: yes                  # set to no to pause this account without removing it
+
+  # An Outlook.com / Hotmail account signs in with Microsoft (OAuth2), see docs/outlook-oauth.md:
+  # - id: hotmail
+  #   email: alice@hotmail.example.com
+  #   provider: outlook
+  #   auth: oauth2-microsoft
+  #   oauth_client_id: 00000000-0000-0000-0000-000000000000
+
+# ---- Folders ----------------------------------------------------------------------------------------
+# Category -> folder name. Every account gets the same folders.
+# Rename a folder by changing the name; write `off` to keep that kind of mail in the Inbox.
+categories:
+  receipts: Receipts
+  finance: Money                  # renamed: bank and bill mail goes to a folder called "Money"
+  travel: Travel
+  newsletters: Reading            # renamed
+  promotions: Promotions
+  social: Social
+  notifications: "off"            # turned off: app notifications stay in the Inbox
+  kids: Kids School               # your own category; rules below send mail to it
+
+# Put all MailTidy folders inside one parent folder (MailTidy/Receipts, MailTidy/Money, ...):
+# folder_prefix: MailTidy
+folder_prefix: ""
+
+# ---- Your own rules ---------------------------------------------------------------------------------
+# Checked in order; the first rule that matches wins, before any of MailTidy's own guesses.
+# Inside a rule every condition must match; inside a list any item may match.
+# action: a category above, `inbox` (leave it alone), or `folder:<any folder name>`.
+rules:
+  - name: school
+    from: ["*@school.example.com", "*@pta.example.org"]   # "*@" = anyone at that domain
+    action: kids
+
+  - name: boss stays in the inbox
+    from: boss@work.example.com
+    accounts: [work]              # only in this account
+    action: inbox
+
+  - name: project mailing list
+    list_id: dev.lists.example.com
+    subject: ["[project]"]
+    action: folder:Lists/Project
+
+# Mail from these addresses or domains always stays in the Inbox:
+vip:
+  - mom@example.com
+  - family.example.org
+
+# ---- How careful MailTidy is ------------------------------------------------------------------------
+min_confidence: 0.75              # only move mail when at least this sure (0 to 1; higher = more careful)
+keep_flagged: yes                 # never move starred / flagged mail
+keep_contacts: yes                # people you have written to always stay in the Inbox
+learn_from_corrections: yes       # when you move something back, MailTidy remembers
+max_moves_per_run: 500            # safety cap per account per run
+
+# ---- Background schedule ----------------------------------------------------------------------------
+interval_minutes: 15              # used by `mailtidy schedule on`
+
+# ---- Optional AI help (off unless you turn it on) ---------------------------------------------------
+# Only mail MailTidy is unsure about is asked about, and only From, Subject and (if send_snippet is yes)
+# a few lines of text are sent to Anthropic. Needs `pip install "mailtidy[ai]"` and your own API key.
+ai:
+  enabled: no
+  model: claude-haiku-5-5
+  max_per_run: 50                 # cost guard
+  send_snippet: yes
+  api_key_env: ANTHROPIC_API_KEY  # name of the environment variable that holds your key
+
+# Where MailTidy keeps its memory (empty = the usual place for your system):
+data_dir: ""
