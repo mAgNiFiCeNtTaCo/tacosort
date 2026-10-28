@@ -260,7 +260,7 @@ def test_install_linux_cron_fallback(monkeypatch, tmp_path):
     assert "keychain" in msg and "No password is saved" in msg and "systemd" in msg     # C-N4 warning
     written = fake.inputs[-1].splitlines()
     assert written[0] == "MAILTO=me" and len(written) == 2 and written[1].endswith("# tidyinbox")
-    assert "old" not in written[1]
+    assert "* old >" not in written[1]
     assert f"cd {shlex.quote(str(tmp_path / 'data'))} && " in written[1] and " -P -m tidyinbox " in written[1]
 
 

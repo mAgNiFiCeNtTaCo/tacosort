@@ -392,10 +392,12 @@ class Store:
             c.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", (key, value))
 
     # ---- runs -----------------------------------------------------------------------------------
-    def start_run(self, run_id: str, started: datetime, dry_run: bool) -> None:
+    def start_run(self, run_id: str, started: datetime, dry_run: bool) -> bool:
+        """Record a new run. False (and nothing changed) when `run_id` is already taken."""
         with self._tx() as c:
-            c.execute("INSERT OR REPLACE INTO runs (id, started, dry_run) VALUES (?, ?, ?)",
-                      (run_id, _ts(started), int(dry_run)))
+            cur = c.execute("INSERT OR IGNORE INTO runs (id, started, dry_run) VALUES (?, ?, ?)",
+                            (run_id, _ts(started), int(dry_run)))
+            return cur.rowcount == 1
 
     def finish_run(self, report: RunReport) -> None:
         with self._tx() as c:

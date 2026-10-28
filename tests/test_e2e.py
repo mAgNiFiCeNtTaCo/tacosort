@@ -350,7 +350,7 @@ def test_full_journey(world, capsys, monkeypatch):
     assert code == 0 and "Kids School" in out, out
 
     # 10. `undo --run` with an id read from the report: the big backlog run is put back.
-    runs = re.findall(r'<code>(\d{8}-\d{6}-[0-9a-f]{4})</code></td><td class="num">(\d+)</td>', html)
+    runs = re.findall(r'<code>(\d{8}-\d{6}-[0-9a-f]{8})</code></td><td class="num">(\d+)</td>', html)
     assert len(runs) == 4          # backlog, new mail, the Reading move, the undone run
     big_run = max(runs, key=lambda r: int(r[1]))[0]
     code, out = tidyinbox(capsys, "undo", "--run", big_run)

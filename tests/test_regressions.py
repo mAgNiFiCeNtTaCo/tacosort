@@ -47,3 +47,17 @@ def test_learned_robot_rule_does_not_file_away_a_security_code(tmp_path):
         out[subject] = (d.keeps or d.confidence < config.min_confidence, d.category, d.source, d.reason)
     moved = {k: v for k, v in out.items() if not v[0]}
     assert not moved, f"security mail filed away by a learned rule: {moved}"
+
+
+# C. Two runs drawing the same run id (CI on Linux, 2026-10-28): the second overwrote the first
+#    run's record, so its moves vanished from the report's run list.
+def test_repeated_run_id_never_overwrites_an_earlier_run(tmp_path, monkeypatch):
+    ids = iter(["20261028-080753-1acb0000", "20261028-080753-1acb0000", "20261028-080753-2bcd0000"])
+    monkeypatch.setattr(engine, "_new_run_id", lambda: next(ids))
+    store = Store(tmp_path / "s.sqlite3")
+    b = FakeBackend("a")
+    config = AppConfig(accounts=[AccountConfig(id="a", email="me@example.com")], data_dir=str(tmp_path))
+    first = engine.run_once(config, store, {"a": b}, dry_run=False, log=quiet)
+    second = engine.run_once(config, store, {"a": b}, dry_run=False, log=quiet)
+    assert first.run_id != second.run_id
+    assert {r.run_id for r in store.runs(10)} == {first.run_id, second.run_id}

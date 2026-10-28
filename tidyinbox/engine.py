@@ -166,7 +166,9 @@ def _say(log: Log, msg: str) -> None:
 
 
 def _new_run_id() -> str:
-    return utcnow().strftime("%Y%m%d-%H%M%S") + "-" + secrets.token_hex(2)
+    # Many runs can start within one second (watch mode, tests), so the random part must be long
+    # enough never to repeat: a repeated id would overwrite an earlier run's record.
+    return utcnow().strftime("%Y%m%d-%H%M%S") + "-" + secrets.token_hex(4)
 
 
 def _close(backend: MailBackend) -> None:
@@ -305,7 +307,8 @@ def run_once(config: AppConfig, store: Store, backends: dict[str, MailBackend], 
         return report
     try:
         report.run_id = _new_run_id()
-        store.start_run(report.run_id, report.started, dry_run)
+        while not store.start_run(report.run_id, report.started, dry_run):
+            report.run_id = _new_run_id()
         _say(log, f"{'Preview' if dry_run else 'Run'} {report.run_id} started.")
         clf = _make_classifier(config, store, classifier, log)
         for account in config.accounts:
