@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from mailtidy.classify.contacts import contacts_from_sent, is_robot_address
-from mailtidy.models import Address
-from mailtidy.testing import make_message
+from tidyinbox.classify.contacts import contacts_from_sent, is_robot_address
+from tidyinbox.models import Address
+from tidyinbox.testing import make_message
 
 
 def sent(to, cc=(), sender="me@example.com"):

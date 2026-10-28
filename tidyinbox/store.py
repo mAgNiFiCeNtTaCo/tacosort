@@ -1,4 +1,4 @@
-"""MailTidy's memory: one SQLite file (`state.sqlite3` in the data folder).
+"""TidyInbox's memory: one SQLite file (`state.sqlite3` in the data folder).
 
 It remembers every run, every move (so it can be undone), how far each folder has been read
 (UID watermarks), what it learned from the user (their folders and their corrections), the people the
@@ -120,7 +120,7 @@ ANY_ACCOUNT = "*"
 
 
 class StoreError(Exception):
-    """The state file can't be used (for example it was made by a newer MailTidy)."""
+    """The state file can't be used (for example it was made by a newer TidyInbox)."""
 
 
 @dataclass
@@ -180,7 +180,7 @@ def _normalize_key(kind: str, key: str) -> str:
 
 
 class LearnedStore:
-    """Learned sender rules. Implements `mailtidy.models.LearnedRules` for the classifier."""
+    """Learned sender rules. Implements `tidyinbox.models.LearnedRules` for the classifier."""
 
     def __init__(self, store: Store):
         self._store = store
@@ -338,7 +338,7 @@ class Store:
     @property
     def conn(self) -> sqlite3.Connection:
         if self._conn is None:
-            raise StoreError("The MailTidy state file is already closed.")
+            raise StoreError("The TidyInbox state file is already closed.")
         return self._conn
 
     @contextmanager
@@ -368,8 +368,8 @@ class Store:
         current = row[0] if row else 0
         if current > SCHEMA_VERSION:
             raise StoreError(
-                f"The state file {self.path} was made by a newer version of MailTidy. "
-                "Please update MailTidy (pip install --upgrade mailtidy)."
+                f"The state file {self.path} was made by a newer version of TidyInbox. "
+                "Please update TidyInbox (pip install --upgrade tidyinbox)."
             )
         for version in range(current + 1, SCHEMA_VERSION + 1):
             with self._tx() as tx:
@@ -595,7 +595,7 @@ class Store:
                 rows,
             )
 
-    # ---- summary for `mailtidy status` ----------------------------------------------------------
+    # ---- summary for `tidyinbox status` ----------------------------------------------------------
     def summary(self) -> dict:
         """Counts for a status screen."""
         today = utcnow().replace(hour=0, minute=0, second=0, microsecond=0)

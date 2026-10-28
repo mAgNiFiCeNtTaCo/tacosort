@@ -38,9 +38,9 @@ PROVIDERS: dict[str, Provider] = {
             notes=(
                 "Gmail needs an App Password, not your normal Google password.\n"
                 "1. Turn on 2-Step Verification: Google Account > Security > 2-Step Verification.\n"
-                "2. Open https://myaccount.google.com/apppasswords, type a name such as MailTidy and "
+                "2. Open https://myaccount.google.com/apppasswords, type a name such as TidyInbox and "
                 "click Create.\n"
-                "3. Copy the 16-letter password Google shows and paste it into MailTidy (spaces don't "
+                "3. Copy the 16-letter password Google shows and paste it into TidyInbox (spaces don't "
                 "matter).\n"
                 "IMAP is always on for personal Gmail. On a work or school Google account your "
                 "administrator may have turned IMAP or App Passwords off; ask them, or use the "
@@ -58,7 +58,7 @@ PROVIDERS: dict[str, Provider] = {
             app_password_url="https://entra.microsoft.com/#view/Microsoft_AAD_RegisteredApps/ApplicationsListBlade",
             notes=(
                 "Microsoft no longer accepts passwords (not even app passwords) for IMAP on "
-                "Outlook.com, Hotmail, Live and MSN addresses. MailTidy signs in the modern way "
+                "Outlook.com, Hotmail, Live and MSN addresses. TidyInbox signs in the modern way "
                 "(OAuth2): you approve it once in your browser.\n"
                 "This needs a free 'app registration' of your own:\n"
                 "1. Open https://entra.microsoft.com > Applications > App registrations > New "
@@ -66,8 +66,8 @@ PROVIDERS: dict[str, Provider] = {
                 "2. Supported account types: 'Personal Microsoft accounts only' (or 'any organizational "
                 "directory and personal Microsoft accounts').\n"
                 "3. After creating it, open Authentication and switch 'Allow public client flows' to Yes.\n"
-                "4. Copy the 'Application (client) ID' into MailTidy setup.\n"
-                "MailTidy then shows a short code: open https://microsoft.com/devicelogin, type the "
+                "4. Copy the 'Application (client) ID' into TidyInbox setup.\n"
+                "TidyInbox then shows a short code: open https://microsoft.com/devicelogin, type the "
                 "code and approve. You only do this once."
             ),
             domains=(
@@ -89,9 +89,9 @@ PROVIDERS: dict[str, Provider] = {
             notes=(
                 "Yahoo needs an app password, not your normal Yahoo password.\n"
                 "1. Open https://login.yahoo.com/account/security (Account Security).\n"
-                "2. Click 'Generate app password' (or 'Manage app passwords'), name it MailTidy and "
+                "2. Click 'Generate app password' (or 'Manage app passwords'), name it TidyInbox and "
                 "click Generate.\n"
-                "3. Copy the password Yahoo shows and paste it into MailTidy."
+                "3. Copy the password Yahoo shows and paste it into TidyInbox."
             ),
             domains=(
                 "yahoo.com", "ymail.com", "rocketmail.com", "yahoo.co.uk", "yahoo.ca", "yahoo.fr",
@@ -111,8 +111,8 @@ PROVIDERS: dict[str, Provider] = {
                 "iCloud needs an app-specific password, not your Apple Account password.\n"
                 "1. Two-factor authentication must be on for your Apple Account.\n"
                 "2. Open https://account.apple.com, sign in, go to Sign-In and Security > "
-                "App-Specific Passwords and create one named MailTidy.\n"
-                "3. Paste it into MailTidy.\n"
+                "App-Specific Passwords and create one named TidyInbox.\n"
+                "3. Paste it into TidyInbox.\n"
                 "If the login is refused, try the user name without '@icloud.com' (just the part "
                 "before the @)."
             ),
@@ -129,8 +129,8 @@ PROVIDERS: dict[str, Provider] = {
             notes=(
                 "AOL needs an app password, not your normal AOL password.\n"
                 "1. Open https://login.aol.com/account/security (Account Security).\n"
-                "2. Click 'Generate app password', name it MailTidy and click Generate.\n"
-                "3. Copy the password AOL shows and paste it into MailTidy."
+                "2. Click 'Generate app password', name it TidyInbox and click Generate.\n"
+                "3. Copy the password AOL shows and paste it into TidyInbox."
             ),
             domains=("aol.com", "aim.com", "aol.co.uk", "aol.de", "aol.fr"),
         ),
@@ -146,8 +146,8 @@ PROVIDERS: dict[str, Provider] = {
                 "Fastmail needs an app password.\n"
                 "1. In Fastmail open Settings > Privacy & Security > Connected apps & API tokens "
                 "(or https://app.fastmail.com/settings/security/apps).\n"
-                "2. Click 'New app password', choose access for IMAP (Mail), name it MailTidy.\n"
-                "3. Copy the password and paste it into MailTidy."
+                "2. Click 'New app password', choose access for IMAP (Mail), name it TidyInbox.\n"
+                "3. Copy the password and paste it into TidyInbox."
             ),
             domains=("fastmail.com", "fastmail.fm"),
         ),
@@ -162,7 +162,7 @@ PROVIDERS: dict[str, Provider] = {
             notes=(
                 "1. In Zoho Mail open Settings > Mail Accounts > IMAP and tick 'IMAP Access'.\n"
                 "2. If two-factor sign-in is on, create an app password at "
-                "https://accounts.zoho.com/home#security/app_password and use it in MailTidy.\n"
+                "https://accounts.zoho.com/home#security/app_password and use it in TidyInbox.\n"
                 "Accounts hosted in Europe use imap.zoho.eu, India imap.zoho.in; paid business "
                 "accounts use imappro.zoho.com (or .eu/.in): change the server in setup if needed."
             ),
@@ -210,8 +210,8 @@ PROVIDERS: dict[str, Provider] = {
                 "1. Install and open Proton Mail Bridge from https://proton.me/mail/bridge and sign in.\n"
                 "2. In Bridge, click your account to see the IMAP settings: server 127.0.0.1, port "
                 "1143, security STARTTLS, and a special Bridge password.\n"
-                "3. Use that Bridge password in MailTidy (not your Proton password).\n"
-                "Bridge must be running whenever MailTidy runs."
+                "3. Use that Bridge password in TidyInbox (not your Proton password).\n"
+                "Bridge must be running whenever TidyInbox runs."
             ),
             domains=("proton.me", "protonmail.com", "protonmail.ch", "pm.me"),
         ),

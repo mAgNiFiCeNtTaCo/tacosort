@@ -1,12 +1,12 @@
 # Your own rules
 
-MailTidy guesses well on its own, but you know your mail best. Rules let you say exactly where some
-mail goes. They are checked **before** MailTidy's own guesses (only the safety checks come first: see
+TidyInbox guesses well on its own, but you know your mail best. Rules let you say exactly where some
+mail goes. They are checked **before** TidyInbox's own guesses (only the safety checks come first: see
 [how-it-works.md](how-it-works.md)).
 
-Rules live in the settings file. Open it with `mailtidy config edit`. When you save and close the
-editor, MailTidy checks the file and tells you about mistakes. You can check it any time with
-`mailtidy config check`.
+Rules live in the settings file. Open it with `tidyinbox config edit`. When you save and close the
+editor, TidyInbox checks the file and tells you about mistakes. You can check it any time with
+`tidyinbox config check`.
 
 ## A first rule
 
@@ -22,7 +22,7 @@ rules:
 Try it without waiting for real mail:
 
 ```
-mailtidy rules test --from teacher@school.example.com --subject "Field trip"
+tidyinbox rules test --from teacher@school.example.com --subject "Field trip"
 ```
 
 ```
@@ -32,7 +32,7 @@ Decided by: user rule (confidence 1.00; ...)
 ```
 
 You can also test a saved email: in most mail apps you can save or export a message as an `.eml` file;
-then run `mailtidy rules test message.eml`.
+then run `tidyinbox rules test message.eml`.
 
 ## What a rule can look at
 
@@ -67,7 +67,7 @@ Address patterns (`from`, `to`):
 |---|---|
 | `receipts`, `finance`, `travel`, `newsletters`, `promotions`, `social`, `notifications` | that category's folder (renamed / with `folder_prefix` if you set those) |
 | your own category, e.g. `kids` | the folder you gave it under `categories:` |
-| `inbox` | leave it in the Inbox, whatever MailTidy would have guessed |
+| `inbox` | leave it in the Inbox, whatever TidyInbox would have guessed |
 | `folder:<name>` | exactly that folder, e.g. `folder:Clients/Acme` (`/` makes a sub-folder; `folder_prefix` is not added) |
 
 Your own categories are added under `categories:`:
@@ -135,13 +135,13 @@ rules:
 
 ## Rules vs learning
 
-You don't have to write rules for everything. When you move a message MailTidy sorted, it learns
-that sender (see [how-it-works.md](how-it-works.md)). `mailtidy rules list` shows your rules and what
-MailTidy learned. Rules are best for things you want to be sure of, or for whole domains.
+You don't have to write rules for everything. When you move a message TidyInbox sorted, it learns
+that sender (see [how-it-works.md](how-it-works.md)). `tidyinbox rules list` shows your rules and what
+TidyInbox learned. Rules are best for things you want to be sure of, or for whole domains.
 
-## Mistakes MailTidy catches
+## Mistakes TidyInbox catches
 
-`mailtidy config check` warns about:
+`tidyinbox config check` warns about:
 
 - an `action` that isn't a category, `inbox` or `folder:...`;
 - a rule pointing at a category you turned `off` (the mail would just stay in the Inbox);

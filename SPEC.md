@@ -1,6 +1,6 @@
-# MailTidy: design spec (shared contract for every builder)
+# TidyInbox: design spec (shared contract for every builder)
 
-MailTidy keeps every email account a person has organized the same way, automatically, forever.
+TidyInbox keeps every email account a person has organized the same way, automatically, forever.
 It is an open-source Python tool (MIT) meant for a public GitHub repo, used by non-programmers.
 
 ## Goals
@@ -9,17 +9,17 @@ It is an open-source Python tool (MIT) meant for a public GitHub repo, used by n
 2. **Optimal organization.** The Inbox keeps only mail a human needs to see (people writing to you,
    security alerts, anything you marked important). Automated mail goes to clear category folders.
 3. **Persistent.** (a) It keeps running: a background job (Windows Task Scheduler / macOS launchd /
-   Linux systemd user timer or cron) or `mailtidy watch` (IMAP IDLE). (b) It remembers: a local SQLite
+   Linux systemd user timer or cron) or `tidyinbox watch` (IMAP IDLE). (b) It remembers: a local SQLite
    state file holds what it did, per-folder UID watermarks, learned rules and an undo log. (c) It
    learns: from the user's existing folders (bootstrap) and from corrections (user moves a sorted
    message somewhere else or back to the Inbox -> the sender's rule changes, and it is never fought).
 4. **Safe.** Never deletes, never marks as read (BODY.PEEK only), never touches Sent/Drafts/Trash/
    Junk/All Mail, never moves flagged/starred mail, every move is logged and undoable, first run is a
    dry-run preview. Passwords live in the OS keychain (keyring), never in the config file or logs.
-5. **Plain-English UX.** `mailtidy setup` wizard, `mailtidy status`, `mailtidy report` (HTML).
+5. **Plain-English UX.** `tidyinbox setup` wizard, `tidyinbox status`, `tidyinbox report` (HTML).
 
 ## Default taxonomy (category key -> default folder)
-Defined in `mailtidy/models.py` as `DEFAULT_CATEGORIES`. `inbox` means "leave it where it is".
+Defined in `tidyinbox/models.py` as `DEFAULT_CATEGORIES`. `inbox` means "leave it where it is".
 | key | folder | what goes there |
 |---|---|---|
 | inbox | (stays) | people, replies, contacts you have written to, security alerts, starred/flagged |
@@ -31,10 +31,10 @@ Defined in `mailtidy/models.py` as `DEFAULT_CATEGORIES`. `inbox` means "leave it
 | social | Social | social networks, forums, community notifications |
 | notifications | Notifications | automated app/service notices, account updates, calendar, dev tools |
 
-Config can rename folders, add a parent (`folder_prefix: "MailTidy"` -> `MailTidy/Receipts`), disable
+Config can rename folders, add a parent (`folder_prefix: "TidyInbox"` -> `TidyInbox/Receipts`), disable
 categories, or add custom ones that user rules target.
 
-## Decision order (first confident answer wins), see `mailtidy/classify/`
+## Decision order (first confident answer wins), see `tidyinbox/classify/`
 1. Safety guards -> inbox: flagged/starred, sender is a known contact (address appears as recipient in
    the Sent folder), VIP list, message is a reply in a thread the user wrote in.
 2. User rules from config (`rules:`), in order.
@@ -53,16 +53,16 @@ A decision below `min_confidence` (default 0.75) is treated as inbox.
 ## Package layout and OWNERSHIP (shared working tree: only edit files you own)
 | path | owner station |
 |---|---|
-| `pyproject.toml`, `mailtidy/__init__.py`, `mailtidy/models.py`, `mailtidy/backend.py`, `mailtidy/testing.py`, `SPEC.md` | orchestrator (ask before changing; propose changes in your final report) |
-| `mailtidy/imap/` (providers.py, client.py, auth.py), `tests/test_imap_*.py` | **IMAP** |
-| `mailtidy/classify/` (pipeline.py, heuristics.py, rules.py, ai.py, contacts.py), `tests/test_classify_*.py` | **Classifier** |
-| `mailtidy/store.py`, `mailtidy/learner.py`, `mailtidy/engine.py`, `mailtidy/schedule.py`, `tests/test_store*.py`, `tests/test_learner*.py`, `tests/test_engine*.py`, `tests/test_schedule*.py` | **Engine** |
-| `mailtidy/cli.py`, `mailtidy/__main__.py`, `mailtidy/config.py`, `mailtidy/report.py`, `README.md`, `docs/`, `examples/`, `LICENSE`, `CONTRIBUTING.md`, `SECURITY.md`, `.github/`, `tests/test_cli*.py`, `tests/test_config*.py`, `tests/test_report*.py` | **CLI & Docs** |
+| `pyproject.toml`, `tidyinbox/__init__.py`, `tidyinbox/models.py`, `tidyinbox/backend.py`, `tidyinbox/testing.py`, `SPEC.md` | orchestrator (ask before changing; propose changes in your final report) |
+| `tidyinbox/imap/` (providers.py, client.py, auth.py), `tests/test_imap_*.py` | **IMAP** |
+| `tidyinbox/classify/` (pipeline.py, heuristics.py, rules.py, ai.py, contacts.py), `tests/test_classify_*.py` | **Classifier** |
+| `tidyinbox/store.py`, `tidyinbox/learner.py`, `tidyinbox/engine.py`, `tidyinbox/schedule.py`, `tests/test_store*.py`, `tests/test_learner*.py`, `tests/test_engine*.py`, `tests/test_schedule*.py` | **Engine** |
+| `tidyinbox/cli.py`, `tidyinbox/__main__.py`, `tidyinbox/config.py`, `tidyinbox/report.py`, `README.md`, `docs/`, `examples/`, `LICENSE`, `CONTRIBUTING.md`, `SECURITY.md`, `.github/`, `tests/test_cli*.py`, `tests/test_config*.py`, `tests/test_report*.py` | **CLI & Docs** |
 
 ## Contracts between stations (code to these; they are in models.py / backend.py)
-- `MailBackend` (backend.py): the IMAP station implements it as `mailtidy.imap.client.ImapBackend`;
-  `mailtidy.testing.FakeBackend` implements it in memory for everyone's tests.
-- Classifier entry point: `mailtidy.classify.pipeline.Classifier(config: AppConfig, learned: LearnedRules,
+- `MailBackend` (backend.py): the IMAP station implements it as `tidyinbox.imap.client.ImapBackend`;
+  `tidyinbox.testing.FakeBackend` implements it in memory for everyone's tests.
+- Classifier entry point: `tidyinbox.classify.pipeline.Classifier(config: AppConfig, learned: LearnedRules,
   contacts: set[str])` with `.classify(msg: Message) -> Decision`. `LearnedRules` is a Protocol in
   models.py (the Engine's store implements it). AI is reached only through the pipeline.
 - Engine entry points (engine.py):
@@ -76,15 +76,15 @@ A decision below `min_confidence` (default 0.75) is treated as inbox.
   - A run that finds another run holding the lock returns `RunReport(skipped=True)` (not an error).
   - `Store(path)` (store.py) owns SQLite; `store.learned` implements `LearnedRules`.
 - Scheduler (schedule.py): `install(interval_minutes: int, config_path: Path) -> str`, `uninstall() -> str`,
-  `status() -> str`. Windows schtasks (per-user, at logon + every N minutes, `pythonw -m mailtidy run`),
+  `status() -> str`. Windows schtasks (per-user, at logon + every N minutes, `pythonw -m tidyinbox run`),
   macOS launchd agent, Linux systemd --user timer (cron fallback).
 - Credentials (imap/auth.py): `get_secret(account_id) / set_secret(account_id, value) / delete_secret(account_id)`
-  via keyring, service name `mailtidy` (failures raise `auth.CredentialError`, a `BackendError`). OAuth2 (XOAUTH2) for Gmail and Microsoft is optional; app
+  via keyring, service name `tidyinbox` (failures raise `auth.CredentialError`, a `BackendError`). OAuth2 (XOAUTH2) for Gmail and Microsoft is optional; app
   passwords are the main path. Outlook.com/Hotmail need OAuth2 (Microsoft removed basic auth):
   device-code flow with a user-supplied client id, documented in docs/.
 - Config (config.py): YAML at the platform config dir (`platformdirs` not used; Windows
-  `%APPDATA%\MailTidy\config.yaml`, macOS `~/Library/Application Support/MailTidy/config.yaml`, Linux
-  `$XDG_CONFIG_HOME/mailtidy/config.yaml`), override with `--config` or `MAILTIDY_CONFIG`.
+  `%APPDATA%\TidyInbox\config.yaml`, macOS `~/Library/Application Support/TidyInbox/config.yaml`, Linux
+  `$XDG_CONFIG_HOME/tidyinbox/config.yaml`), override with `--config` or `TIDYINBOX_CONFIG`.
   `load_config(path) -> AppConfig`, `save_config(cfg, path)`, `default_config_path()`, `default_data_dir()`.
   The SQLite state file lives in the data dir (`state.sqlite3`).
 

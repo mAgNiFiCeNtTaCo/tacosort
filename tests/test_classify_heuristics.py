@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import pytest
 
-from mailtidy.classify.heuristics import (
+from tidyinbox.classify.heuristics import (
     automation_markers,
     collect_signals,
     heuristic_decision,
@@ -21,8 +21,8 @@ from mailtidy.classify.heuristics import (
     looks_automated,
     looks_personal,
 )
-from mailtidy.models import INBOX
-from mailtidy.testing import make_message
+from tidyinbox.models import INBOX
+from tidyinbox.testing import make_message
 
 THRESHOLD = 0.75
 UNSUB = {"List-Unsubscribe": "<https://example.com/unsubscribe/abc>, <mailto:u@example.com>"}

@@ -1,7 +1,7 @@
-"""Reading and writing the MailTidy settings file (config.yaml).
+"""Reading and writing the TidyInbox settings file (config.yaml).
 
 The file is plain YAML so people can edit it by hand. It never holds passwords: those live in the
-operating system's keychain (see `mailtidy.imap.auth`).
+operating system's keychain (see `tidyinbox.imap.auth`).
 """
 
 from __future__ import annotations
@@ -43,24 +43,24 @@ RESERVED_IDS = {"anthropic", "ai"}
 def account_id_problem(account_id: str) -> str | None:
     """Why `account_id` can't be used as an account's short name, or None when it is fine."""
     if account_id.lower() in RESERVED_IDS:
-        return f"'{account_id}' is reserved for MailTidy's own use; pick another short name."
+        return f"'{account_id}' is reserved for TidyInbox's own use; pick another short name."
     if not ACCOUNT_ID_RE.match(account_id):
         return "Use letters, numbers, dots, dashes or underscores (no spaces), up to 40 characters."
     return None
 
 _HEADER = """\
-# MailTidy settings
+# TidyInbox settings
 #
-# This file says which email accounts MailTidy looks after and how it sorts your mail.
-# You can edit it by hand (it is plain text); run `mailtidy config check` afterwards to spot mistakes.
+# This file says which email accounts TidyInbox looks after and how it sorts your mail.
+# You can edit it by hand (it is plain text); run `tidyinbox config check` afterwards to spot mistakes.
 # Passwords are NOT stored here: they are kept in your computer's keychain.
 #
-#   accounts:   your mailboxes (add more with `mailtidy accounts add`)
+#   accounts:   your mailboxes (add more with `tidyinbox accounts add`)
 #   categories: category -> folder name. Rename a folder here, or write `off` to keep that mail in the Inbox
-#   rules:      your own rules; they win over MailTidy's built-in guesses
+#   rules:      your own rules; they win over TidyInbox's built-in guesses
 #   vip:        addresses or domains whose mail always stays in the Inbox
 #
-# Full guide: docs/rules.md in the MailTidy project (examples/config.example.yaml shows every setting)
+# Full guide: docs/rules.md in the TidyInbox project (examples/config.example.yaml shows every setting)
 """
 
 
@@ -79,40 +79,40 @@ def _platform() -> str:
 
 
 def default_config_path() -> Path:
-    """Where the settings file lives: $MAILTIDY_CONFIG, else the usual place for this operating system."""
-    env = os.environ.get("MAILTIDY_CONFIG")
+    """Where the settings file lives: $TIDYINBOX_CONFIG, else the usual place for this operating system."""
+    env = os.environ.get("TIDYINBOX_CONFIG")
     if env:
         return Path(env).expanduser()
     home = Path.home()
     plat = _platform()
     if plat == "windows":
         base = Path(os.environ.get("APPDATA") or home / "AppData" / "Roaming")
-        return base / "MailTidy" / CONFIG_FILENAME
+        return base / "TidyInbox" / CONFIG_FILENAME
     if plat == "macos":
-        return home / "Library" / "Application Support" / "MailTidy" / CONFIG_FILENAME
+        return home / "Library" / "Application Support" / "TidyInbox" / CONFIG_FILENAME
     base = Path(os.environ.get("XDG_CONFIG_HOME") or home / ".config")
-    return base / "mailtidy" / CONFIG_FILENAME
+    return base / "tidyinbox" / CONFIG_FILENAME
 
 
 def default_data_dir() -> Path:
-    """Where MailTidy keeps its memory (state.sqlite3, log, report): $MAILTIDY_DATA, else the OS default."""
-    env = os.environ.get("MAILTIDY_DATA")
+    """Where TidyInbox keeps its memory (state.sqlite3, log, report): $TIDYINBOX_DATA, else the OS default."""
+    env = os.environ.get("TIDYINBOX_DATA")
     if env:
         return Path(env).expanduser()
     home = Path.home()
     plat = _platform()
     if plat == "windows":
         base = Path(os.environ.get("LOCALAPPDATA") or home / "AppData" / "Local")
-        return base / "MailTidy"
+        return base / "TidyInbox"
     if plat == "macos":
-        return home / "Library" / "Application Support" / "MailTidy"
+        return home / "Library" / "Application Support" / "TidyInbox"
     base = Path(os.environ.get("XDG_DATA_HOME") or home / ".local" / "share")
-    return base / "mailtidy"
+    return base / "tidyinbox"
 
 
 def data_dir(cfg: AppConfig) -> Path:
-    """The data folder for this config ($MAILTIDY_DATA wins, then `data_dir:` in the file, then the default)."""
-    if os.environ.get("MAILTIDY_DATA"):
+    """The data folder for this config ($TIDYINBOX_DATA wins, then `data_dir:` in the file, then the default)."""
+    if os.environ.get("TIDYINBOX_DATA"):
         return default_data_dir()
     if cfg.data_dir:
         return Path(cfg.data_dir).expanduser()
@@ -155,7 +155,7 @@ def _check_keys(data: dict, allowed: set[str], where: str, warnings: list[str]) 
     for key in data:
         if str(key).lower() in _SECRET_KEYS:
             warnings.append(
-                f"{where} has a '{key}' entry. Passwords don't belong in this file: MailTidy ignores it and "
+                f"{where} has a '{key}' entry. Passwords don't belong in this file: TidyInbox ignores it and "
                 "uses your keychain instead. Please delete that line."
             )
         elif key not in allowed:

@@ -1,4 +1,4 @@
-"""The HTML report (`mailtidy report`): what MailTidy moved, where, and why.
+"""The HTML report (`tidyinbox report`): what TidyInbox moved, where, and why.
 
 Everything that comes from an email (sender, subject, folder names) is untrusted text and is escaped
 with html.escape before it goes into the page. The page is one self-contained file: no scripts, no
@@ -212,7 +212,7 @@ def build_report(store: Any, config: AppConfig) -> str:
         kind = "preview (nothing moved)" if _field(run, "dry_run", False) else "run"
         last = f"Last {kind}: {_e(started)}, moved {_e(_field(run, 'moved', 0))}."
     else:
-        last = "MailTidy hasn't run yet."
+        last = "TidyInbox hasn't run yet."
 
     emails = {a.id: a.email for a in config.accounts}
     acct_rows = [[_e(a), _e(emails.get(a, "")), _e(n)] for a, n in per_account.most_common()]
@@ -253,9 +253,9 @@ def build_report(store: Any, config: AppConfig) -> str:
         '<meta name="viewport" content="width=device-width, initial-scale=1">',
         # No scripts, no remote resources: block them outright in case anything slips through.
         "<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; style-src 'unsafe-inline'\">",
-        "<title>MailTidy report</title>",
+        "<title>TidyInbox report</title>",
         f"<style>{_CSS}</style></head><body><main>",
-        "<h1>MailTidy report</h1>",
+        "<h1>TidyInbox report</h1>",
         f'<p class="sub">Made {_e(generated)}. {last}</p>',
         f'<div class="tiles">{tiles_html}</div>',
         "<h2>By account</h2>",
@@ -264,23 +264,23 @@ def build_report(store: Any, config: AppConfig) -> str:
         _table(["Folder", "Moved"], folder_rows, empty="Nothing moved yet.", classes=["", "num"]),
         f"<h2>Last {len(move_rows)} moves</h2>" if move_rows else "<h2>Recent moves</h2>",
         _table(["When", "Account", "From", "Subject", "Moved to", "Why"], move_rows,
-               empty="No moves yet. Run `mailtidy preview` to see what would happen.",
+               empty="No moves yet. Run `tidyinbox preview` to see what would happen.",
                classes=["", "", "", "subj", "", ""]),
         "<h2>Runs</h2>",
         ('<p class="sub">Runs that moved mail. To put one run\'s mail back: '
-         "<code>mailtidy undo --run RUN-ID</code>, with the id from this table.</p>"),
+         "<code>tidyinbox undo --run RUN-ID</code>, with the id from this table.</p>"),
         _table(["When", "Run id", "Moved", "Checked"], run_rows, empty="No runs have moved mail yet.",
                classes=["", "", "num", "num"]),
         "<h2>Your corrections</h2>",
-        ('<p class="sub">Mail you moved somewhere else after MailTidy sorted it. MailTidy learns from these '
+        ('<p class="sub">Mail you moved somewhere else after TidyInbox sorted it. TidyInbox learns from these '
          "and never moves those messages again.</p>"),
-        _table(["When", "Account", "From", "MailTidy put it in", "You moved it to"], fix_rows,
+        _table(["When", "Account", "From", "TidyInbox put it in", "You moved it to"], fix_rows,
                empty="No corrections yet."),
         "<h2>Learned rules</h2>",
-        '<p class="sub">What MailTidy picked up from your existing folders and your corrections.</p>',
+        '<p class="sub">What TidyInbox picked up from your existing folders and your corrections.</p>',
         _table(["Kind", "Sender / list", "Goes to", "Account", "Evidence", "Updated"],
-               [_rule_row(r) for r in learned], empty="Nothing learned yet. Try `mailtidy learn`."),
-        "<footer>MailTidy never deletes mail. Undo the last run with <code>mailtidy undo</code>.</footer>",
+               [_rule_row(r) for r in learned], empty="Nothing learned yet. Try `tidyinbox learn`."),
+        "<footer>TidyInbox never deletes mail. Undo the last run with <code>tidyinbox undo</code>.</footer>",
         "</main></body></html>",
     ]
     return "\n".join(parts)

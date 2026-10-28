@@ -1,4 +1,4 @@
-"""Shared data types. Every part of MailTidy speaks in these, so keep them stable.
+"""Shared data types. Every part of TidyInbox speaks in these, so keep them stable.
 
 Owned by the orchestrator: propose changes instead of editing (see SPEC.md).
 """
@@ -88,7 +88,7 @@ class Decision:
     reason: str                   # plain English, shown in reports ("List-Unsubscribe header")
     folder: str | None = None     # explicit target folder (user rule / learned rule may name any folder)
     # True when the person taught this directly (a user rule, or a correction: they moved a message
-    # MailTidy sorted). Rules guessed from existing folders are False: they may not move mail that
+    # TidyInbox sorted). Rules guessed from existing folders are False: they may not move mail that
     # looks written by a person.
     explicit: bool = False
 
@@ -128,7 +128,7 @@ class AccountConfig:
 
     id: str                               # short unique name, e.g. "gmail-personal"
     email: str
-    provider: str = "custom"              # key in mailtidy.imap.providers.PROVIDERS
+    provider: str = "custom"              # key in tidyinbox.imap.providers.PROVIDERS
     host: str = ""
     port: int = 993
     ssl: bool = True
@@ -173,7 +173,7 @@ class AppConfig:
     categories: dict[str, str] = field(
         default_factory=lambda: {k: v[0] for k, v in DEFAULT_CATEGORIES.items()}
     )
-    folder_prefix: str = ""               # e.g. "MailTidy" -> "MailTidy/Receipts"
+    folder_prefix: str = ""               # e.g. "TidyInbox" -> "TidyInbox/Receipts"
     rules: list[Rule] = field(default_factory=list)
     vip: list[str] = field(default_factory=list)       # addresses/domains that always stay in the Inbox
     min_confidence: float = 0.75

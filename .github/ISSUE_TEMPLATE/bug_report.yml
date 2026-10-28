@@ -1,5 +1,5 @@
 name: Something went wrong
-description: MailTidy crashed, showed an error, or sorted mail wrongly
+description: TidyInbox crashed, showed an error, or sorted mail wrongly
 labels: [bug]
 body:
   - type: markdown
@@ -15,7 +15,7 @@ body:
     attributes:
       label: What happened?
       description: What did you do, what did you expect, and what happened instead?
-      placeholder: "I ran `mailtidy run` and a shipping notice from a shoe shop went to Promotions instead of Receipts."
+      placeholder: "I ran `tidyinbox run` and a shipping notice from a shoe shop went to Promotions instead of Receipts."
     validations:
       required: true
   - type: textarea
@@ -24,20 +24,20 @@ body:
       label: The message (described, not pasted)
       description: |
         If a message was sorted wrongly: the kind of sender (shop, bank, friend...), the subject (with
-        personal details removed), and the output of `mailtidy rules test --from sender@example.com --subject "..."`.
+        personal details removed), and the output of `tidyinbox rules test --from sender@example.com --subject "..."`.
       render: text
   - type: textarea
     id: output
     attributes:
       label: Error or output
-      description: Copy what MailTidy printed. Remove any email addresses first.
+      description: Copy what TidyInbox printed. Remove any email addresses first.
       render: text
   - type: input
     id: version
     attributes:
-      label: MailTidy version
-      description: Output of `mailtidy --version`
-      placeholder: mailtidy 0.1.0
+      label: TidyInbox version
+      description: Output of `tidyinbox --version`
+      placeholder: tidyinbox 0.1.0
     validations:
       required: true
   - type: dropdown

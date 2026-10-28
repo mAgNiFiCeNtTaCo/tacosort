@@ -3,10 +3,10 @@ from __future__ import annotations
 import json
 from types import SimpleNamespace
 
-from mailtidy.classify import Classifier, pipeline
-from mailtidy.classify.ai import AIClassifier
-from mailtidy.models import INBOX, AccountConfig, AIConfig, AppConfig, Decision, Rule
-from mailtidy.testing import make_message
+from tidyinbox.classify import Classifier, pipeline
+from tidyinbox.classify.ai import AIClassifier
+from tidyinbox.models import INBOX, AccountConfig, AIConfig, AppConfig, Decision, Rule
+from tidyinbox.testing import make_message
 
 UNSUB = {"List-Unsubscribe": "<https://example.com/u>"}
 
@@ -127,7 +127,7 @@ def test_unknown_rule_category_stays_in_inbox():
 
 def test_folder_rule_and_prefix():
     rules = [Rule(name="Shop", action="folder:Shopping/Amazon", from_=["*@amazon.com"])]
-    d = Classifier(cfg(rules=rules, folder_prefix="MailTidy")).classify(receipt())
+    d = Classifier(cfg(rules=rules, folder_prefix="TidyInbox")).classify(receipt())
     assert d.folder == "Shopping/Amazon" and not d.keeps
 
 

@@ -9,9 +9,9 @@ import types
 import pytest
 from imapclient import exceptions as imap_errors
 
-from mailtidy.backend import BackendError
-from mailtidy.imap.client import ImapBackend
-from mailtidy.models import AccountConfig
+from tidyinbox.backend import BackendError
+from tidyinbox.imap.client import ImapBackend
+from tidyinbox.models import AccountConfig
 
 
 class MailServer:

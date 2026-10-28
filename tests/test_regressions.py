@@ -1,12 +1,12 @@
 """Regression tests for problems the re-check review found after the fix wave (2026-10-28).
 Each test asserts the safe behaviour."""
 
-from mailtidy import engine
-from mailtidy.classify.pipeline import Classifier
-from mailtidy.models import AccountConfig, AppConfig
-from mailtidy.store import Store
-from mailtidy.testing import FakeBackend, make_message
 from tests.test_imap_move import MIDS, MailServer, connect, inbox_with
+from tidyinbox import engine
+from tidyinbox.classify.pipeline import Classifier
+from tidyinbox.models import AccountConfig, AppConfig
+from tidyinbox.store import Store
+from tidyinbox.testing import FakeBackend, make_message
 
 
 def quiet(_m):

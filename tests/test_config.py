@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from mailtidy import config as cfgmod
-from mailtidy.config import (
+from tidyinbox import config as cfgmod
+from tidyinbox.config import (
     ConfigError,
     config_problems,
     default_config_path,
@@ -16,7 +16,7 @@ from mailtidy.config import (
     load_config,
     save_config,
 )
-from mailtidy.models import AccountConfig, AIConfig, AppConfig, Rule
+from tidyinbox.models import AccountConfig, AIConfig, AppConfig, Rule
 
 
 def full_config() -> AppConfig:
@@ -29,7 +29,7 @@ def full_config() -> AppConfig:
     cfg.categories["promotions"] = ""          # turned off
     cfg.categories["receipts"] = "Shopping"    # renamed
     cfg.categories["kids"] = "Kids School"     # custom
-    cfg.folder_prefix = "MailTidy"
+    cfg.folder_prefix = "TidyInbox"
     cfg.rules = [
         Rule(name="school", action="kids", from_=["*@school.example.com"], subject=["field trip"]),
         Rule(name="boss", action="inbox", from_=["boss@example.com"], accounts=["work"]),
@@ -50,18 +50,18 @@ def test_round_trip(tmp_path: Path) -> None:
     assert loaded.accounts == original.accounts
     assert loaded.rules == original.rules
     assert loaded.categories == original.categories
-    assert loaded.folder_prefix == "MailTidy"
+    assert loaded.folder_prefix == "TidyInbox"
     assert loaded.vip == original.vip
     assert loaded.ai == original.ai
     assert loaded.min_confidence == 0.8 and loaded.interval_minutes == 30
     assert loaded.folder_for("promotions") is None
-    assert loaded.folder_for("receipts") == "MailTidy/Shopping"
+    assert loaded.folder_for("receipts") == "TidyInbox/Shopping"
 
 
 def test_saved_file_is_friendly(tmp_path: Path) -> None:
     path = save_config(full_config(), tmp_path / "config.yaml")
     text = path.read_text(encoding="utf-8")
-    assert text.startswith("# MailTidy settings")
+    assert text.startswith("# TidyInbox settings")
     assert "Passwords are NOT stored here" in text
     assert "promotions: 'off'" in text or "promotions: off" in text
     assert "  from:" in text and "from_:" not in text
@@ -137,8 +137,8 @@ def test_real_mistakes_are_plain_errors(tmp_path: Path, text: str, words: str) -
 
 
 def test_env_overrides(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("MAILTIDY_CONFIG", str(tmp_path / "x.yaml"))
-    monkeypatch.setenv("MAILTIDY_DATA", str(tmp_path / "data"))
+    monkeypatch.setenv("TIDYINBOX_CONFIG", str(tmp_path / "x.yaml"))
+    monkeypatch.setenv("TIDYINBOX_DATA", str(tmp_path / "data"))
     assert default_config_path() == tmp_path / "x.yaml"
     assert default_data_dir() == tmp_path / "data"
     cfg = AppConfig(data_dir=str(tmp_path / "elsewhere"))
@@ -147,19 +147,19 @@ def test_env_overrides(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_data_dir_from_config(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("MAILTIDY_DATA", raising=False)
+    monkeypatch.delenv("TIDYINBOX_DATA", raising=False)
     assert cfgmod.data_dir(AppConfig(data_dir=str(tmp_path))) == tmp_path
 
 
 @pytest.mark.parametrize("platform, expect_cfg, expect_data", [
-    ("win32", ("Roaming", "MailTidy", "config.yaml"), ("Local", "MailTidy")),
-    ("darwin", ("Library", "Application Support", "MailTidy", "config.yaml"),
-     ("Library", "Application Support", "MailTidy")),
-    ("linux", (".config", "mailtidy", "config.yaml"), (".local", "share", "mailtidy")),
+    ("win32", ("Roaming", "TidyInbox", "config.yaml"), ("Local", "TidyInbox")),
+    ("darwin", ("Library", "Application Support", "TidyInbox", "config.yaml"),
+     ("Library", "Application Support", "TidyInbox")),
+    ("linux", (".config", "tidyinbox", "config.yaml"), (".local", "share", "tidyinbox")),
 ])
 def test_platform_paths(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, platform: str,
                         expect_cfg: tuple, expect_data: tuple) -> None:
-    for var in ("MAILTIDY_CONFIG", "MAILTIDY_DATA", "XDG_CONFIG_HOME", "XDG_DATA_HOME"):
+    for var in ("TIDYINBOX_CONFIG", "TIDYINBOX_DATA", "XDG_CONFIG_HOME", "XDG_DATA_HOME"):
         monkeypatch.delenv(var, raising=False)
     monkeypatch.setattr(cfgmod.sys, "platform", platform)
     monkeypatch.setattr(cfgmod.Path, "home", classmethod(lambda cls: tmp_path))
@@ -170,10 +170,10 @@ def test_platform_paths(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, platfor
 
 
 def test_xdg_respected(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("MAILTIDY_CONFIG", raising=False)
+    monkeypatch.delenv("TIDYINBOX_CONFIG", raising=False)
     monkeypatch.setattr(cfgmod.sys, "platform", "linux")
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
-    assert default_config_path() == tmp_path / "xdg" / "mailtidy" / "config.yaml"
+    assert default_config_path() == tmp_path / "xdg" / "tidyinbox" / "config.yaml"
 
 
 def test_good_config_has_no_problems() -> None:
@@ -261,7 +261,7 @@ def test_make_private_skips_windows_and_home(tmp_path: Path, monkeypatch: pytest
     monkeypatch.setattr(cfgmod.os, "chmod", lambda p, m: calls.append((str(p), m)))
     monkeypatch.setattr(cfgmod.os, "name", "posix")
     monkeypatch.setattr(cfgmod.Path, "home", classmethod(lambda cls: tmp_path))
-    folder = tmp_path / "mailtidy"
+    folder = tmp_path / "tidyinbox"
     folder.mkdir()
     cfgmod.make_private(folder)
     cfgmod.make_private(tmp_path)             # the home folder: never changed

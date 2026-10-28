@@ -101,7 +101,7 @@ class AIClassifier:
             except ImportError as exc:
                 raise AIUnavailable(
                     "AI sorting needs the 'anthropic' package, which is not installed. "
-                    'Install it with:  pip install "mailtidy[ai]"   or turn AI off in the config.'
+                    'Install it with:  pip install "tidyinbox[ai]"   or turn AI off in the config.'
                 ) from exc
             client = anthropic.Anthropic(api_key=api_key) if api_key else anthropic.Anthropic()
         self.client = client

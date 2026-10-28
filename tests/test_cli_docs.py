@@ -9,7 +9,7 @@ import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parent.parent
-REPO_URL = "https://github.com/OWNER/REPO"
+REPO_URL = "https://github.com/mAgNiFiCeNtTaCo/tidyinbox"
 
 
 def text(name: str) -> str:
@@ -28,18 +28,19 @@ def all_docs() -> list[Path]:
 
 @pytest.mark.parametrize("doc", all_docs(), ids=lambda p: p.name)
 def test_never_installs_the_pypi_name(doc: Path) -> None:
-    """T-B2: "mailtidy" on PyPI belongs to someone else; installing it by name gets a stranger's program."""
+    """T-B2: TidyInbox is not published on PyPI, so installing it by name would fail or, if someone
+    else took the name, install a stranger's program. Docs install from GitHub only."""
     body = doc.read_text(encoding="utf-8")
-    bad = re.findall(r"pipx? install (?:--upgrade |-U )?\"?mailtidy(?:\[ai\])?\"?(?! @)(?=[\s`)]|$)", body)
+    bad = re.findall(r"pipx? install (?:--upgrade |-U )?\"?tidyinbox(?:\[ai\])?\"?(?! @)(?=[\s`)]|$)", body)
     assert bad == [], f"{doc.name}: {bad}"
-    assert "<this repository's URL>" not in body and "cd mailtidy\n" not in body
+    assert "<this repository's URL>" not in body and "OWNER/REPO" not in body
 
 
 def test_readme_installs_from_github() -> None:
     readme = text("README.md")
     assert f"pipx install git+{REPO_URL}" in readme
-    assert f'pipx install "mailtidy[ai] @ git+{REPO_URL}"' in readme
-    assert f"git clone {REPO_URL}\ncd REPO" in readme
+    assert f'pipx install "tidyinbox[ai] @ git+{REPO_URL}"' in readme
+    assert f"git clone {REPO_URL}\ncd tidyinbox" in readme
     for system in ("Windows", "macOS", "Linux"):
         assert f"**{system}:**" in readme, system
     assert "ensurepath" in readme
@@ -49,7 +50,7 @@ def test_ai_key_docs_point_at_the_keychain_command() -> None:
     """T-S9: a key set in one terminal window is invisible to the background schedule."""
     for name in ("README.md", "docs/privacy.md"):
         body = words(name)
-        assert "mailtidy config ai-key" in body, name
+        assert "tidyinbox config ai-key" in body, name
         assert "schedule" in body and "one terminal window" in body, name
 
 
@@ -57,8 +58,8 @@ def test_privacy_is_honest_about_prompt_injection() -> None:
     """S-S4: no promise that hidden instructions can't work; say what is and isn't possible."""
     for name in ("docs/privacy.md", "SECURITY.md"):
         body = words(name)
-        assert "can't change what MailTidy does" not in body, name
-        assert "mailtidy undo" in body, name
+        assert "can't change what TidyInbox does" not in body, name
+        assert "tidyinbox undo" in body, name
         assert "never sent to" in body and "person" in body, name
         assert "could" in body and "wrong folder" in body, name
 

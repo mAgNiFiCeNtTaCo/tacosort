@@ -5,11 +5,11 @@ from datetime import timedelta
 
 import pytest
 
-from mailtidy import learner
-from mailtidy.backend import BackendError
-from mailtidy.models import INBOX, AccountConfig, Address, AppConfig, FolderInfo, MoveRecord
-from mailtidy.store import ANY_ACCOUNT, Store, utcnow
-from mailtidy.testing import FakeBackend, make_message
+from tidyinbox import learner
+from tidyinbox.backend import BackendError
+from tidyinbox.models import INBOX, AccountConfig, Address, AppConfig, FolderInfo, MoveRecord
+from tidyinbox.store import ANY_ACCOUNT, Store, utcnow
+from tidyinbox.testing import FakeBackend, make_message
 
 
 def cfg(**kw) -> AppConfig:
@@ -95,14 +95,14 @@ def test_learns_the_users_own_scheme_and_contacts(store, fb, monkeypatch):
 def test_uses_classifier_contacts_helper_when_present(store, fb, monkeypatch):
     import types
 
-    mod = types.ModuleType("mailtidy.classify.contacts")
+    mod = types.ModuleType("tidyinbox.classify.contacts")
     mod.contacts_from_sent = lambda msgs: {"Helper@Example.org", "me@example.com"}
-    monkeypatch.setitem(sys.modules, "mailtidy.classify.contacts", mod)
+    monkeypatch.setitem(sys.modules, "tidyinbox.classify.contacts", mod)
     learner.learn_from_folders(cfg(), store, {"a": fb}, log=lambda m: None)
     assert store.contacts() == {"helper@example.org"}           # own address removed
 
 
-def test_learning_skips_mail_mailtidy_filed_itself(store):
+def test_learning_skips_mail_tidyinbox_filed_itself(store):
     b = FakeBackend("a")
     for s in ("1", "2"):
         b.add("Receipts", make_message("orders@shop.example.com", s, message_id=f"<{s}@example.com>"))
@@ -113,13 +113,13 @@ def test_learning_skips_mail_mailtidy_filed_itself(store):
 
 
 def test_contacts_fallback_without_the_classifier(monkeypatch):
-    monkeypatch.setitem(sys.modules, "mailtidy.classify.contacts", None)
+    monkeypatch.setitem(sys.modules, "tidyinbox.classify.contacts", None)
     msgs = [sent(["friend@example.org", "Me@example.com", "noreply@service.example.com"], "Hi")]
     assert learner.contacts_from_sent(msgs, {"me@example.com"}) == {"friend@example.org"}
 
 
 def test_prefix_scheme_means_existing_folder_is_custom(store, fb):
-    learner.learn_from_folders(cfg(folder_prefix="MailTidy"), store, {"a": fb}, log=lambda m: None)
+    learner.learn_from_folders(cfg(folder_prefix="TidyInbox"), store, {"a": fb}, log=lambda m: None)
     assert rules(store)[("a", "address", "orders@shop.example.com")] == ("folder", "Receipts")
 
 
@@ -184,7 +184,7 @@ def test_same_message_in_inbox_and_folder_is_skipped(store):
 def test_jane_in_projects_is_not_learned(store):
     """Reviewer case (C-B2): the person filed two emails from their contractor Jane in "Projects".
     Jane's next "URGENT: can you call me today?" must stay in the Inbox."""
-    from mailtidy.classify.pipeline import Classifier
+    from tidyinbox.classify.pipeline import Classifier
 
     b = FakeBackend("a")
     b.add("Projects", make_message("jane@acme-builders.com", "Site visit photos"))
@@ -233,7 +233,7 @@ def test_domain_rule_blocked_by_inbox_mail_from_the_domain(store):
 
 
 def test_without_the_classifier_the_counts_alone_decide(store, monkeypatch):
-    monkeypatch.setitem(sys.modules, "mailtidy.classify.heuristics", None)
+    monkeypatch.setitem(sys.modules, "tidyinbox.classify.heuristics", None)
     b = FakeBackend("a")
     b.add("Projects", make_message("jane@acme-builders.com", "Site visit photos"))
     b.add("Projects", make_message("jane@acme-builders.com", "Updated quote"))
@@ -263,7 +263,7 @@ def test_unreadable_inbox_means_no_folder_rules(store):
 
 
 def test_watched_folders_count_as_inbox(store):
-    """A folder MailTidy watches (here "archive", in other capitals) is part of the "Inbox" side: a copy
+    """A folder TidyInbox watches (here "archive", in other capitals) is part of the "Inbox" side: a copy
     of its mail in another folder is not a filing habit."""
     config = AppConfig(accounts=[AccountConfig(id="a", email="me@example.com", watch_folders=["INBOX", "archive"])])
     b = FakeBackend("a")
@@ -283,7 +283,7 @@ def test_namespace_prefix_matches_scheme_folders(store):
     assert learner.category_for_folder(c, "INBOX.Receipts", ".") == "receipts"
     assert learner.category_for_folder(c, "INBOX/Receipts") == "receipts"
     assert learner.category_for_folder(c, "INBOX") is None
-    assert learner.category_for_folder(cfg(folder_prefix="MailTidy"), "INBOX.MailTidy.Receipts", ".") == "receipts"
+    assert learner.category_for_folder(cfg(folder_prefix="TidyInbox"), "INBOX.TidyInbox.Receipts", ".") == "receipts"
     b = FakeBackend("a", delimiter=".")
     b.add("INBOX.Receipts", make_message("orders@shop.example.com", "Order 1"))
     b.add("INBOX.Receipts", make_message("orders@shop.example.com", "Order 2"))

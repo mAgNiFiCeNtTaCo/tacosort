@@ -1,7 +1,7 @@
-"""The `mailtidy` command. Every message here is written for people who don't program.
+"""The `tidyinbox` command. Every message here is written for people who don't program.
 
 The parts that do the real work (imap, classify, engine, schedule) are imported only inside the
-commands that need them, so `mailtidy --help` stays fast and each part can be tested on its own.
+commands that need them, so `tidyinbox --help` stays fast and each part can be tested on its own.
 """
 
 from __future__ import annotations
@@ -42,13 +42,13 @@ from .models import AccountConfig, Address, AppConfig, Message
 EXIT_OK, EXIT_ERROR, EXIT_USAGE = 0, 1, 2
 PREVIEW_FILE = "previewed.json"
 MAX_INTERVAL = 1439          # the scheduler's limit: just under a day
-REINSTALL_HINT = "Try installing MailTidy again (the Install steps are in the README)."
+REINSTALL_HINT = "Try installing TidyInbox again (the Install steps are in the README)."
 
 
 # ---- lazily loaded parts (tests replace these) --------------------------------------------------------
 
 def _module(name: str) -> Any:
-    return importlib.import_module(f"mailtidy.{name}")
+    return importlib.import_module(f"tidyinbox.{name}")
 
 
 def _engine() -> Any:
@@ -75,7 +75,7 @@ def make_backend(account: AccountConfig, secret_getter: Callable[[str], str | No
 
 
 def open_store(cfg: AppConfig) -> Any:
-    """MailTidy's memory (SQLite) for this config."""
+    """TidyInbox's memory (SQLite) for this config."""
     path = state_path(cfg)
     path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     return _module("store").Store(path)
@@ -167,7 +167,7 @@ class UserError(Exception):
 def _need_accounts(ctx: Ctx) -> AppConfig:
     cfg = ctx.cfg
     if not cfg.accounts:
-        raise UserError("No email accounts are set up yet. Run `mailtidy setup` to add one.")
+        raise UserError("No email accounts are set up yet. Run `tidyinbox setup` to add one.")
     return cfg
 
 
@@ -223,9 +223,9 @@ def _gate(cfg: AppConfig, accounts: list[AccountConfig], yes: bool) -> list[Acco
     missing = [a for a in accounts if a.id not in done]
     if missing:
         names = ", ".join(a.id for a in missing)
-        warn(f"Not moving anything in {names} yet: MailTidy hasn't shown you a preview for "
+        warn(f"Not moving anything in {names} yet: TidyInbox hasn't shown you a preview for "
              f"{'this account' if len(missing) == 1 else 'these accounts'}.\n"
-             "Run `mailtidy preview` first to see what would happen (nothing is moved).\n"
+             "Run `tidyinbox preview` first to see what would happen (nothing is moved).\n"
              "When you're happy with it, run this again, or add --yes to skip the preview.")
     return [a for a in accounts if a.id in done]
 
@@ -261,7 +261,7 @@ def do_preview(ctx: Ctx, accounts: list[AccountConfig], limit: int = 50) -> int:
             rep = _engine().run_once(_only(cfg, [acct]), store, _backends([acct]),
                                      dry_run=True, backlog=True, log=ctx.log)
             if not rep.run_id:
-                errors.append("MailTidy is busy with another run right now; try the preview again in a minute.")
+                errors.append("TidyInbox is busy with another run right now; try the preview again in a minute.")
                 continue
             moves.extend(rep.moves)
             scanned += rep.scanned
@@ -280,13 +280,13 @@ def do_preview(ctx: Ctx, accounts: list[AccountConfig], limit: int = 50) -> int:
             say(f"...and {len(moves) - limit} more (show more with --limit {len(moves)}).")
         say("")
     say(f"Preview: {len(moves)} of {scanned} messages would be moved into folders; {kept} would stay in the Inbox.")
-    say("Nothing was changed. Every move MailTidy makes can be undone with `mailtidy undo`.")
+    say("Nothing was changed. Every move TidyInbox makes can be undone with `tidyinbox undo`.")
     for e in errors:
         warn(f"Problem: {e}")
     if ok_ids:
         mark_previewed(cfg, ok_ids)
-        say("To do it for real: `mailtidy run --backlog` (sorts the mail already there) "
-            "or `mailtidy run` (only new mail from now on).")
+        say("To do it for real: `tidyinbox run --backlog` (sorts the mail already there) "
+            "or `tidyinbox run` (only new mail from now on).")
     return EXIT_ERROR if errors else EXIT_OK
 
 
@@ -307,7 +307,7 @@ def do_run(ctx: Ctx, accounts: list[AccountConfig], *, dry_run: bool, backlog: b
     finally:
         _close(store)
     if rep.skipped or not rep.run_id:   # another run (the schedule or `watch`) holds the lock: nothing to do
-        ctx.log("Another MailTidy run is busy right now, so this one was skipped. That's fine.")
+        ctx.log("Another TidyInbox run is busy right now, so this one was skipped. That's fine.")
         return EXIT_OK
     if not dry_run and yes:
         mark_previewed(cfg, [a.id for a in accounts])
@@ -316,9 +316,9 @@ def do_run(ctx: Ctx, accounts: list[AccountConfig], *, dry_run: bool, backlog: b
         for m in rep.moves[:20]:
             ctx.log(f"  {_short(m.sender, 30)}: {_short(m.subject, 50)} -> {m.to_folder}")
         if len(rep.moves) > 20:
-            ctx.log(f"  ...and {len(rep.moves) - 20} more (see `mailtidy report`).")
+            ctx.log(f"  ...and {len(rep.moves) - 20} more (see `tidyinbox report`).")
     if not dry_run and rep.moved:
-        ctx.log("Changed your mind? `mailtidy undo` puts the last run's mail back.")
+        ctx.log("Changed your mind? `tidyinbox undo` puts the last run's mail back.")
     for e in rep.errors:
         warn(f"Problem: {e}")
     return EXIT_ERROR if rep.errors else EXIT_OK
@@ -377,7 +377,7 @@ def _app_password_steps(provider: Any) -> None:
     notes = (getattr(provider, "notes", "") or "").strip()
     url = getattr(provider, "app_password_url", "") or ""
     say("")
-    say(f"MailTidy needs an *app password* for {name}: a separate password just for MailTidy, which you can")
+    say(f"TidyInbox needs an *app password* for {name}: a separate password just for TidyInbox, which you can")
     say("cancel at any time without changing your normal password.")
     if notes:
         say("")
@@ -418,16 +418,16 @@ def _password_login(acct: AccountConfig, provider: Any, *, existing: bool = Fals
         say(f"That didn't work: {problem}")
         if not ask_yes("Try a different password?", True):
             if existing:
-                say("The password MailTidy already had is kept.")
+                say("The password TidyInbox already had is kept.")
                 return False
             return ask_yes("Save this account anyway, without a password? (add one later with "
-                           "`mailtidy accounts add`)", False)
+                           "`tidyinbox accounts add`)", False)
 
 
 def _microsoft_login(acct: AccountConfig, provider: Any) -> bool:
     say("")
     say("Microsoft no longer lets mail programs sign in to Outlook.com / Hotmail with a password.")
-    say("MailTidy signs in the Microsoft way instead: you approve it once in your browser.")
+    say("TidyInbox signs in the Microsoft way instead: you approve it once in your browser.")
     say("For that it needs a free 'client ID', which you create once on Microsoft's website.")
     say("docs/outlook-oauth.md walks you through it (about 10 minutes, no payment needed).")
     notes = (getattr(provider, "notes", "") or "").strip()
@@ -438,7 +438,7 @@ def _microsoft_login(acct: AccountConfig, provider: Any) -> bool:
     say("")
     client_id = ask("Paste your client ID (or press Enter to skip this account for now): ")
     if not client_id:
-        say("Skipped. Come back with `mailtidy accounts add` once you have a client ID.")
+        say("Skipped. Come back with `tidyinbox accounts add` once you have a client ID.")
         return False
     acct.oauth_client_id = client_id
     auth = _auth()
@@ -465,7 +465,7 @@ def _forget_secrets(account_id: str) -> bool:
         return True
     except (BackendError, OSError) as e:   # auth.CredentialError is a BackendError
         warn(f"Couldn't remove the saved sign-in from your keychain ({e}); you can delete the "
-             f"'mailtidy' entries for '{account_id}' by hand.")
+             f"'tidyinbox' entries for '{account_id}' by hand.")
         return False
 
 
@@ -535,8 +535,8 @@ def add_account(ctx: Ctx) -> AccountConfig | None:
 
 def cmd_setup(args: argparse.Namespace, ctx: Ctx) -> int:
     cfg = ctx.cfg
-    say("Welcome to MailTidy!")
-    say("MailTidy sorts automated mail (receipts, newsletters, promotions...) into folders, so your Inbox")
+    say("Welcome to TidyInbox!")
+    say("TidyInbox sorts automated mail (receipts, newsletters, promotions...) into folders, so your Inbox")
     say("keeps only mail from people. It never deletes anything, never marks mail as read, and every move")
     say("can be undone. Your password stays in your computer's keychain, never in a file.")
     say("")
@@ -556,14 +556,14 @@ def cmd_setup(args: argparse.Namespace, ctx: Ctx) -> int:
         ctx.save()   # an empty settings file, so `config edit` and friends have something to show
     accounts = [a for a in cfg.accounts if a.enabled]
     if not accounts:
-        say("No accounts yet. Run `mailtidy setup` again when you're ready.")
+        say("No accounts yet. Run `tidyinbox setup` again when you're ready.")
         return EXIT_OK
 
     say("")
-    if ask_yes("Learn from the folders you already have, so MailTidy follows your own system?", True):
+    if ask_yes("Learn from the folders you already have, so TidyInbox follows your own system?", True):
         do_learn(ctx, accounts)
         say("")
-    if ask_yes("See a preview of what MailTidy would do with the mail in your Inbox? (nothing is moved)", True):
+    if ask_yes("See a preview of what TidyInbox would do with the mail in your Inbox? (nothing is moved)", True):
         do_preview(ctx, accounts)
         say("")
         if ask_yes("Sort the mail in your Inbox like that now? (every move can be undone)", False):
@@ -572,7 +572,7 @@ def cmd_setup(args: argparse.Namespace, ctx: Ctx) -> int:
     minutes = cfg.interval_minutes
     if ask_yes(f"Keep your mail tidy automatically, every {minutes} minutes in the background?", True):
         if not previewed_accounts(cfg) & {a.id for a in accounts}:
-            say("Note: background runs only move mail in accounts you've previewed. Run `mailtidy preview` soon.")
+            say("Note: background runs only move mail in accounts you've previewed. Run `tidyinbox preview` soon.")
         try:
             say(_schedule().install(minutes, ctx.path.resolve()))
         except (RuntimeError, ValueError, OSError) as e:   # schedule.ScheduleError is a RuntimeError
@@ -580,13 +580,13 @@ def cmd_setup(args: argparse.Namespace, ctx: Ctx) -> int:
     if cfg.ai.enabled:
         say("")
         say("The AI helper is switched on in your settings. Save your Anthropic API key with")
-        say("`mailtidy config ai-key`, so the background schedule can use it too.")
+        say("`tidyinbox config ai-key`, so the background schedule can use it too.")
     say("")
     say("All set. Handy commands:")
-    say("  mailtidy status    what MailTidy has been doing")
-    say("  mailtidy preview   what it would do right now")
-    say("  mailtidy undo      put the last run's mail back")
-    say("  mailtidy report    a page listing every move")
+    say("  tidyinbox status    what TidyInbox has been doing")
+    say("  tidyinbox preview   what it would do right now")
+    say("  tidyinbox undo      put the last run's mail back")
+    say("  tidyinbox report    a page listing every move")
     return EXIT_OK
 
 
@@ -602,7 +602,7 @@ def cmd_accounts(args: argparse.Namespace, ctx: Ctx) -> int:
         return EXIT_OK
     if action == "remove":
         acct = _pick_accounts(cfg, args.id)[0]
-        say(f"This stops MailTidy looking after {acct.email}. Your mail and folders stay exactly as they are.")
+        say(f"This stops TidyInbox looking after {acct.email}. Your mail and folders stay exactly as they are.")
         if not args.yes and not ask_yes(f"Remove '{acct.id}'?", False):
             say("Nothing changed.")
             return EXIT_OK
@@ -622,7 +622,7 @@ def cmd_accounts(args: argparse.Namespace, ctx: Ctx) -> int:
                 failed += 1
                 say(f"  Problem: {problem}")
         return EXIT_ERROR if failed else EXIT_OK
-    raise UserError("Choose list, add, remove or test (for example `mailtidy accounts list`).")
+    raise UserError("Choose list, add, remove or test (for example `tidyinbox accounts list`).")
 
 
 def cmd_run(args: argparse.Namespace, ctx: Ctx) -> int:
@@ -651,7 +651,7 @@ def cmd_undo(args: argparse.Namespace, ctx: Ctx) -> int:
     finally:
         _close(store)
     if n:   # the engine already said how many were put back (or that there was nothing to undo)
-        say("MailTidy won't move them again.")
+        say("TidyInbox won't move them again.")
     return EXIT_OK
 
 
@@ -679,7 +679,7 @@ def _store_if_exists(cfg: AppConfig) -> Any:
     try:
         return open_store(cfg)
     except Exception as e:  # noqa: BLE001 - a damaged memory file must not stop status/report
-        warn(f"Couldn't read MailTidy's memory file ({e}); showing what I can.")
+        warn(f"Couldn't read TidyInbox's memory file ({e}); showing what I can.")
         return None
 
 
@@ -689,13 +689,13 @@ def cmd_status(args: argparse.Namespace, ctx: Ctx) -> int:
     cfg = ctx.cfg
     say(f"Settings file: {ctx.path}{'' if ctx.path.exists() else ' (not created yet)'}")
     if not cfg.accounts:
-        say("Accounts: none yet. Run `mailtidy setup` to add one.")
+        say("Accounts: none yet. Run `tidyinbox setup` to add one.")
     else:
         done = previewed_accounts(cfg)
         say(f"Accounts ({len(cfg.accounts)}):")
         for a in cfg.accounts:
             state = "on" if a.enabled else "off"
-            note = "" if a.id in done else "  (not previewed yet: run `mailtidy preview`)"
+            note = "" if a.id in done else "  (not previewed yet: run `tidyinbox preview`)"
             say(f"  {a.id:<20} {a.email:<34} {state}{note}")
     store = _store_if_exists(cfg)
     try:
@@ -780,7 +780,7 @@ def cmd_rules(args: argparse.Namespace, ctx: Ctx) -> int:
             for i, r in enumerate(cfg.rules, 1):
                 say(f"  {i}. {r.name}: {_rule_text(r)} -> {r.action}")
         else:
-            say("You have no rules of your own yet. See docs/rules.md, then `mailtidy config edit`.")
+            say("You have no rules of your own yet. See docs/rules.md, then `tidyinbox config edit`.")
         store = _store_if_exists(cfg)
         try:
             learned = report.learned_rules(store) if store is not None else []
@@ -792,7 +792,7 @@ def cmd_rules(args: argparse.Namespace, ctx: Ctx) -> int:
                                  report._field(item, "folder") or report._field(item, "category"))
             say(f"  {kind} {key} -> {target}")
         if len(learned) > 20:
-            say(f"  ...and {len(learned) - 20} more (see `mailtidy report`).")
+            say(f"  ...and {len(learned) - 20} more (see `tidyinbox report`).")
         return EXIT_OK
 
     # rules test
@@ -807,7 +807,7 @@ def cmd_rules(args: argparse.Namespace, ctx: Ctx) -> int:
                       from_=Address((args.from_ or "").lower()), headers=headers)
     else:
         raise UserError("Give a saved email (.eml file) or --from and/or --subject. "
-                        "Example: mailtidy rules test --from news@example.com --subject \"Weekly digest\"")
+                        "Example: tidyinbox rules test --from news@example.com --subject \"Weekly digest\"")
     store = _store_if_exists(cfg)
     try:
         learned = getattr(store, "learned", None) if store is not None else None
@@ -824,7 +824,7 @@ def cmd_rules(args: argparse.Namespace, ctx: Ctx) -> int:
         say(f"Result: it goes to {target}{kind}.")
     say(f"Why: {decision.reason}")
     say(f"Decided by: {decision.source.replace('-', ' ')} (confidence {decision.confidence:.2f}; "
-        f"MailTidy only moves mail at {cfg.min_confidence:.2f} or more)")
+        f"TidyInbox only moves mail at {cfg.min_confidence:.2f} or more)")
     return EXIT_OK
 
 
@@ -838,7 +838,7 @@ def cmd_schedule(args: argparse.Namespace, ctx: Ctx) -> int:
                             "(15 is a good choice).")
         enabled = {a.id for a in cfg.accounts if a.enabled}
         if not args.yes and not previewed_accounts(cfg) & enabled:
-            raise UserError("Run `mailtidy preview` first to see what would happen, then turn the schedule on. "
+            raise UserError("Run `tidyinbox preview` first to see what would happen, then turn the schedule on. "
                             "(Or add --yes to skip the preview.)")
         try:
             say(sched.install(minutes, ctx.path.resolve()))
@@ -941,7 +941,7 @@ def _ai_key(args: argparse.Namespace, ctx: Ctx) -> int:
             auth.delete_ai_key()
             say("Removed your Anthropic API key from the keychain.")
             return EXIT_OK
-        say("MailTidy keeps your Anthropic API key in your computer's keychain, so the background")
+        say("TidyInbox keeps your Anthropic API key in your computer's keychain, so the background")
         say("schedule can use it too. Make a key at https://console.anthropic.com (API Keys).")
         key = "".join(getpass.getpass("Paste the API key here (it stays hidden while you type): ").split())
         if not key:
@@ -951,9 +951,9 @@ def _ai_key(args: argparse.Namespace, ctx: Ctx) -> int:
         del key
     except BackendError as e:   # auth.CredentialError: no usable keychain
         raise UserError(f"Couldn't reach your keychain: {e}") from None
-    say("Saved. MailTidy will use this key when `ai: enabled: yes` is set in your settings.")
+    say("Saved. TidyInbox will use this key when `ai: enabled: yes` is set in your settings.")
     if not ctx.cfg.ai.enabled:
-        say("The AI helper is still off: run `mailtidy config edit` and set `enabled: yes` under `ai:`.")
+        say("The AI helper is still off: run `tidyinbox config edit` and set `enabled: yes` under `ai:`.")
     return EXIT_OK
 
 
@@ -961,11 +961,11 @@ def _ai_key(args: argparse.Namespace, ctx: Ctx) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        prog="mailtidy",
+        prog="tidyinbox",
         description="Keep every email account organized the same way, automatically. "
-                    "Start with `mailtidy setup`.",
+                    "Start with `tidyinbox setup`.",
     )
-    p.add_argument("--version", action="version", version=f"mailtidy {__version__}")
+    p.add_argument("--version", action="version", version=f"tidyinbox {__version__}")
     p.add_argument("--config", metavar="PATH", help="use this settings file instead of the usual one")
     sub = p.add_subparsers(dest="command", metavar="COMMAND")
 
@@ -977,10 +977,10 @@ def build_parser() -> argparse.ArgumentParser:
     acc.add_parser("list", help="show your accounts")
     acc.add_parser("add", help="add an account (asks questions)")
     r = acc.add_parser("remove", help="stop looking after an account (mail is not touched)")
-    r.add_argument("id", help="the account's short name (see `mailtidy accounts list`)")
+    r.add_argument("id", help="the account's short name (see `tidyinbox accounts list`)")
     r.add_argument("--yes", action="store_true", help="don't ask for confirmation")
     r.add_argument("--keep-password", action="store_true", help="leave its password in the keychain")
-    t = acc.add_parser("test", help="check that MailTidy can log in")
+    t = acc.add_parser("test", help="check that TidyInbox can log in")
     t.add_argument("id", nargs="?", help="only this account")
     s.set_defaults(func=cmd_accounts)
 
@@ -1004,7 +1004,7 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("undo", help="put mail back where it was")
     g = s.add_mutually_exclusive_group()
     g.add_argument("--last", type=int, metavar="N", help="undo the last N moves")
-    g.add_argument("--run", metavar="ID", help="undo one run (ids are in `mailtidy report`)")
+    g.add_argument("--run", metavar="ID", help="undo one run (ids are in `tidyinbox report`)")
     s.set_defaults(func=cmd_undo)
 
     s = sub.add_parser("watch", help="stay open and sort mail the moment it arrives")
@@ -1012,12 +1012,12 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--yes", action="store_true", help="move mail even if you haven't seen a preview")
     s.set_defaults(func=cmd_watch)
 
-    s = sub.add_parser("status", help="what MailTidy has been doing")
+    s = sub.add_parser("status", help="what TidyInbox has been doing")
     s.set_defaults(func=cmd_status)
 
     s = sub.add_parser("rules", help="show your rules, or test where a message would go")
     ru = s.add_subparsers(dest="rules_action", metavar="ACTION", required=True)
-    ru.add_parser("list", help="show your rules and what MailTidy learned")
+    ru.add_parser("list", help="show your rules and what TidyInbox learned")
     t = ru.add_parser("test", help="where would this message go?")
     t.add_argument("file", nargs="?", help="a saved email (.eml file)")
     t.add_argument("--from", dest="from_", metavar="ADDRESS", help="sender address")
@@ -1035,7 +1035,7 @@ def build_parser() -> argparse.ArgumentParser:
     sc.add_parser("status", help="is it on?")
     s.set_defaults(func=cmd_schedule)
 
-    s = sub.add_parser("report", help="make a web page listing everything MailTidy did")
+    s = sub.add_parser("report", help="make a web page listing everything TidyInbox did")
     s.add_argument("--open", action="store_true", help="open it in your browser")
     s.add_argument("--output", metavar="FILE", help="save it here instead of the memory folder")
     s.set_defaults(func=cmd_report)
@@ -1053,7 +1053,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def _accept_config_everywhere(parser: argparse.ArgumentParser) -> None:
-    """Let `--config PATH` also come after the command (`mailtidy run --config PATH`): the background
+    """Let `--config PATH` also come after the command (`tidyinbox run --config PATH`): the background
     schedule runs it that way, and people type it that way too."""
     for action in parser._actions:
         if isinstance(action, argparse._SubParsersAction):
@@ -1085,7 +1085,7 @@ def main(argv: list[str] | None = None) -> int:
         return EXIT_USAGE
     path = Path(args.config).expanduser() if args.config else default_config_path()
     ctx = Ctx(path=path, quiet=bool(getattr(args, "quiet", False)))
-    # Linux/macOS: everything MailTidy creates (memory, log, report, settings) is readable by this user only.
+    # Linux/macOS: everything TidyInbox creates (memory, log, report, settings) is readable by this user only.
     old_umask = os.umask(0o077) if os.name == "posix" else None
     try:
         _private_folders(ctx)
@@ -1099,14 +1099,14 @@ def main(argv: list[str] | None = None) -> int:
     except KeyboardInterrupt:
         warn("Stopped.")
     except ImportError as e:
-        if os.environ.get("MAILTIDY_DEBUG"):
+        if os.environ.get("TIDYINBOX_DEBUG"):
             raise
-        warn(f"Part of MailTidy is missing ({e.name or e}). {REINSTALL_HINT}")
+        warn(f"Part of TidyInbox is missing ({e.name or e}). {REINSTALL_HINT}")
     except Exception as e:
-        if os.environ.get("MAILTIDY_DEBUG"):
+        if os.environ.get("TIDYINBOX_DEBUG"):
             raise
         warn(f"Something went wrong: {type(e).__name__}: {e}\n"
-             "Set MAILTIDY_DEBUG=1 and run it again to see details for a bug report "
+             "Set TIDYINBOX_DEBUG=1 and run it again to see details for a bug report "
              "(remove any email addresses before sharing).")
     finally:
         if old_umask is not None:
@@ -1115,9 +1115,9 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _private_folders(ctx: Ctx) -> None:
-    """Tighten MailTidy's own settings and memory folders made by older versions (Linux/macOS).
+    """Tighten TidyInbox's own settings and memory folders made by older versions (Linux/macOS).
 
-    Only the usual folders (or the ones named by $MAILTIDY_CONFIG / $MAILTIDY_DATA) are changed, never a
+    Only the usual folders (or the ones named by $TIDYINBOX_CONFIG / $TIDYINBOX_DATA) are changed, never a
     folder someone pointed `--config` or `data_dir:` at, such as Documents. New files and folders are
     private anyway because of the umask set in main()."""
     if os.name != "posix":

@@ -9,9 +9,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from mailtidy.classify.ai import AIClassifier, AIUnavailable
-from mailtidy.models import INBOX, AIConfig
-from mailtidy.testing import make_message
+from tidyinbox.classify.ai import AIClassifier, AIUnavailable
+from tidyinbox.models import INBOX, AIConfig
+from tidyinbox.testing import make_message
 
 
 class FakeMessages:

@@ -1,7 +1,7 @@
 """Passwords and sign-in tokens.
 
 Secrets live in the operating system's password store (Windows Credential Manager, macOS Keychain,
-Linux Secret Service) through the `keyring` package, under the service name "mailtidy". Each kind of
+Linux Secret Service) through the `keyring` package, under the service name "tidyinbox". Each kind of
 secret has its own entry name, so they can never be mixed up:
 - `account:<id>`: an account's password, or its OAuth2 refresh token
 - `account:<id>:client-secret`: the Google client secret of an oauth2-google account
@@ -10,10 +10,10 @@ Older versions saved an account's password under the bare `<id>`; it is moved to
 first time it is read. Nothing secret is ever written to the config file or to logs.
 
 Optional OAuth2 sign-in (XOAUTH2) for two providers:
-- Microsoft (Outlook.com / Hotmail): the "device code" flow. MailTidy shows a short code, the person
+- Microsoft (Outlook.com / Hotmail): the "device code" flow. TidyInbox shows a short code, the person
   types it at microsoft.com/devicelogin and approves. Needs the person's own app registration
   (a public client id, not secret).
-- Google: the "installed app" flow. MailTidy opens the browser, Google sends the person back to a tiny
+- Google: the "installed app" flow. TidyInbox opens the browser, Google sends the person back to a tiny
   web server on this computer (http://127.0.0.1:<port>), protected with PKCE. Needs the person's own
   Google "Desktop app" client id and client secret.
 In both cases the long-lived refresh token is stored in the keychain as `account:<id>`; short-lived
@@ -38,7 +38,7 @@ from collections.abc import Callable
 from ..backend import BackendError
 from ..models import AccountConfig
 
-SERVICE = "mailtidy"
+SERVICE = "tidyinbox"
 
 MICROSOFT_AUTHORITY = "https://login.microsoftonline.com/{tenant}/oauth2/v2.0"
 MICROSOFT_SCOPE = "https://outlook.office.com/IMAP.AccessAsUser.All offline_access"
@@ -61,7 +61,7 @@ class CredentialError(BackendError):
 # ---- keychain ------------------------------------------------------------------------------------
 
 _NO_KEYCHAIN = (
-    "MailTidy could not use this computer's password store (keychain), so it cannot save or read "
+    "TidyInbox could not use this computer's password store (keychain), so it cannot save or read "
     "your email password. On Windows and macOS this normally just works. On Linux, install and "
     "unlock a keyring such as GNOME Keyring or KWallet (a server without a desktop needs one set up, "
     "for example the 'keyrings.alt' package). Details: {detail}"
@@ -113,7 +113,7 @@ def _account_entry(account_id: str, suffix: str = "") -> str:
     if not account_id or ":" in account_id:
         raise CredentialError(
             f"The account name '{account_id}' can't be used for saving a password (it must not be empty "
-            "or contain ':'). Rename the account in the config file, then run 'mailtidy setup'."
+            "or contain ':'). Rename the account in the config file, then run 'tidyinbox setup'."
         )
     return f"account:{account_id}{suffix}"
 
@@ -190,7 +190,7 @@ def _post_form(url: str, fields: dict[str, str]) -> dict:
             return {"error": f"http_{exc.code}"}
     except (urllib.error.URLError, OSError) as exc:
         raise CredentialError(
-            f"MailTidy could not reach the sign-in server ({type(exc).__name__}). "
+            f"TidyInbox could not reach the sign-in server ({type(exc).__name__}). "
             "Check your internet connection and try again."
         ) from None
 
@@ -198,7 +198,7 @@ def _post_form(url: str, fields: dict[str, str]) -> dict:
 def _need_client_id(account: AccountConfig) -> str:
     if not account.oauth_client_id:
         raise CredentialError(
-            f"Account '{account.id}' signs in with OAuth2 but has no client id. Run 'mailtidy setup' "
+            f"Account '{account.id}' signs in with OAuth2 but has no client id. Run 'tidyinbox setup' "
             "and paste the client id of your app registration."
         )
     return account.oauth_client_id
@@ -217,8 +217,8 @@ def _explain(answer: dict, what: str) -> CredentialError:
     """Turn an OAuth error answer into a plain-English error (only the error code, never tokens)."""
     code = str(answer.get("error", "unknown"))
     hints = {
-        "invalid_grant": "The saved sign-in has expired or was revoked. Run 'mailtidy setup' to sign in again.",
-        "invalid_client": "The client id (or client secret) was not accepted. Check it in 'mailtidy setup'.",
+        "invalid_grant": "The saved sign-in has expired or was revoked. Run 'tidyinbox setup' to sign in again.",
+        "invalid_client": "The client id (or client secret) was not accepted. Check it in 'tidyinbox setup'.",
         "unauthorized_client": "The app registration does not allow this sign-in. For Microsoft, switch "
                                "'Allow public client flows' to Yes in the app's Authentication page.",
         "authorization_declined": "The sign-in was declined in the browser.",
@@ -263,7 +263,7 @@ def microsoft_device_login(account: AccountConfig, *, log: Callable[[str], objec
         })
         if "access_token" in answer:
             _remember(account, answer)
-            log("Signed in to Microsoft. MailTidy saved the sign-in in your keychain.")
+            log("Signed in to Microsoft. TidyInbox saved the sign-in in your keychain.")
             return
         error = answer.get("error")
         if error == "authorization_pending":
@@ -336,11 +336,11 @@ class _RedirectHandler(http.server.BaseHTTPRequestHandler):
             return
         server: _RedirectServer = self.server  # type: ignore[assignment]
         if not secrets.compare_digest(query.get("state", "").encode(), server.state.encode()):
-            self._answer(400, "This answer does not belong to the MailTidy sign-in that is waiting.")
+            self._answer(400, "This answer does not belong to the TidyInbox sign-in that is waiting.")
             return
         server.accept(query)
         if "code" in query:
-            self._answer(200, "MailTidy got your sign-in. You can close this tab and go back to MailTidy.")
+            self._answer(200, "TidyInbox got your sign-in. You can close this tab and go back to TidyInbox.")
         else:
             self._answer(200, "The sign-in was cancelled. You can close this tab.")
 
@@ -409,12 +409,12 @@ def google_loopback_login(account: AccountConfig, client_secret: str, *,
         raise _explain(answer, "Google sign-in")
     if not answer.get("refresh_token"):
         raise CredentialError(
-            "Google did not hand out a lasting sign-in (refresh token). Remove MailTidy's access at "
-            "https://myaccount.google.com/permissions and run 'mailtidy setup' again."
+            "Google did not hand out a lasting sign-in (refresh token). Remove TidyInbox's access at "
+            "https://myaccount.google.com/permissions and run 'tidyinbox setup' again."
         )
     _set(_client_secret_entry(account.id), client_secret)
     _remember(account, answer)
-    log("Signed in to Google. MailTidy saved the sign-in in your keychain.")
+    log("Signed in to Google. TidyInbox saved the sign-in in your keychain.")
 
 
 def _google_refresh(account: AccountConfig, refresh_token: str) -> str:
@@ -440,7 +440,7 @@ def get_access_token(account: AccountConfig) -> str:
     refresh_token = get_secret(account.id)
     if not refresh_token:
         raise CredentialError(
-            f"Account '{account.id}' is not signed in yet. Run 'mailtidy setup' to sign in."
+            f"Account '{account.id}' is not signed in yet. Run 'tidyinbox setup' to sign in."
         )
     if account.auth == "oauth2-microsoft":
         return _microsoft_refresh(account, refresh_token)

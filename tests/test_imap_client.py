@@ -7,16 +7,16 @@ from datetime import datetime, timezone
 import pytest
 from imapclient import exceptions as imap_errors
 
-from mailtidy.backend import BackendError
-from mailtidy.imap import client as client_module
-from mailtidy.imap.client import (
+from tidyinbox.backend import BackendError
+from tidyinbox.imap import client as client_module
+from tidyinbox.imap.client import (
     ImapBackend,
     decode_header_value,
     make_snippet,
     parse_addresses,
     parse_copyuid,
 )
-from mailtidy.models import AccountConfig
+from tidyinbox.models import AccountConfig
 
 SECRET = "sup3r-s3cret-app-pass"
 
@@ -340,23 +340,23 @@ def test_ensure_folder_with_dot_delimiter_and_inbox_prefix():
     fake = FakeIMAP(delimiter=".", prefix="INBOX.", folders={"INBOX": ()})
     b = backend(fake)
     b.connect()
-    assert b.ensure_folder("MailTidy/Receipts") == "INBOX.MailTidy.Receipts"
+    assert b.ensure_folder("TidyInbox/Receipts") == "INBOX.TidyInbox.Receipts"
     created = [c[1] for c in fake.calls if c[0] == "create_folder"]
-    assert created == ["INBOX.MailTidy", "INBOX.MailTidy.Receipts"]
+    assert created == ["INBOX.TidyInbox", "INBOX.TidyInbox.Receipts"]
     subscribed = [c[1] for c in fake.calls if c[0] == "subscribe_folder"]
     assert subscribed == created
     # Second time: nothing new is created.
     fake.calls.clear()
-    assert b.ensure_folder("MailTidy/Receipts") == "INBOX.MailTidy.Receipts"
+    assert b.ensure_folder("TidyInbox/Receipts") == "INBOX.TidyInbox.Receipts"
     assert "create_folder" not in fake.names()
 
 
 def test_ensure_folder_plain_server_and_existing_parent():
-    fake = FakeIMAP(folders={"INBOX": (), "MailTidy": ()})
+    fake = FakeIMAP(folders={"INBOX": (), "TidyInbox": ()})
     b = backend(fake)
     b.connect()
-    assert b.ensure_folder("MailTidy/Finance") == "MailTidy/Finance"
-    assert [c[1] for c in fake.calls if c[0] == "create_folder"] == ["MailTidy/Finance"]
+    assert b.ensure_folder("TidyInbox/Finance") == "TidyInbox/Finance"
+    assert [c[1] for c in fake.calls if c[0] == "create_folder"] == ["TidyInbox/Finance"]
     assert b.ensure_folder("Receipts") == "Receipts"
 
 
@@ -368,14 +368,14 @@ def test_ensure_folder_already_given_with_prefix():
 
 
 def test_ensure_folder_reuses_other_capitals():
-    fake = FakeIMAP(folders={"INBOX": (), "receipts": (), "mailtidy": ()})
+    fake = FakeIMAP(folders={"INBOX": (), "receipts": (), "tidyinbox": ()})
     b = backend(fake)
     b.connect()
     assert b.ensure_folder("Receipts") == "receipts"
-    assert b.ensure_folder("MailTidy/Travel") == "mailtidy/Travel"     # the parent keeps its spelling
-    assert [c[1] for c in fake.calls if c[0] == "create_folder"] == ["mailtidy/Travel"]
+    assert b.ensure_folder("TidyInbox/Travel") == "tidyinbox/Travel"     # the parent keeps its spelling
+    assert [c[1] for c in fake.calls if c[0] == "create_folder"] == ["tidyinbox/Travel"]
     fake.calls.clear()
-    assert b.ensure_folder("MAILTIDY/travel") == "mailtidy/Travel"
+    assert b.ensure_folder("TIDYINBOX/travel") == "tidyinbox/Travel"
     assert "create_folder" not in fake.names()
 
 

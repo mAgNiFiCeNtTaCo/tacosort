@@ -1,4 +1,4 @@
-"""Learning from the user, so MailTidy follows their habits instead of fighting them.
+"""Learning from the user, so TidyInbox follows their habits instead of fighting them.
 
 - `learn_from_folders`: looks at the folders the user already made ("Kids School", "Work"...) and at
   the Sent folder. A sender whose mail sits mostly in one folder (counting the Inbox too) gets a learned
@@ -7,7 +7,7 @@
   mail that looks written by a person does not make a folder rule (people belong in the Inbox).
 - `refresh_contacts`: re-reads the newest Sent mail, so people the user started writing to later are
   protected too (the engine calls it once a day).
-- `detect_corrections`: checks where the messages MailTidy moved are now. Moved back to the Inbox ->
+- `detect_corrections`: checks where the messages TidyInbox moved are now. Moved back to the Inbox ->
   that sender stays in the Inbox from now on, and that message is never moved again. Moved to another
   folder -> that sender's mail goes there from now on.
 """
@@ -123,7 +123,7 @@ def _read(backend: MailBackend, folder: str, limit: int) -> list[Message]:
 
 
 def _automation_check() -> Callable[[Message], bool] | None:
-    """The classifier's "looks machine-sent" test, or None when it isn't installed (then MailTidy
+    """The classifier's "looks machine-sent" test, or None when it isn't installed (then TidyInbox
     can't tell people from machines here and relies on the counts alone)."""
     try:
         from .classify.heuristics import automation_markers
@@ -203,7 +203,7 @@ def learn_account(config: AppConfig, store: Store, backend: MailBackend, account
         try:
             msgs = _read(backend, name, sample)
         except BackendError as e:
-            report.errors.append(f"{account.id}: could not read {name!r}, so MailTidy did not learn from "
+            report.errors.append(f"{account.id}: could not read {name!r}, so TidyInbox did not learn from "
                                  f"your folders this time ({e})")
             inbox_ok = False
             break
@@ -229,7 +229,7 @@ def learn_account(config: AppConfig, store: Store, backend: MailBackend, account
         for m in msgs:
             report.messages_scanned += 1
             if store.moved_by_us(account.id, m.message_id):
-                continue        # mail MailTidy filed itself teaches nothing about the user's habits
+                continue        # mail TidyInbox filed itself teaches nothing about the user's habits
             email = m.from_.email
             if not email or "@" not in email or email in own:
                 continue
@@ -437,5 +437,5 @@ def detect_corrections(store: Store, backend: MailBackend, account: str | Accoun
             store.mark_seen(account_id, mv.message_id, f"moved:{where}", override=True)
         store.mark_move_checked(mv.id, f"corrected:{where}")
         found_count += 1
-        log(f"{account_id}: you moved a message from {mv.sender} to {where}; MailTidy will remember that.")
+        log(f"{account_id}: you moved a message from {mv.sender} to {where}; TidyInbox will remember that.")
     return found_count

@@ -1,13 +1,13 @@
-"""Run MailTidy in the background every few minutes, using the computer's own scheduler.
+"""Run TidyInbox in the background every few minutes, using the computer's own scheduler.
 
-- Windows: a Task Scheduler task "MailTidy-<your user name>" for the current user (no admin needed),
-  every N minutes and at logon, running `pythonw.exe -m mailtidy run --quiet` (pythonw = no console
-  window). Older versions named the task plain "MailTidy"; status and uninstall still find that one.
-- macOS: a LaunchAgent (~/Library/LaunchAgents/com.mailtidy.run.plist), every N minutes and at login.
-- Linux: a systemd user timer (mailtidy.timer), or a crontab line when systemd isn't available.
+- Windows: a Task Scheduler task "TidyInbox-<your user name>" for the current user (no admin needed),
+  every N minutes and at logon, running `pythonw.exe -m tidyinbox run --quiet` (pythonw = no console
+  window). Older versions named the task plain "TidyInbox"; status and uninstall still find that one.
+- macOS: a LaunchAgent (~/Library/LaunchAgents/com.tidyinbox.run.plist), every N minutes and at login.
+- Linux: a systemd user timer (tidyinbox.timer), or a crontab line when systemd isn't available.
 
-The scheduled job starts in MailTidy's own data folder and, on Python 3.11 or newer, with `-P`, so a
-stray file such as `yaml.py` lying in the home folder can never be loaded into MailTidy.
+The scheduled job starts in TidyInbox's own data folder and, on Python 3.11 or newer, with `-P`, so a
+stray file such as `yaml.py` lying in the home folder can never be loaded into TidyInbox.
 
 The `build_*` functions only build commands and file contents (easy to test); `install`, `uninstall`
 and `status` run them.
@@ -29,10 +29,10 @@ from datetime import datetime
 from pathlib import Path
 from xml.sax.saxutils import escape
 
-TASK_NAME = "MailTidy"        # the old, machine-wide task name (still found by status and uninstall)
-LAUNCHD_LABEL = "com.mailtidy.run"
-SYSTEMD_NAME = "mailtidy"
-CRON_MARKER = "# mailtidy"
+TASK_NAME = "TidyInbox"        # the old, machine-wide task name (still found by status and uninstall)
+LAUNCHD_LABEL = "com.tidyinbox.run"
+SYSTEMD_NAME = "tidyinbox"
+CRON_MARKER = "# tidyinbox"
 SCHTASKS_TR_LIMIT = 261       # schtasks refuses longer /TR commands
 
 
@@ -70,14 +70,14 @@ def windowless_python(executable: str | None = None) -> str:
 
 def python_options(version_info: tuple[int, ...] | None = None) -> list[str]:
     """Options for the scheduled Python: `-P` (Python 3.11+) keeps the current folder out of the
-    import path, so only the installed MailTidy and its libraries are ever loaded."""
+    import path, so only the installed TidyInbox and its libraries are ever loaded."""
     version = tuple(version_info or sys.version_info)[:2]
     return ["-P"] if version >= (3, 11) else []
 
 
 def run_arguments(config_path: Path | str) -> list[str]:
-    """The MailTidy part of the scheduled command line (after Python and its options)."""
-    return ["-m", "mailtidy", "run", "--quiet", "--config", str(config_path)]
+    """The TidyInbox part of the scheduled command line (after Python and its options)."""
+    return ["-m", "tidyinbox", "run", "--quiet", "--config", str(config_path)]
 
 
 def _command(python: str, config_path: Path | str) -> list[str]:
@@ -85,7 +85,7 @@ def _command(python: str, config_path: Path | str) -> list[str]:
 
 
 def _data_dir(config_path: Path | str | None = None) -> Path | None:
-    """MailTidy's data folder for this config (where the scheduled job starts), or None if unknown."""
+    """TidyInbox's data folder for this config (where the scheduled job starts), or None if unknown."""
     try:
         from .config import data_dir, default_data_dir, load_config
     except ImportError:
@@ -107,7 +107,7 @@ def _prepare_dir(path: Path | None) -> Path | None:
 
 # ---- Windows --------------------------------------------------------------------------------------
 def windows_task_name(user: str | None = None) -> str:
-    """The Task Scheduler name for this Windows user, e.g. "MailTidy-Some_One". Task names are
+    """The Task Scheduler name for this Windows user, e.g. "TidyInbox-Some_One". Task names are
     machine-wide, so each user on a shared PC gets their own."""
     user = os.environ.get("USERNAME", "") if user is None else user
     clean = re.sub(r"[^A-Za-z0-9._-]+", "_", user.split("\\")[-1]).strip("._")[:64]
@@ -119,7 +119,7 @@ def build_windows_command(pythonw: str, config_path: Path | str, interval_minute
     """Plain `schtasks /Create` for an every-N-minutes task (the fallback when the XML is refused)."""
     n = _check_interval(interval_minutes)
     opts = "".join(f"{o} " for o in python_options())
-    tr = f'"{pythonw}" {opts}-m mailtidy run --quiet --config "{config_path}"'
+    tr = f'"{pythonw}" {opts}-m tidyinbox run --quiet --config "{config_path}"'
     if len(tr) > SCHTASKS_TR_LIMIT:
         raise ScheduleError("The path to Python or to the config file is too long for Windows Task "
                             "Scheduler. Move the config file to a shorter path and try again.")
@@ -144,7 +144,7 @@ def build_windows_task_xml(pythonw: str, config_path: Path | str, interval_minut
     return f"""<?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
   <RegistrationInfo>
-    <Description>MailTidy keeps your email folders organized.</Description>
+    <Description>TidyInbox keeps your email folders organized.</Description>
   </RegistrationInfo>
   <Triggers>
     <TimeTrigger>
@@ -193,7 +193,7 @@ def _windows_user() -> str:
 
 
 def _legacy_task_is_ours() -> bool | None:
-    """The old plain "MailTidy" task: None when there is none, True when it runs as this Windows user
+    """The old plain "TidyInbox" task: None when there is none, True when it runs as this Windows user
     (or its owner can't be read), False when it belongs to someone else on this PC."""
     result = _run(["schtasks", "/Query", "/TN", TASK_NAME, "/XML"])
     if result.returncode != 0:
@@ -210,7 +210,7 @@ def _legacy_task_is_ours() -> bool | None:
 
 
 def _delete_legacy_task() -> bool:
-    """Remove the old plain "MailTidy" task when it is this user's. True when one was removed."""
+    """Remove the old plain "TidyInbox" task when it is this user's. True when one was removed."""
     if _legacy_task_is_ours() is not True:
         return False
     return _run(["schtasks", "/Delete", "/TN", TASK_NAME, "/F"]).returncode == 0
@@ -225,7 +225,7 @@ def _install_windows(n: int, config_path: Path) -> str:
     for at_logon in (True, False):
         xml = build_windows_task_xml(pythonw, config_path, n, user=_windows_user(), start=datetime.now(),
                                      at_logon=at_logon, work_dir=work_dir)
-        fd, tmp = tempfile.mkstemp(suffix=".xml", prefix="mailtidy-task-")
+        fd, tmp = tempfile.mkstemp(suffix=".xml", prefix="tidyinbox-task-")
         os.close(fd)
         try:
             Path(tmp).write_text(xml, encoding="utf-16")
@@ -234,7 +234,7 @@ def _install_windows(n: int, config_path: Path) -> str:
             Path(tmp).unlink(missing_ok=True)
         if result.returncode == 0:
             extra = " and when you log in" if at_logon else ""
-            done = (f"MailTidy will now run every {n} minutes{extra} while you are logged in to Windows "
+            done = (f"TidyInbox will now run every {n} minutes{extra} while you are logged in to Windows "
                     f"(Task Scheduler task \"{name}\").")
             break
         errors.append((result.stderr or result.stdout).strip())
@@ -242,8 +242,8 @@ def _install_windows(n: int, config_path: Path) -> str:
         result = _run(build_windows_command(pythonw, config_path, n, name))
         if result.returncode != 0:
             errors.append((result.stderr or result.stdout).strip())
-            raise ScheduleError("Windows Task Scheduler refused to create the MailTidy task: " + errors[-1])
-        done = (f"MailTidy will now run every {n} minutes while you are logged in to Windows "
+            raise ScheduleError("Windows Task Scheduler refused to create the TidyInbox task: " + errors[-1])
+        done = (f"TidyInbox will now run every {n} minutes while you are logged in to Windows "
                 f"(Task Scheduler task \"{name}\"). Note: Windows may skip runs while a laptop is "
                 "on battery.")
     if name != TASK_NAME and _delete_legacy_task():
@@ -266,8 +266,8 @@ def _status_windows() -> str:
     if result.returncode != 0:
         if name != TASK_NAME and _legacy_task_is_ours():
             return (f"The background schedule is on (Task Scheduler task \"{TASK_NAME}\", made by an "
-                    "earlier MailTidy version). Run `mailtidy schedule on` once to update it.")
-        return "The background schedule is off (no MailTidy task in Windows Task Scheduler)."
+                    "earlier TidyInbox version). Run `tidyinbox schedule on` once to update it.")
+        return "The background schedule is off (no TidyInbox task in Windows Task Scheduler)."
     info = _parse_list(result.stdout)
     parts = [f"The background schedule is on (Task Scheduler task \"{name}\")."]
     if info.get("next run time"):
@@ -284,7 +284,7 @@ def _uninstall_windows() -> str:
         removed = _delete_legacy_task() or removed
     if not removed:
         return "The background schedule was already off."
-    return "The background schedule is off. MailTidy will only run when you start it."
+    return "The background schedule is off. TidyInbox will only run when you start it."
 
 
 # ---- macOS ----------------------------------------------------------------------------------------
@@ -328,9 +328,9 @@ def _install_macos(n: int, config_path: Path) -> str:
     _run(unload)
     result = _run(load)
     if result.returncode != 0:
-        raise ScheduleError("macOS refused to start the MailTidy background agent: "
+        raise ScheduleError("macOS refused to start the TidyInbox background agent: "
                             + (result.stderr or result.stdout).strip())
-    return f"MailTidy will now run every {n} minutes and when you log in to your Mac."
+    return f"TidyInbox will now run every {n} minutes and when you log in to your Mac."
 
 
 def _status_macos() -> str:
@@ -338,7 +338,7 @@ def _status_macos() -> str:
         return "The background schedule is off."
     result = _run(["launchctl", "print", f"gui/{os.getuid()}/{LAUNCHD_LABEL}"])
     if result.returncode != 0:
-        return "The background schedule is set up but not loaded; run `mailtidy schedule on` again."
+        return "The background schedule is set up but not loaded; run `tidyinbox schedule on` again."
     return "The background schedule is on (macOS LaunchAgent)."
 
 
@@ -348,7 +348,7 @@ def _uninstall_macos() -> str:
     if not path.exists():
         return "The background schedule was already off."
     path.unlink()
-    return "The background schedule is off. MailTidy will only run when you start it."
+    return "The background schedule is off. TidyInbox will only run when you start it."
 
 
 # ---- Linux ----------------------------------------------------------------------------------------
@@ -372,7 +372,7 @@ def build_systemd_units(python: str, config_path: Path | str, interval_minutes: 
     # WorkingDirectory takes the path as it is (no quotes); only % needs escaping.
     workdir = f"WorkingDirectory={str(work_dir).replace('%', '%%')}\n" if work_dir else ""
     service = f"""[Unit]
-Description=MailTidy: keep email folders organized
+Description=TidyInbox: keep email folders organized
 After=network-online.target
 
 [Service]
@@ -381,7 +381,7 @@ Type=oneshot
 Nice=10
 """
     timer = f"""[Unit]
-Description=Run MailTidy every {n} minutes
+Description=Run TidyInbox every {n} minutes
 
 [Timer]
 OnBootSec=2min
@@ -441,24 +441,24 @@ def _install_linux(n: int, config_path: Path) -> str:
         _run(["systemctl", "--user", "daemon-reload"])
         result = _run(["systemctl", "--user", "enable", "--now", f"{SYSTEMD_NAME}.timer"])
         if result.returncode != 0:
-            raise ScheduleError("systemd refused to start the MailTidy timer: "
+            raise ScheduleError("systemd refused to start the TidyInbox timer: "
                                 + (result.stderr or result.stdout).strip())
-        return (f"MailTidy will now run every {n} minutes (systemd user timer {SYSTEMD_NAME}.timer). "
+        return (f"TidyInbox will now run every {n} minutes (systemd user timer {SYSTEMD_NAME}.timer). "
                 "It runs while you are logged in; to keep it running when you are logged out, run "
                 "`loginctl enable-linger` once.")
     if not shutil.which("crontab"):
-        raise ScheduleError("This computer has neither a systemd user session nor cron, so MailTidy "
-                            "can't schedule itself. Use `mailtidy watch` instead.")
+        raise ScheduleError("This computer has neither a systemd user session nor cron, so TidyInbox "
+                            "can't schedule itself. Use `tidyinbox watch` instead.")
     lines = _crontab_without_us() + [build_cron_line(sys.executable, config_path, n, work_dir)]
     result = _run(["crontab", "-"], input="\n".join(lines) + "\n")
     if result.returncode != 0:
-        raise ScheduleError("cron refused the MailTidy entry: " + (result.stderr or result.stdout).strip())
-    return (f"MailTidy will now run {cron_interval_text(n)} (a line in your crontab, because this computer "
-            "has no systemd user session; MailTidy prefers a systemd user timer when there is one).\n"
+        raise ScheduleError("cron refused the TidyInbox entry: " + (result.stderr or result.stdout).strip())
+    return (f"TidyInbox will now run {cron_interval_text(n)} (a line in your crontab, because this computer "
+            "has no systemd user session; TidyInbox prefers a systemd user timer when there is one).\n"
             "Please check that it works: cron jobs run without your desktop session, so they often can't "
             "open the keychain where your password is saved, and then every run fails with \"No password "
-            "is saved\". Run `mailtidy status` after a while. If the runs fail, use `mailtidy watch` in a "
-            "terminal instead, or turn on a systemd user session and run `mailtidy schedule on` again.")
+            "is saved\". Run `tidyinbox status` after a while. If the runs fail, use `tidyinbox watch` in a "
+            "terminal instead, or turn on a systemd user session and run `tidyinbox schedule on` again.")
 
 
 def _status_linux() -> str:
@@ -466,7 +466,7 @@ def _status_linux() -> str:
         result = _run(["systemctl", "--user", "is-active", f"{SYSTEMD_NAME}.timer"])
         if result.stdout.strip() == "active":
             return f"The background schedule is on (systemd user timer {SYSTEMD_NAME}.timer)."
-        return "The background schedule is set up but not active; run `mailtidy schedule on` again."
+        return "The background schedule is set up but not active; run `tidyinbox schedule on` again."
     if shutil.which("crontab"):
         result = _run(["crontab", "-l"])
         if result.returncode == 0 and any(line.rstrip().endswith(CRON_MARKER) for line in result.stdout.splitlines()):
@@ -490,7 +490,7 @@ def _uninstall_linux() -> str:
             did = True
     if not did:
         return "The background schedule was already off."
-    return "The background schedule is off. MailTidy will only run when you start it."
+    return "The background schedule is off. TidyInbox will only run when you start it."
 
 
 # ---- public ---------------------------------------------------------------------------------------

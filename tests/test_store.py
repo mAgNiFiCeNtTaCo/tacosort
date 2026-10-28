@@ -5,8 +5,8 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from mailtidy.models import INBOX, MoveRecord, RunReport
-from mailtidy.store import ANY_ACCOUNT, SCHEMA_VERSION, Store, StoreError, normalize_list_id
+from tidyinbox.models import INBOX, MoveRecord, RunReport
+from tidyinbox.store import ANY_ACCOUNT, SCHEMA_VERSION, Store, StoreError, normalize_list_id
 
 NOW = datetime(2026, 10, 1, 12, 0, tzinfo=timezone.utc)
 
@@ -223,7 +223,7 @@ def test_moves_for_message(store):
 
 
 def test_a_first_version_state_file_is_upgraded(tmp_path):
-    from mailtidy.store import MIGRATIONS
+    from tidyinbox.store import MIGRATIONS
 
     path = tmp_path / "state.sqlite3"
     conn = sqlite3.connect(path)

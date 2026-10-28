@@ -1,4 +1,4 @@
-"""ImapBackend: the real-server implementation of `mailtidy.backend.MailBackend`, built on IMAPClient.
+"""ImapBackend: the real-server implementation of `tidyinbox.backend.MailBackend`, built on IMAPClient.
 
 Safety promises kept here:
 - Messages are only ever read with BODY.PEEK (and folders opened read-only for reading), so nothing
@@ -9,7 +9,7 @@ Safety promises kept here:
   the originals are left flagged \\Deleted (their mail app hides or purges them later) and nothing is
   expunged.
 - Passwords and tokens never appear in error messages or logs.
-- A MOVE/COPY is never blindly repeated after a dropped connection: MailTidy reconnects and looks
+- A MOVE/COPY is never blindly repeated after a dropped connection: TidyInbox reconnects and looks
   (by Message-ID) at what the server already did, so a message is never copied twice and a move that
   did happen is still reported (and so can be undone).
 
@@ -56,7 +56,7 @@ MAX_IDLE = 25 * 60                          # servers drop IDLE after ~29 minute
 POLL_EVERY = 30                             # seconds between checks when the server has no IDLE
 
 # Folders without special-use flags are recognised by these common names (last part, lower case),
-# so MailTidy still never touches Sent/Drafts/Trash/Junk on older servers.
+# so TidyInbox still never touches Sent/Drafts/Trash/Junk on older servers.
 _NAME_FLAGS = {
     "sent": "\\Sent", "sent items": "\\Sent", "sent mail": "\\Sent", "sent messages": "\\Sent",
     "drafts": "\\Drafts", "draft": "\\Drafts",
@@ -70,7 +70,7 @@ _SPECIAL = {"\\Sent", "\\Drafts", "\\Trash", "\\Junk", "\\All", "\\Archive", "\\
 _DROPPED = (imap_errors.IMAPClientAbortError, OSError, EOFError)   # OSError covers socket + SSL errors
 MESSAGE_ID_FETCH = "BODY.PEEK[HEADER.FIELDS (MESSAGE-ID)]"
 
-_logger = logging.getLogger("mailtidy.imap")
+_logger = logging.getLogger("tidyinbox.imap")
 
 
 class _Copied(Exception):
@@ -223,7 +223,7 @@ def _is_loopback(host: str) -> bool:
 # ---- the backend ---------------------------------------------------------------------------------
 
 class ImapBackend:
-    """One IMAP account. Implements every method of `MailBackend` (see mailtidy/backend.py)."""
+    """One IMAP account. Implements every method of `MailBackend` (see tidyinbox/backend.py)."""
 
     def __init__(
         self,
@@ -272,7 +272,7 @@ class ImapBackend:
         self.close()
         if not self.host:
             raise BackendError(
-                f"Account '{self.account_id}' has no IMAP server set. Run 'mailtidy setup' and enter "
+                f"Account '{self.account_id}' has no IMAP server set. Run 'tidyinbox setup' and enter "
                 "your provider's IMAP server name."
             )
         user = self.account.username or self.account.email
@@ -282,7 +282,7 @@ class ImapBackend:
             secret = self._secret_getter(self.account_id) or ""
             if not secret:
                 raise BackendError(
-                    f"No password is saved for account '{self.account_id}'. Run 'mailtidy setup' to "
+                    f"No password is saved for account '{self.account_id}'. Run 'tidyinbox setup' to "
                     "enter it (it is kept in your computer's keychain)."
                 )
         self._secret = secret
@@ -299,7 +299,7 @@ class ImapBackend:
                 except Exception as exc:  # noqa: BLE001 (never crash on odd server data)
                     raise BackendError(
                         f"The server {self.host} did not offer a secure (STARTTLS) connection, so "
-                        f"MailTidy did not send your password. ({self._scrub(exc)})"
+                        f"TidyInbox did not send your password. ({self._scrub(exc)})"
                     ) from None
             try:
                 if self.account.auth.startswith("oauth2"):
@@ -317,7 +317,7 @@ class ImapBackend:
         self._selected = None
 
     def _connect_hint(self, exc: Exception) -> str:
-        what = f"MailTidy could not connect to {self.host} port {self.port} ({type(exc).__name__}: {self._scrub(exc)})."
+        what = f"TidyInbox could not connect to {self.host} port {self.port} ({type(exc).__name__}: {self._scrub(exc)})."
         if isinstance(exc, ssl.SSLError):
             return what + " The secure connection failed: check the port (993 = SSL, 143 = STARTTLS)."
         if isinstance(exc, socket.gaierror):
@@ -335,17 +335,17 @@ class ImapBackend:
             return (f"{base}\nIMAP is switched off for this mailbox. Look for an IMAP setting in your "
                     "mail's web settings; for a work or school account, ask your administrator to allow IMAP.")
         if self.account.auth.startswith("oauth2"):
-            return (f"{base}\nThe sign-in token was not accepted. Run 'mailtidy setup' to sign in again.")
+            return (f"{base}\nThe sign-in token was not accepted. Run 'tidyinbox setup' to sign in again.")
         if key == "outlook":
             return (f"{base}\nMicrosoft no longer accepts passwords for Outlook.com/Hotmail IMAP. Run "
-                    "'mailtidy setup' and choose the Microsoft sign-in (oauth2-microsoft).")
+                    "'tidyinbox setup' and choose the Microsoft sign-in (oauth2-microsoft).")
         if key == "gmail" or "application-specific password" in lower:
             return (f"{base}\nGmail needs an App Password (16 letters), not your Google password: "
                     "https://myaccount.google.com/apppasswords (needs 2-Step Verification). Run "
-                    "'mailtidy setup' to enter it.")
+                    "'tidyinbox setup' to enter it.")
         if key in ("yahoo", "aol", "icloud", "fastmail"):
             return (f"{base}\n{self.provider.name} needs an app password, not your normal password: "
-                    f"{self.provider.app_password_url} . Run 'mailtidy setup' to enter it.")
+                    f"{self.provider.app_password_url} . Run 'tidyinbox setup' to enter it.")
         if key == "protonmail-bridge":
             return f"{base}\nUse the Bridge password shown in the Proton Mail Bridge app, not your Proton password."
         return f"{base}\nCheck the user name and password (many providers want an app password)."
@@ -388,7 +388,7 @@ class ImapBackend:
                 if attempt == 2:
                     raise BackendError(
                         f"The connection to {self.host} keeps dropping while {what} "
-                        f"({type(exc).__name__}). MailTidy will try again next run."
+                        f"({type(exc).__name__}). TidyInbox will try again next run."
                     ) from None
             except imap_errors.IMAPClientError as exc:
                 raise BackendError(f"The server said no while {what}: {self._scrub(exc)}") from None
@@ -408,7 +408,7 @@ class ImapBackend:
             name = _text(name)
             delim_s = _text(delim)
             fl = {_text(f) for f in flags}
-            # Server flags vary in case (\\sent vs \\Sent): normalise the ones MailTidy cares about.
+            # Server flags vary in case (\\sent vs \\Sent): normalise the ones TidyInbox cares about.
             fl = {next((s for s in _SPECIAL if s.lower() == f.lower()), f) for f in fl}
             if not fl & _SPECIAL:
                 last = name.rsplit(delim_s, 1)[-1] if delim_s else name
@@ -496,7 +496,7 @@ class ImapBackend:
         """UIDVALIDITY, UIDNEXT and message count (STATUS: changes nothing).
 
         A server that leaves UIDNEXT out of its answer gets "highest UID + 1" from a search instead,
-        because 0 would make MailTidy think the whole folder is new."""
+        because 0 would make TidyInbox think the whole folder is new."""
         what = f"checking the folder '{folder}'"
         st = self._call(lambda c: c.folder_status(folder, ["UIDVALIDITY", "UIDNEXT", "MESSAGES"]), what)
         uidnext = int(st.get(b"UIDNEXT") or 0)
@@ -728,9 +728,9 @@ class ImapBackend:
             except BackendError as exc:
                 problem = exc
         self._log(
-            f"MailTidy copied {len(uids)} message(s) from '{folder}' to '{dest}' but could not remove the "
+            f"TidyInbox copied {len(uids)} message(s) from '{folder}' to '{dest}' but could not remove the "
             f"originals from '{folder}' ({self._scrub(problem)}). They are counted as moved; the originals "
-            "stay where they were, and MailTidy will not copy them again."
+            "stay where they were, and TidyInbox will not copy them again."
         )
         return moved
 
