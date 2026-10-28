@@ -1,0 +1,49 @@
+"""Regression tests for problems the re-check review found after the fix wave (2026-10-28).
+Each test asserts the safe behaviour."""
+
+from mailtidy import engine
+from mailtidy.classify.pipeline import Classifier
+from mailtidy.models import AccountConfig, AppConfig
+from mailtidy.store import Store
+from mailtidy.testing import FakeBackend, make_message
+from tests.test_imap_move import MIDS, MailServer, connect, inbox_with
+
+
+def quiet(_m):
+    pass
+
+
+# A. MOVE carried out, reply lost, and the destination search does not find the messages yet
+#    (search index lag, e.g. Gmail/Exchange right after a move). Is the move still reported?
+def test_move_done_then_drop_and_dest_search_lags():
+    s = MailServer()
+    uids = inbox_with(s, *MIDS)
+    s.faults = [("move", "after")]
+    b, _logs = connect(s)
+    b._find_ids = lambda client, folder, mid: []          # the destination's index hasn't caught up
+    result = b.move("INBOX", uids, "Receipts")
+    gone = s.visible("INBOX") == [] and s.visible("Receipts") == list(MIDS)
+    assert not gone or result, (
+        f"both messages left the Inbox and are in Receipts, but move() returned {result}: "
+        "the engine records nothing (no undo, no report)")
+
+
+# B. A folder-learned rule for a robot sender vs. a security code / verify message from that sender.
+def test_learned_robot_rule_does_not_file_away_a_security_code(tmp_path):
+    store = Store(tmp_path / "s.sqlite3")
+    b = FakeBackend("a")
+    for i in range(8):
+        b.add("Notifications", make_message("noreply@accounts.example.com", f"Weekly summary {i}",
+                                            headers={"List-Unsubscribe": "<mailto:u@accounts.example.com>"}))
+    for i in range(3):
+        b.add("INBOX", make_message(f"friend{i}@example.org", f"hi {i}"))
+    config = AppConfig(accounts=[AccountConfig(id="a", email="me@example.com")])
+    engine.learn_from_folders(config, store, {"a": b}, log=quiet)
+    clf = Classifier(config, store.learned, set())
+    out = {}
+    for subject in ("Your verification code is 123456", "Password reset requested",
+                    "Confirm your email address", "New sign-in to your account"):
+        d = clf.classify(make_message("noreply@accounts.example.com", subject))
+        out[subject] = (d.keeps or d.confidence < config.min_confidence, d.category, d.source, d.reason)
+    moved = {k: v for k, v in out.items() if not v[0]}
+    assert not moved, f"security mail filed away by a learned rule: {moved}"

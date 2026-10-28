@@ -757,6 +757,10 @@ class ImapBackend:
                         again.append(uid)                 # MOVE did not happen: repeating is safe
                     elif in_dest:
                         moved[uid] = max(in_dest)
+                    elif mid:
+                        # Gone from the source after the MOVE we sent, but dest's search index may lag
+                        # (Gmail, Exchange): count it as moved so it is recorded; undo finds it by Message-ID.
+                        moved[uid] = None
                 elif in_dest:
                     moved[uid] = max(in_dest)             # the copy is there: never copy again
                     if uid in now:

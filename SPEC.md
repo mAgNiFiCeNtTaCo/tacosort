@@ -38,7 +38,10 @@ categories, or add custom ones that user rules target.
 1. Safety guards -> inbox: flagged/starred, sender is a known contact (address appears as recipient in
    the Sent folder), VIP list, message is a reply in a thread the user wrote in.
 2. User rules from config (`rules:`), in order.
-3. Learned rules (store): sender address, then sender domain, then List-Id.
+2b. Security and account messages (codes, password resets, sign-in alerts, "confirm your email") -> inbox,
+   even when a learned rule files the rest of that sender's mail.
+3. Learned rules (store): sender address, then sender domain, then List-Id. Rules guessed from existing
+   folders (`explicit=False`) never move mail that looks written by a person.
 4. Built-in heuristics (headers: List-Unsubscribe, List-Id, Precedence, Auto-Submitted, X-Mailer,
    ESP signatures, sender local-part like noreply/billing/receipts, subject keywords, known domains,
    Gmail category labels when the server exposes them).

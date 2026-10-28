@@ -21,7 +21,14 @@ from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
 from ..models import INBOX, AppConfig, Decision, LearnedRules, Message
-from .heuristics import bulk_markers, heuristic_decision, list_id_of, looks_personal
+from .heuristics import (
+    bulk_markers,
+    heuristic_decision,
+    is_account_confirmation,
+    is_security_message,
+    list_id_of,
+    looks_personal,
+)
 from .rules import first_matching_rule
 
 if TYPE_CHECKING:
@@ -101,6 +108,12 @@ class Classifier:
         hit = first_matching_rule(self.config.rules, msg)
         if hit:
             return self._finish(hit[1]), None
+
+        # Codes, password resets, sign-in alerts and "confirm your email" stay in the Inbox even when
+        # a learned rule files the rest of that sender's mail away. Only your own rules beat this.
+        phrase = is_security_message(msg) or is_account_confirmation(msg)
+        if phrase:
+            return Decision(INBOX, 1.0, "guard", f'Security or account message ("{phrase}"): stays in the Inbox'), None
 
         guess: Decision | None = None
         learned = self._learned(msg)

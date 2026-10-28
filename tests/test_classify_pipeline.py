@@ -146,7 +146,14 @@ def test_broken_learned_store_is_ignored():
 def test_security_mail_stays_even_from_shop():
     m = make_message("no-reply@amazon.com", "Your Amazon verification code", headers=UNSUB)
     d = Classifier(cfg()).classify(m)
-    assert d.keeps and d.source == "heuristic"
+    assert d.keeps and d.source == "guard"
+
+
+def test_security_mail_beats_a_learned_folder_rule():
+    m = make_message("no-reply@amazon.com", "Password reset requested", headers=UNSUB)
+    learned = FakeLearned(Decision("receipts", 0.97, "learned", "You keep this sender in Receipts", explicit=True))
+    d = Classifier(cfg(), learned=learned).classify(m)
+    assert d.keeps and d.source == "guard"
 
 
 def test_default_when_nothing_matches():
