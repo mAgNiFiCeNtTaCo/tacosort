@@ -11,12 +11,15 @@ from __future__ import annotations
 import pytest
 
 from mailtidy.classify.heuristics import (
+    automation_markers,
     collect_signals,
     heuristic_decision,
+    is_account_confirmation,
     is_calendar_invite,
     is_security_message,
     list_id_of,
     looks_automated,
+    looks_personal,
 )
 from mailtidy.models import INBOX
 from mailtidy.testing import make_message
@@ -40,13 +43,13 @@ def m(sender, subject, *, name="", headers=None, snippet="", labels=()):
 
 CASES = [
     # ---- people and things that must stay in the Inbox ----------------------------------------
-    ("friend on gmail", m("test.friend.mailtidy@gmail.com", "Dinner on Saturday?", name="Alex"), INBOX),
-    ("friend mentions order", m("test.friend.mailtidy@gmail.com", "Did you get my order of cookies?"), INBOX),
+    ("friend on gmail", m("user@gmail.com", "Dinner on Saturday?", name="Alex"), INBOX),
+    ("friend mentions order", m("user@gmail.com", "Did you get my order of cookies?"), INBOX),
     ("coworker", m("dana@example.com", "Q3 planning doc", name="Dana Smith"), INBOX),
     ("support agent reply", m("support@shop.example.com", "Re: Your ticket #4412", headers=REPLY), INBOX),
     ("person reply", m("sam@example.org", "Re: photos from the trip", headers=REPLY), INBOX),
-    ("outlook person", m("test.person.mailtidy@outlook.com", "Quick question"), INBOX),
-    ("spanish person", m("test.amigo.mailtidy@yahoo.com", "Hola, ¿qué tal?"), INBOX),
+    ("outlook person", m("user@outlook.com", "Quick question"), INBOX),
+    ("spanish person", m("user@yahoo.com", "Hola, ¿qué tal?"), INBOX),
     ("2fa code", m("no-reply@accounts.example.com", "Your verification code is 482913", headers=UNSUB), INBOX),
     ("login code digits", m("security@mail.instagram.com", "123456 is your Instagram login code"), INBOX),
     ("password reset", m("noreply@github.com", "[GitHub] Please reset your password"), INBOX),
@@ -58,6 +61,26 @@ CASES = [
     ("ics invite", m("lee@example.com", "Project kickoff",
                      headers={"Content-Type": "text/calendar; method=REQUEST"}), INBOX),
     ("unknown robot", m("noreply@unknown.example.com", "Hello"), INBOX),
+    # account confirmations are time-sensitive, like security codes
+    ("verify email", m("no-reply@app.example.com", "Please verify your email address"), INBOX),
+    ("confirm account", m("noreply@service.example.com", "Confirm your account to get started",
+                          headers=AUTO), INBOX),
+    ("activate account", m("accounts@shop.example.com", "Activate your account"), INBOX),
+    ("verify in snippet", m("no-reply@forum.example.org", "Welcome to Example Forum",
+                            snippet="Click the link below to verify your email address."), INBOX),
+    ("verify from big site", m("noreply@github.com", "[GitHub] Please verify your email address"), INBOX),
+
+    # ---- real people writing from role-looking addresses (family, freelancer, small firm) -----
+    # A role address alone is weak evidence: it must not cancel the "looks like a person" signals.
+    ("family mail@", m("mail@mueller-family.example", "Sale of the house - documents attached"), INBOX),
+    ("startup team@", m("team@ourstartup.example", "Board meeting deal terms"), INBOX),
+    ("plumber info@", m("info@smithplumbing.example", "Your quote for the bathroom"), INBOX),
+    ("designer hello@", m("hello@janedoe-design.example", "New logo drafts for you"), INBOX),
+    ("photographer contact@", m("contact@lisa-photo.example", "Your wedding photos: 20% off prints"), INBOX),
+    ("family email@", m("email@thejohnsons.example", "Gift ideas for Grandma?"), INBOX),
+    ("club admin@", m("admin@riverside-choir.example", "Free tickets for the concert"), INBOX),
+    ("german family", m("mail@familie-schmidt.example", "Angebot für das Haus"), INBOX),
+    ("freelancer support@", m("support@itfixer.example", "Special offer on your laptop repair"), INBOX),
 
     # ---- receipts -----------------------------------------------------------------------------
     ("amazon order", m("auto-confirm@amazon.com", "Your Amazon.com order #112-5551234 has been confirmed"),
@@ -212,6 +235,52 @@ def test_looks_automated():
     assert not looks_automated(m("alex@example.com", "Hi"))
 
 
+@pytest.mark.parametrize("local", ["noreply", "no-reply", "donotreply", "notifications", "billing",
+                                   "receipts", "orders", "newsletter", "marketing", "alerts"])
+def test_robot_local_parts_stay_strong(local):
+    assert automation_markers(m(f"{local}@smallfirm.example", "Hi"))
+
+
+@pytest.mark.parametrize("local", ["mail", "info", "hello", "team", "contact", "admin", "email",
+                                   "support", "help", "service", "reply", "feedback"])
+def test_role_local_part_alone_is_weak(local):
+    msg = m(f"{local}@family.example", "Hi")
+    assert automation_markers(msg) == []
+    assert looks_personal(msg)
+    sigs = collect_signals(msg)
+    assert any(s.category == INBOX and "written by a person" in s.reason for s in sigs)
+
+
+@pytest.mark.parametrize("headers", [UNSUB, LIST, AUTO, KLAVIYO, {"Precedence": "bulk"}])
+def test_role_local_part_with_a_header_marker_is_automated(headers):
+    assert automation_markers(m("info@family.example", "Hi", headers=headers))
+
+
+def test_role_local_part_at_known_company_is_automated():
+    found = automation_markers(m("service@paypal.com", "Hi"))
+    assert any("role address" in f and "paypal.com" in f for f in found)
+
+
+def test_role_local_part_gets_no_automated_boost():
+    # Same subject, same score whether a person writes from anna@ or from mail@ on their own domain.
+    a = heuristic_decision(m("anna@family.example", "Sale of the house"))
+    b = heuristic_decision(m("mail@family.example", "Sale of the house"))
+    assert a.confidence == b.confidence
+    assert final_category(m("mail@family.example", "Sale of the house")) == INBOX
+
+
+def test_account_confirmation_helper():
+    assert is_account_confirmation(m("x@example.com", "Verify your email address"))
+    assert is_account_confirmation(m("x@example.com", "Confirm your account"))
+    assert not is_account_confirmation(m("x@example.com", "Your order is confirmed"))
+    # in the text only when it is not a mailing (newsletters mention "confirm your email preferences")
+    assert is_account_confirmation(m("x@example.com", "Welcome", snippet="Please confirm your email"))
+    assert not is_account_confirmation(m("x@example.com", "Welcome", headers=UNSUB,
+                                         snippet="Please confirm your email"))
+    d = heuristic_decision(m("no-reply@app.example.com", "Please verify your email address"))
+    assert d.keeps and d.confidence >= THRESHOLD and "confirmation" in d.reason
+
+
 def test_list_id_of():
     assert list_id_of(m("a@example.com", "x", headers=LIST)) == "list.example.com"
     assert list_id_of(m("a@example.com", "x", headers={"List-Id": "plain.example.com"})) == "plain.example.com"
@@ -236,7 +305,7 @@ def test_no_signals_returns_none_or_inbox():
 
 # Written after tuning and never tuned against: an honest check that the tables generalize.
 UNSEEN = [
-    ("u friend icloud", m("test.pal.mailtidy@icloud.com", "Are you free this weekend?"), INBOX),
+    ("u friend icloud", m("user@icloud.com", "Are you free this weekend?"), INBOX),
     ("u walmart order", m("help@walmart.com", "Thanks for your order, Sam"), "receipts"),
     ("u dhl", m("noreply@dhl.com", "Your DHL shipment is on its way"), "receipts"),
     ("u amex statement", m("americanexpress@welcome.aexp.com", "Your statement is available"), "finance"),
@@ -249,7 +318,8 @@ UNSEEN = [
     ("u store promo", m("deals@outdoorgear.example.com", "Up to 60% off tents this weekend",
                         headers=KLAVIYO), "promotions"),
     ("u zoom", m("no-reply@zoom.us", "Cloud recording is now available"), "notifications"),
-    ("u verify email", m("no-reply@app.example.com", "Please verify your email address"), INBOX),
+    # "u verify email" was a miss here; the 2026-10-28 fix wave added an account-confirmation rule
+    # for it, so it moved to the main table ("verify email") and no longer counts as unseen.
 ]
 
 
@@ -261,3 +331,48 @@ def test_unseen_accuracy(capsys):
         for label, d in misses:
             print(f"  miss {label}: {d}")
     assert len(hits) / len(UNSEEN) >= 0.75
+
+
+# A second unseen set, written on 2026-10-28 after the fix wave and NOT tuned against: whatever it
+# scores is reported as is. Mixes people (some writing from role addresses), shops, banks,
+# newsletters, notifications, social and travel mail.
+UNSEEN_2 = [
+    ("n neighbour", m("neighbour@example.org", "Your parcel is with us at number 12"), INBOX),
+    ("n teacher", m("ms.ortiz@school.example.org", "Field trip permission slip due Friday"), INBOX),
+    ("n friend gmail", m("user@gmail.com", "Happy birthday!! Drinks on me"), INBOX),
+    ("n landlord", m("landlord@example.com", "Rent payment for November"), INBOX),
+    ("n bakery info@", m("info@corner-bakery.example", "Your cake order for Saturday"), INBOX),
+    ("n tutor hello@", m("hello@mathtutor.example", "Lesson notes and next week's homework"), INBOX),
+    ("n architect office@", m("office@archstudio.example", "Revised floor plans"), INBOX),
+    ("n family mail@", m("mail@vandenberg-family.example", "Christmas plans and a gift list"), INBOX),
+    ("n target order", m("orders@target.com", "Your Target order has shipped"), "receipts"),
+    ("n ikea promo", m("news@ikea.com", "Up to 50% off kitchen storage this week", headers=UNSUB),
+     "promotions"),
+    ("n small shop receipt", m("orders@candleshop.example", "Order #2045 confirmed - thank you!",
+                               headers={"X-Shopify-Shop": "1"}), "receipts"),
+    ("n wells statement", m("alerts@notify.wellsfargo.com", "Your statement is available online"), "finance"),
+    ("n revolut transfer", m("no-reply@revolut.com", "You sent €50 to Alex"), "finance"),
+    ("n morning brew", m("crew@morningbrew.com", "Today's top stories: markets rally", headers=UNSUB),
+     "newsletters"),
+    ("n club newsletter", m("newsletter@garden-club.example.org", "Spring newsletter: planting guide",
+                            headers={**UNSUB, **LIST}), "newsletters"),
+    ("n trello", m("do-not-reply@trello.com", "Sam added you to the board Home Reno"), "notifications"),
+    ("n dropbox storage", m("no-reply@dropbox.com", "Your Dropbox is almost full"), "notifications"),
+    ("n vercel deploy", m("notifications@vercel.com", "Deployment failed for my-site"), "notifications"),
+    ("n strava", m("no-reply@strava.com", "Alex gave you kudos", headers=UNSUB), "social"),
+    ("n easyjet", m("noreply@easyjet.com", "Your easyJet booking confirmation EZY123"), "travel"),
+]
+
+
+def test_unseen_2_accuracy(capsys):
+    assert len(UNSEEN_2) == 20
+    hits = [label for label, msg, expected in UNSEEN_2 if final_category(msg) == expected]
+    misses = [(label, heuristic_decision(msg)) for label, msg, expected in UNSEEN_2 if label not in hits]
+    with capsys.disabled():
+        print(f"\nheuristics accuracy on unseen set 2: {len(hits)}/{len(UNSEEN_2)}")
+        for label, d in misses:
+            print(f"  miss {label}: {d}")
+    # The people rows are the safety promise: none of them may be moved.
+    people = [label for label, _, expected in UNSEEN_2 if expected == INBOX]
+    assert all(label in hits for label in people)
+    assert len(hits) / len(UNSEEN_2) >= 0.7

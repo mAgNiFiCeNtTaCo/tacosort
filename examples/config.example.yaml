@@ -86,13 +86,14 @@ interval_minutes: 15              # used by `mailtidy schedule on`
 
 # ---- Optional AI help (off unless you turn it on) ---------------------------------------------------
 # Only mail MailTidy is unsure about is asked about, and only From, Subject and (if send_snippet is yes)
-# a few lines of text are sent to Anthropic. Needs `pip install "mailtidy[ai]"` and your own API key.
+# a few lines of text are sent to Anthropic. Needs MailTidy installed with the AI helper (see the README)
+# and your own API key: save it with `mailtidy config ai-key` so the background schedule can use it too.
 ai:
   enabled: no
   model: claude-haiku-5-5
   max_per_run: 50                 # cost guard
   send_snippet: yes
-  api_key_env: ANTHROPIC_API_KEY  # name of the environment variable that holds your key
+  api_key_env: ANTHROPIC_API_KEY  # an environment variable with this name wins over the saved key
 
 # Where MailTidy keeps its memory (empty = the usual place for your system):
 data_dir: ""

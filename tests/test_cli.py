@@ -131,6 +131,10 @@ def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         set_secret=lambda i, v: secrets.__setitem__(i, v),
         get_secret=lambda i: secrets.get(i),
         delete_secret=lambda i: secrets.pop(i, None),
+        delete_account_secrets=lambda i: [secrets.pop(k) for k in list(secrets) if k in (i, f"{i}:client-secret")],
+        get_ai_key=lambda: secrets.get("ai:anthropic"),
+        set_ai_key=lambda v: secrets.__setitem__("ai:anthropic", v),
+        delete_ai_key=lambda: secrets.pop("ai:anthropic", None),
         device_logins=[],
     )
     auth.microsoft_device_login = lambda acct, log=print: (
@@ -138,8 +142,9 @@ def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     providers = SimpleNamespace(PROVIDERS=PROVIDERS, detect_provider=detect)
     stores: list[FakeStore] = []
 
-    def make_backend(acct: AccountConfig) -> FakeBackend:
-        ok = secrets.get(acct.id) in (GOOD, "refresh-token")
+    def make_backend(acct: AccountConfig, secret_getter=None) -> FakeBackend:
+        secret = (secret_getter or secrets.get)(acct.id)
+        ok = secret in (GOOD, "refresh-token")
         return FakeBackend(acct.id, fail_connect=None if ok else "The app password was not accepted.")
 
     def open_store(cfg):
@@ -242,7 +247,8 @@ def test_missing_module_is_friendly(env, monkeypatch, capsys) -> None:
 
     monkeypatch.setattr(cli, "_engine", broken)
     assert cli.main(["run"]) == 1
-    assert "reinstalling" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert "installing MailTidy again" in err and "pip install" not in err   # not ours on PyPI (T-B2)
 
 
 # ---- safety: preview before the first real move ------------------------------------------------------
@@ -572,7 +578,7 @@ def test_readme_commands_exist() -> None:
     commands = set(parser._subparsers._group_actions[0].choices)
     seen = set()
     for doc in [root / "README.md", *sorted((root / "docs").glob("*.md"))]:
-        for m in re.finditer(r"`mailtidy ([a-z][a-z-]*)(?: ([a-z]+))?", doc.read_text(encoding="utf-8")):
+        for m in re.finditer(r"`mailtidy ([a-z][a-z-]*)(?: ([a-z][a-z-]*))?", doc.read_text(encoding="utf-8")):
             cmd, action = m.groups()
             assert cmd in commands, f"{doc.name}: mailtidy {cmd}"
             sub = parser._subparsers._group_actions[0].choices[cmd]
@@ -580,3 +586,185 @@ def test_readme_commands_exist() -> None:
                 assert action in sub._subparsers._group_actions[0].choices, f"{doc.name}: mailtidy {cmd} {action}"
             seen.add(cmd)
     assert {"setup", "preview", "run", "undo", "status"} <= seen
+
+
+# ---- fix wave (2026-10-28) ------------------------------------------------------------------------------
+
+# S-S1: account names that would share a keychain entry with something else are never suggested or taken.
+
+def test_suggested_id_never_reserved() -> None:
+    cfg = AppConfig()
+    assert cli._suggest_id(cfg, "custom", "sam@anthropic.example.com") == "anthropic-mail"
+    assert cli._suggest_id(cfg, "custom", "sam@ai.example.com") == "ai-mail"
+    assert cli._suggest_id(cfg, "custom", "sam@AI.example.com") == "AI-mail"
+    long = cli._suggest_id(AppConfig(accounts=[AccountConfig(id="x" * 30, email="a@example.com")]),
+                           "custom", ("y" * 25) + "@" + ("x" * 30) + ".example.com")
+    assert len(long) <= 40 and cli.account_id_problem(long) is None
+
+
+def test_wizard_refuses_reserved_names(env, capsys) -> None:
+    script(env, answers=["sam@anthropic.example.com", "imap.example.com", "", "",   # custom server
+                         "anthropic", "AI", "a:b", "",                            # 3 refused, then the suggestion
+                         "n"],
+           passwords=[GOOD])
+    assert cli.main(["accounts", "add"]) == 0
+    out = capsys.readouterr().out
+    assert out.count("reserved for MailTidy's own use") == 2 and "no spaces" in out
+    assert [a.id for a in load_config(env.path).accounts] == ["anthropic-mail"]
+    assert env.secrets == {"anthropic-mail": GOOD}
+
+
+# S-N4: a password reaches the keychain only after it worked.
+
+def test_password_tested_before_it_is_saved(env, capsys) -> None:
+    saved_when: list[bool] = []
+    real_make = cli.make_backend
+
+    def make(acct, secret_getter=None):
+        saved_when.append(acct.id in env.secrets)
+        return real_make(acct, secret_getter)
+
+    env.monkeypatch.setattr(cli, "make_backend", make)
+    script(env, answers=["alice@gmail.example.com", "", "n"], passwords=[GOOD])
+    assert cli.main(["accounts", "add"]) == 0
+    assert saved_when == [False] and env.secrets == {"gmail": GOOD}
+
+
+def test_failed_password_leaves_nothing_behind(env, capsys) -> None:
+    script(env, answers=["alice@gmail.example.com", "", "n", "n"], passwords=["nope"])
+    assert cli.main(["accounts", "add"]) == 1
+    assert env.secrets == {}
+
+
+def test_save_anyway_keeps_account_without_password(env, capsys) -> None:
+    script(env, answers=["alice@gmail.example.com", "", "n", "y"], passwords=["nope"])
+    assert cli.main(["accounts", "add"]) == 0
+    assert [a.id for a in load_config(env.path).accounts] == ["gmail"]
+    assert env.secrets == {}
+
+
+def test_new_failing_password_never_replaces_working_one(env, capsys) -> None:
+    with_accounts(env, "gmail")
+    script(env, answers=["gmail@example.com", "y", "n"], passwords=["typo"])
+    assert cli.main(["accounts", "add"]) == 1
+    assert env.secrets["gmail"] == GOOD
+    out = capsys.readouterr().out
+    assert "already had is kept" in out and "Password updated" not in out
+
+
+def test_outlook_token_removed_when_account_not_saved(env, capsys) -> None:
+    env.auth.microsoft_device_login = lambda acct, log=print: env.secrets.__setitem__(acct.id, "token-no-imap")
+    script(env, answers=["carol@outlook.example.com", "", "00000000-1111-2222-3333-444444444444",
+                         "n",                      # save anyway? no
+                         "n"])                     # add another account
+    assert cli.main(["setup"]) == 0
+    assert env.secrets == {} and load_config(env.path).accounts == []
+
+
+def test_accounts_remove_deletes_every_secret(env, capsys) -> None:
+    with_accounts(env, "gmail", "yahoo")
+    env.secrets["gmail:client-secret"] = "client-secret"
+    assert cli.main(["accounts", "remove", "gmail", "--yes"]) == 0
+    assert env.secrets == {"yahoo": GOOD}
+
+
+def test_accounts_remove_keep_password(env, capsys) -> None:
+    with_accounts(env, "gmail")
+    assert cli.main(["accounts", "remove", "gmail", "--yes", "--keep-password"]) == 0
+    assert env.secrets == {"gmail": GOOD}
+
+
+# T-S9: the AI key goes in the keychain, where the background schedule can find it.
+
+def test_config_ai_key_saves_and_removes(env, capsys) -> None:
+    script(env, answers=[], passwords=["  sk-ant-example-key \n"])
+    assert cli.main(["config", "ai-key"]) == 0
+    assert env.secrets == {"ai:anthropic": "sk-ant-example-key"}
+    out = capsys.readouterr().out
+    assert "sk-ant" not in out and "still off" in out
+    assert cli.main(["config", "ai-key", "--remove"]) == 0
+    assert env.secrets == {}
+
+
+def test_config_ai_key_empty_changes_nothing(env, capsys) -> None:
+    env.secrets["ai:anthropic"] = "old"
+    script(env, answers=[], passwords=[""])
+    assert cli.main(["config", "ai-key"]) == 1
+    assert env.secrets == {"ai:anthropic": "old"}
+
+
+def test_config_ai_key_keychain_failure_is_plain(env, capsys) -> None:
+    def broken(value):
+        raise BackendError("No keychain is available on this computer.")
+
+    env.auth.set_ai_key = broken
+    script(env, answers=[], passwords=["sk-ant-example"])
+    assert cli.main(["config", "ai-key"]) == 1
+    assert "No keychain" in capsys.readouterr().err
+
+
+def test_setup_mentions_ai_key_when_ai_is_on(env, capsys) -> None:
+    with_accounts(env, "gmail")
+    cfg = load_config(env.path)
+    cfg.ai.enabled = True
+    save_config(cfg, env.path)
+    script(env, answers=["n", "n", "n", "n"])   # add another, learn, preview, schedule
+    assert cli.main(["setup"]) == 0
+    assert "`mailtidy config ai-key`" in capsys.readouterr().out
+
+
+# S-S3: on Linux/macOS everything MailTidy writes is private to the user.
+
+class _PosixOs:
+    """`os` as cli.py sees it, pretending to be Linux, with a recorded umask."""
+
+    name = "posix"
+
+    def __init__(self) -> None:
+        self.mask = 0o022
+        self.calls: list[int] = []
+
+    def umask(self, mask: int) -> int:
+        old, self.mask = self.mask, mask
+        self.calls.append(mask)
+        return old
+
+    def __getattr__(self, attr):
+        import os
+        return getattr(os, attr)
+
+
+def test_main_sets_private_umask_and_folders(env, capsys) -> None:
+    fake_os = _PosixOs()
+    tightened: list[str] = []
+    masks_while_running: list[int] = []
+    env.monkeypatch.setattr(cli, "os", fake_os)
+    env.monkeypatch.setattr(cli, "make_private", lambda folder: tightened.append(str(folder)))
+    env.monkeypatch.setattr(cli, "say", lambda *parts: masks_while_running.append(fake_os.mask))
+    assert cli.main(["config", "path"]) == 0
+    assert masks_while_running and set(masks_while_running) == {0o077}
+    assert fake_os.mask == 0o022                      # put back afterwards
+    assert tightened == [str(env.path.parent), str(env.data)]
+
+
+def test_main_leaves_folders_people_chose_alone(env, tmp_path, capsys) -> None:
+    fake_os = _PosixOs()
+    tightened: list[str] = []
+    env.monkeypatch.setattr(cli, "os", fake_os)
+    env.monkeypatch.setattr(cli, "make_private", lambda folder: tightened.append(str(folder)))
+    own = tmp_path / "Documents" / "my-settings.yaml"
+    assert cli.main(["--config", str(own), "config", "path"]) == 0
+    assert str(own.parent) not in tightened
+
+
+@pytest.mark.skipif(cli.os.name != "posix", reason="file permissions are a Linux/macOS matter")
+def test_files_and_folders_are_private_on_posix(env, capsys) -> None:
+    env.path.parent.mkdir(parents=True)
+    env.path.parent.chmod(0o755)
+    env.data.mkdir(parents=True)
+    env.data.chmod(0o755)
+    with_accounts(env, "gmail")
+    assert cli.main(["report"]) == 0
+    assert env.path.parent.stat().st_mode & 0o777 == 0o700
+    assert env.data.stat().st_mode & 0o777 == 0o700
+    assert (env.data / "report.html").stat().st_mode & 0o777 == 0o600

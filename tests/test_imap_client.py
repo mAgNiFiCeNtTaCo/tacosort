@@ -1,5 +1,6 @@
 """ImapBackend against a fake IMAPClient (no network)."""
 
+import ssl
 import types
 from datetime import datetime, timezone
 
@@ -7,6 +8,7 @@ import pytest
 from imapclient import exceptions as imap_errors
 
 from mailtidy.backend import BackendError
+from mailtidy.imap import client as client_module
 from mailtidy.imap.client import (
     ImapBackend,
     decode_header_value,
@@ -58,6 +60,7 @@ class FakeIMAP:
 
     # connection
     def starttls(self, ctx=None):
+        self.starttls_context = ctx
         self._rec("starttls")
 
     def login(self, user, password):
@@ -124,7 +127,7 @@ class FakeIMAP:
             return [u for u in uids if u in wanted]
         if criteria[0] == "HEADER":
             needle = criteria[2]
-            return [u for u, row in self.messages.items() if needle.encode() in _header_bytes(row)]
+            return [u for u in uids if needle.encode() in _header_bytes(self.messages[u])]
         raise AssertionError(criteria)
 
     def fetch(self, uids, items):
@@ -311,6 +314,8 @@ def test_list_folders_special_use_and_name_guess():
         "Junk E-mail": (),
         "odd": (b"\\trash",),                         # lower-case flag from a sloppy server
         "Receipts": (),
+        "Trash": (),
+        "Archive/All Mail": (),
     })
     b = backend(fake)
     b.connect()
@@ -326,6 +331,8 @@ def test_list_folders_special_use_and_name_guess():
     assert by["Junk E-mail"].special_use == "\\Junk"
     assert by["odd"].special_use == "\\Trash"
     assert by["Receipts"].special_use is None
+    assert by["Trash"].special_use == "\\Trash"
+    assert by["Archive/All Mail"].special_use == "\\All"
     assert by["INBOX"].delimiter == "/"
 
 
@@ -360,6 +367,46 @@ def test_ensure_folder_already_given_with_prefix():
     assert b.ensure_folder("INBOX/Travel") == "INBOX.Travel"
 
 
+def test_ensure_folder_reuses_other_capitals():
+    fake = FakeIMAP(folders={"INBOX": (), "receipts": (), "mailtidy": ()})
+    b = backend(fake)
+    b.connect()
+    assert b.ensure_folder("Receipts") == "receipts"
+    assert b.ensure_folder("MailTidy/Travel") == "mailtidy/Travel"     # the parent keeps its spelling
+    assert [c[1] for c in fake.calls if c[0] == "create_folder"] == ["mailtidy/Travel"]
+    fake.calls.clear()
+    assert b.ensure_folder("MAILTIDY/travel") == "mailtidy/Travel"
+    assert "create_folder" not in fake.names()
+
+
+def test_ensure_folder_other_capitals_with_dot_delimiter_and_prefix():
+    fake = FakeIMAP(delimiter=".", prefix="INBOX.", folders={"INBOX": (), "INBOX.receipts": ()})
+    b = backend(fake)
+    b.connect()
+    assert b.ensure_folder("Receipts") == "INBOX.receipts"
+    assert "create_folder" not in fake.names()
+
+
+def test_ensure_folder_exact_name_wins_over_other_capitals():
+    fake = FakeIMAP(folders={"INBOX": (), "receipts": (), "Receipts": ()})   # a case-sensitive server
+    b = backend(fake)
+    b.connect()
+    assert b.ensure_folder("Receipts") == "Receipts"
+
+
+def test_ensure_folder_create_refused_because_it_exists_in_other_capitals():
+    fake = FakeIMAP(folders={"INBOX": ()})
+    b = backend(fake)
+    b.connect()
+
+    def create(name):          # someone else made "receipts" a moment ago; the server refuses
+        fake.folders["receipts"] = ()
+        raise imap_errors.IMAPClientError("[ALREADYEXISTS] Mailbox exists")
+
+    fake.create_folder = create
+    assert b.ensure_folder("Receipts") == "receipts"
+
+
 def test_folder_state():
     fake = FakeIMAP()
     b = backend(fake)
@@ -367,6 +414,44 @@ def test_folder_state():
     st = b.folder_state("INBOX")
     assert (st.uidvalidity, st.uidnext, st.exists) == (7, 50, 3)
     assert "select_folder" not in fake.names()
+
+
+def test_folder_state_without_uidnext_uses_highest_uid():
+    fake = FakeIMAP(messages=msgs(3, 5, 9))
+    fake.status = {b"UIDVALIDITY": 7, b"MESSAGES": 3}            # this server leaves UIDNEXT out
+    b = backend(fake)
+    b.connect()
+    assert b.folder_state("INBOX").uidnext == 10
+    fake.messages.clear()
+    fake.status[b"UIDNEXT"] = 0
+    assert b.folder_state("INBOX").uidnext == 1
+
+
+# ---- certificate checks -----------------------------------------------------------------------
+
+def _contexts(acct):
+    fake = FakeIMAP()
+    b = backend(fake, acct)
+    b.connect()
+    return b.made[0][1]["ssl_context"], getattr(fake, "starttls_context", None)
+
+
+def test_certificates_are_checked_for_normal_servers():
+    ctx, _ = _contexts(account(host="imap.example.com", ssl=True, port=993))
+    assert ctx.verify_mode == ssl.CERT_REQUIRED and ctx.check_hostname is True
+    ctx, tls = _contexts(account(host="imap.example.com", ssl=False, port=143))
+    assert tls is ctx
+    assert tls.verify_mode == ssl.CERT_REQUIRED and tls.check_hostname is True
+    ctx, _ = _contexts(account(host="127.0.0.2.example.com"))
+    assert ctx.verify_mode == ssl.CERT_REQUIRED
+
+
+@pytest.mark.parametrize("host", ["127.0.0.1", "::1", "localhost"])
+def test_certificates_unchecked_only_for_this_computer(host):
+    for use_ssl in (True, False):
+        ctx, tls = _contexts(account(host=host, ssl=use_ssl, port=1143))
+        used = ctx if use_ssl else tls
+        assert used.verify_mode == ssl.CERT_NONE and used.check_hostname is False
 
 
 # ---- reading ----------------------------------------------------------------------------------
@@ -490,10 +575,23 @@ def test_find_message_id_exact_match_only():
     assert b.find_message_id("INBOX", "<abc@example.com>") == [1]
     assert b.find_message_id("INBOX", "") == []
     searches = [c for c in fake.calls if c[0] == "search"]
-    assert searches[-1][1] == ["HEADER", "Message-ID", "<abc@example.com>"]
+    assert searches[-1][1] == ["HEADER", "Message-ID", "<abc@example.com>", "UNDELETED"]
     for c in fake.calls:
         if c[0] == "fetch":
-            assert all(i.startswith("BODY.PEEK[") for i in c[2])
+            assert all(i == "FLAGS" or i.startswith("BODY.PEEK[") for i in c[2])
+
+
+def test_find_message_id_skips_deleted_originals():
+    # A server without UIDPLUS leaves the original of a move behind, flagged \Deleted.
+    fake = FakeIMAP(messages={
+        4: row(header_block(Message_ID="<abc@example.com>"), flags=(b"\\Seen", b"\\Deleted")),
+        8: row(header_block(Message_ID="<abc@example.com>")),
+    })
+    b = backend(fake)
+    b.connect()
+    assert b.find_message_id("INBOX", "<abc@example.com>") == [8]
+    del fake.messages[8]
+    assert b.find_message_id("INBOX", "<abc@example.com>") == []
 
 
 # ---- moving -----------------------------------------------------------------------------------
@@ -607,6 +705,43 @@ def test_idle_reports_new_mail_and_always_ends_idle():
     assert fake.names()[-3:] == ["idle", "idle_check", "idle_done"]
     assert ("select_folder", "INBOX", True) in fake.calls
 
+
+def fast_clock(monkeypatch):
+    """Each look at the clock moves it 5 seconds on, so waiting loops end without real waiting."""
+    clock = {"t": 0.0}
+
+    def tick():
+        clock["t"] += 5
+        return clock["t"]
+
+    monkeypatch.setattr(client_module.time, "monotonic", tick)
+
+
+def test_idle_ignores_flag_changes_and_deletions(monkeypatch):
+    fast_clock(monkeypatch)
+    fake = FakeIMAP()
+    fake.idle_responses = [(3, b"FETCH", (b"FLAGS", (b"\\Seen",))), (2, b"EXPUNGE")]   # read on a phone
+    b = backend(fake)
+    b.connect()
+    assert b.idle("INBOX", 60) is False
+    fake.idle_responses = [(9, b"RECENT")]
+    assert b.idle("INBOX", 60) is True
+
+
+def test_poll_ignores_a_deletion(monkeypatch):
+    fast_clock(monkeypatch)
+    fake = FakeIMAP(caps=("IMAP4REV1",))
+    b = backend(fake)
+    b.connect()
+    original = fake.folder_status
+
+    def status(folder, what=None):
+        answer = original(folder, what)
+        fake.status[b"MESSAGES"] = 2      # one message deleted elsewhere while waiting; UIDNEXT unchanged
+        return answer
+
+    fake.folder_status = status
+    assert b.idle("INBOX", 60) is False
 
 
 def test_idle_done_sent_even_when_check_fails():

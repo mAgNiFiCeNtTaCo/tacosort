@@ -22,8 +22,8 @@ sharing the mail.
 ## Setting up for development
 
 ```
-git clone <this repository's URL>
-cd mailtidy
+git clone https://github.com/OWNER/REPO
+cd REPO
 python -m venv .venv
 .venv\Scripts\activate          (Windows)   or   source .venv/bin/activate   (macOS / Linux)
 pip install -e ".[dev,ai]"

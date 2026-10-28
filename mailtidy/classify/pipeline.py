@@ -7,6 +7,11 @@
 5. Optional AI, only for messages the steps above were unsure about.
 6. Default: leave it in the Inbox.
 A decision below `min_confidence` counts as unsure. A category that is turned off stays in the Inbox.
+
+Mail that looks written by a person (no bulk headers, no robot sender; `heuristics.looks_personal`)
+is protected twice: a learned rule guessed from your existing folders may not move it (only your own
+rules and corrections may), and it is never sent to the AI, whose verdict could be steered by text in
+another email of the same batch.
 """
 
 from __future__ import annotations
@@ -16,7 +21,7 @@ from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
 from ..models import INBOX, AppConfig, Decision, LearnedRules, Message
-from .heuristics import bulk_markers, heuristic_decision, list_id_of
+from .heuristics import bulk_markers, heuristic_decision, list_id_of, looks_personal
 from .rules import first_matching_rule
 
 if TYPE_CHECKING:
@@ -63,7 +68,9 @@ class Classifier:
             decision, guess = self._before_ai(msg)
             results.append(decision)
             guesses.append(guess)
-            if decision is None:
+            # Only mail with bulk/robot markers of its own may be moved by an AI verdict, so
+            # personal-looking mail is not sent at all (also keeps it private).
+            if decision is None and not looks_personal(msg):
                 unsure.append(i)
 
         if unsure and self.ai is not None and self.config.ai.enabled:
@@ -75,6 +82,8 @@ class Classifier:
             for i, ans in zip(unsure, answers):
                 if ans is None:
                     continue
+                if not ans.keeps and looks_personal(msgs[i]):
+                    continue        # never reached today (see above); kept as a second lock
                 if ans.confidence >= self.config.min_confidence:
                     results[i] = self._finish(ans)
                 elif guesses[i] is None or ans.confidence > guesses[i].confidence:
@@ -95,6 +104,10 @@ class Classifier:
 
         guess: Decision | None = None
         learned = self._learned(msg)
+        if learned is not None and not learned.explicit and not learned.keeps and looks_personal(msg):
+            # Guessed from where you filed earlier mail: not enough to take a person's new mail
+            # out of the Inbox. Your own rules and corrections (explicit) still apply.
+            learned = None
         if learned is not None:
             if learned.confidence >= self.config.min_confidence:
                 return self._finish(learned), None

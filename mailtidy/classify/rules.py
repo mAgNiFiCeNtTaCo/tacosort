@@ -78,8 +78,9 @@ def rule_decision(rule: Rule) -> Decision:
     reason = f'Your rule "{rule.name}"'
     if action.lower().startswith(FOLDER_PREFIX):
         folder = action[len(FOLDER_PREFIX):].strip()
-        return Decision(INBOX, 1.0, "user-rule", f"{reason} (folder {folder})", folder=folder or None)
-    return Decision(action.lower(), 1.0, "user-rule", reason)
+        return Decision(INBOX, 1.0, "user-rule", f"{reason} (folder {folder})", folder=folder or None,
+                        explicit=True)
+    return Decision(action.lower(), 1.0, "user-rule", reason, explicit=True)
 
 
 def first_matching_rule(rules: list[Rule], msg: Message) -> tuple[Rule, Decision] | None:

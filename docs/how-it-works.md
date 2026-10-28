@@ -42,7 +42,8 @@ The checks run in this order, and the **first confident answer wins**:
    `noreply@` or `billing@`, words in the subject ("your order", "statement", "boarding pass",
    "% off"...), well-known company domains, and Gmail's own category tabs when available. Security
    mail (codes, password resets, new sign-in alerts) and calendar invitations are kept in the Inbox.
-5. **AI (optional, off by default)**, only for the messages the checks above were unsure about. See
+5. **AI (optional, off by default)**, only for the messages the checks above were unsure about. It
+   only picks a folder, and mail that looks written by a person is never moved on its word alone. See
    [privacy.md](privacy.md).
 6. **Otherwise: stays in the Inbox.** When unsure, MailTidy does nothing.
 
@@ -102,4 +103,5 @@ Background runs only move mail in accounts you have previewed (`mailtidy preview
 
 Every move is recorded. `mailtidy undo` finds the moved messages by their Message-ID (which doesn't
 change when mail moves) and moves them back to where they came from. Undone messages are marked so
-MailTidy doesn't move them again.
+MailTidy doesn't move them again. That's also why a message **without** a Message-ID is never moved:
+MailTidy couldn't find it again to undo the move, so it leaves it in the Inbox.

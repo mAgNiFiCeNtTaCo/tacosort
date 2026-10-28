@@ -27,6 +27,15 @@ have turned IMAP or app passwords off: ask them.
 About labels: Gmail shows folders as labels. When MailTidy moves a message to *Receipts*, it gets the
 *Receipts* label and leaves the Inbox. It is still in *All Mail*, as with any Gmail label.
 
+Labels on mail **you keep in the Inbox** are respected. If you put a "Family" label on a message but
+leave it in the Inbox, MailTidy reads that as "this stays in my Inbox": it never moves that mail out,
+and it doesn't learn "mail from this sender goes to Family" from it. Only mail you've actually moved
+out of the Inbox teaches MailTidy where a sender's mail belongs.
+
+Messages without a *Message-ID* (a hidden label mail programs use to tell messages apart; a few
+badly made emails don't have one) are left alone in the Inbox, on every provider: MailTidy couldn't
+undo a move of such a message reliably, so it doesn't make one.
+
 ## Outlook.com, Hotmail, Live, MSN
 
 Server `outlook.office365.com`, port 993, SSL, sign-in **OAuth2** (no passwords).

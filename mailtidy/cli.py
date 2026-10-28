@@ -25,11 +25,15 @@ from typing import Any
 from . import __version__
 from .backend import BackendError
 from .config import (
+    RESERVED_IDS,
     ConfigError,
+    account_id_problem,
     config_problems,
     data_dir,
     default_config_path,
+    default_data_dir,
     load_config,
+    make_private,
     save_config,
     state_path,
 )
@@ -38,7 +42,7 @@ from .models import AccountConfig, Address, AppConfig, Message
 EXIT_OK, EXIT_ERROR, EXIT_USAGE = 0, 1, 2
 PREVIEW_FILE = "previewed.json"
 MAX_INTERVAL = 1439          # the scheduler's limit: just under a day
-_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,39}$")
+REINSTALL_HINT = "Try installing MailTidy again (the Install steps are in the README)."
 
 
 # ---- lazily loaded parts (tests replace these) --------------------------------------------------------
@@ -63,15 +67,17 @@ def _auth() -> Any:
     return _module("imap.auth")
 
 
-def make_backend(account: AccountConfig) -> Any:
-    """A real IMAP connection for `account` (not connected yet)."""
-    return _module("imap.client").ImapBackend(account)
+def make_backend(account: AccountConfig, secret_getter: Callable[[str], str | None] | None = None) -> Any:
+    """A real IMAP connection for `account` (not connected yet). `secret_getter` overrides the keychain,
+    so a new password can be tested before it is saved."""
+    cls = _module("imap.client").ImapBackend
+    return cls(account) if secret_getter is None else cls(account, secret_getter=secret_getter)
 
 
 def open_store(cfg: AppConfig) -> Any:
     """MailTidy's memory (SQLite) for this config."""
     path = state_path(cfg)
-    path.parent.mkdir(parents=True, exist_ok=True)
+    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     return _module("store").Store(path)
 
 
@@ -205,7 +211,7 @@ def mark_previewed(cfg: AppConfig, ids: list[str], *, remove: bool = False) -> N
     current = previewed_accounts(cfg)
     current = current - set(ids) if remove else current | set(ids)
     path = _preview_path(cfg)
-    path.parent.mkdir(parents=True, exist_ok=True)
+    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     path.write_text(json.dumps({"accounts": sorted(current)}, indent=2), encoding="utf-8")
 
 
@@ -322,12 +328,14 @@ def do_run(ctx: Ctx, accounts: list[AccountConfig], *, dry_run: bool, backlog: b
 
 def _suggest_id(cfg: AppConfig, provider_key: str, email: str) -> str:
     base = provider_key if provider_key != "custom" else email.rsplit("@", 1)[-1].split(".")[0]
-    base = re.sub(r"[^A-Za-z0-9._-]", "-", base).strip("-.") or "mail"
+    base = re.sub(r"[^A-Za-z0-9._-]", "-", base).strip("-.")[:30] or "mail"
+    if base.lower() in RESERVED_IDS:   # e.g. sam@anthropic.com: that name belongs to the AI key
+        base = f"{base}-mail"
     taken = {a.id for a in cfg.accounts}
     if base not in taken:
         return base
     local = re.sub(r"[^A-Za-z0-9._-]", "-", email.split("@")[0]).strip("-.")[:20]
-    candidate = f"{base}-{local}" if local else base
+    candidate = f"{base}-{local}"[:40].rstrip("-.") if local else base
     n = 2
     while candidate in taken:
         candidate = f"{base}-{n}"
@@ -346,9 +354,11 @@ def _ask_email() -> str | None:
         say("That doesn't look like an email address. It should look like name@example.com.")
 
 
-def _test_login(acct: AccountConfig) -> str | None:
-    """Try to log in and list folders. Returns None when it worked, else a plain-English problem."""
-    backend = make_backend(acct)
+def _test_login(acct: AccountConfig, password: str | None = None) -> str | None:
+    """Try to log in and list folders. Returns None when it worked, else a plain-English problem.
+
+    With `password`, that password is tried instead of the one in the keychain (nothing is saved)."""
+    backend = make_backend(acct) if password is None else make_backend(acct, secret_getter=lambda _id: password)
     try:
         backend.connect()
         folders = backend.list_folders()
@@ -379,8 +389,11 @@ def _app_password_steps(provider: Any) -> None:
     say("")
 
 
-def _password_login(acct: AccountConfig, provider: Any) -> bool:
-    """Ask for the app password, keep it in the keychain, test it. True when the account works."""
+def _password_login(acct: AccountConfig, provider: Any, *, existing: bool = False) -> bool:
+    """Ask for the app password and test it; only a password that works is saved in the keychain.
+
+    True when the account works. For a new account the person may also choose to save it without a
+    password. For an `existing` account a failing password never replaces the saved one."""
     auth = _auth()
     _app_password_steps(provider)
     while True:
@@ -391,18 +404,24 @@ def _password_login(acct: AccountConfig, provider: Any) -> bool:
             continue
         if acct.provider not in ("custom", "protonmail-bridge"):
             secret = "".join(secret.split())   # app passwords are often shown in groups of four
-        try:
-            auth.set_secret(acct.id, secret)
-        except BackendError as e:
-            say(f"Couldn't save the password in your keychain: {e}")
-            return False
-        del secret
-        problem = _test_login(acct)
+        problem = _test_login(acct, password=secret)
         if problem is None:
+            try:
+                auth.set_secret(acct.id, secret)
+            except BackendError as e:
+                say(f"The password works, but it couldn't be saved in your keychain: {e}")
+                return False
+            finally:
+                del secret
             return True
+        del secret
         say(f"That didn't work: {problem}")
         if not ask_yes("Try a different password?", True):
-            return ask_yes("Save this account anyway, and fix it later with `mailtidy accounts add`?", False)
+            if existing:
+                say("The password MailTidy already had is kept.")
+                return False
+            return ask_yes("Save this account anyway, without a password? (add one later with "
+                           "`mailtidy accounts add`)", False)
 
 
 def _microsoft_login(acct: AccountConfig, provider: Any) -> bool:
@@ -422,16 +441,32 @@ def _microsoft_login(acct: AccountConfig, provider: Any) -> bool:
         say("Skipped. Come back with `mailtidy accounts add` once you have a client ID.")
         return False
     acct.oauth_client_id = client_id
+    auth = _auth()
     try:
-        _auth().microsoft_device_login(acct, log=say)
+        auth.microsoft_device_login(acct, log=say)
     except BackendError as e:
         say(f"The Microsoft sign-in didn't finish: {e}")
+        _forget_secrets(acct.id)
         return False
     problem = _test_login(acct)
     if problem:
         say(f"Signed in, but reading mail didn't work: {problem}")
-        return ask_yes("Save this account anyway?", False)
+        if ask_yes("Save this account anyway?", False):
+            return True
+        _forget_secrets(acct.id)   # the sign-in saved a token; don't leave it behind for an unsaved account
+        return False
     return True
+
+
+def _forget_secrets(account_id: str) -> bool:
+    """Delete every keychain entry of an account. False (after a plain warning) when that failed."""
+    try:
+        _auth().delete_account_secrets(account_id)
+        return True
+    except (BackendError, OSError) as e:   # auth.CredentialError is a BackendError
+        warn(f"Couldn't remove the saved sign-in from your keychain ({e}); you can delete the "
+             f"'mailtidy' entries for '{account_id}' by hand.")
+        return False
 
 
 def add_account(ctx: Ctx) -> AccountConfig | None:
@@ -446,7 +481,7 @@ def add_account(ctx: Ctx) -> AccountConfig | None:
         say(f"{email} is already set up (as '{existing.id}').")
         provider = providers.PROVIDERS.get(existing.provider) or providers.detect_provider(email)
         if (existing.auth == "password" and ask_yes("Do you want to give it a new app password?", False)
-                and _password_login(existing, provider)):
+                and _password_login(existing, provider, existing=True)):
             say("Password updated.")
         return None
 
@@ -469,8 +504,9 @@ def add_account(ctx: Ctx) -> AccountConfig | None:
     suggested = _suggest_id(cfg, provider.key, email)
     while True:
         acct_id = ask(f"Short name for this account [{suggested}]: ", suggested)
-        if not _ID_RE.match(acct_id):
-            say("Use letters, numbers, dots, dashes or underscores (no spaces), up to 40 characters.")
+        problem = account_id_problem(acct_id)
+        if problem:
+            say(problem)
         elif any(a.id == acct_id for a in cfg.accounts):
             say(f"'{acct_id}' is already used by another account. Pick another name.")
         else:
@@ -541,6 +577,10 @@ def cmd_setup(args: argparse.Namespace, ctx: Ctx) -> int:
             say(_schedule().install(minutes, ctx.path.resolve()))
         except (RuntimeError, ValueError, OSError) as e:   # schedule.ScheduleError is a RuntimeError
             warn(f"Couldn't turn on the background schedule: {e}")
+    if cfg.ai.enabled:
+        say("")
+        say("The AI helper is switched on in your settings. Save your Anthropic API key with")
+        say("`mailtidy config ai-key`, so the background schedule can use it too.")
     say("")
     say("All set. Handy commands:")
     say("  mailtidy status    what MailTidy has been doing")
@@ -569,13 +609,8 @@ def cmd_accounts(args: argparse.Namespace, ctx: Ctx) -> int:
         cfg.accounts = [a for a in cfg.accounts if a.id != acct.id]
         ctx.save()
         mark_previewed(cfg, [acct.id], remove=True)
-        if not args.keep_password:
-            try:
-                _auth().delete_secret(acct.id)
-                say("Removed its password from your keychain.")
-            except (BackendError, OSError) as e:   # auth.CredentialError is a BackendError
-                warn(f"Couldn't remove the password from your keychain ({e}); you can delete the "
-                     f"'mailtidy' entry named '{acct.id}' by hand.")
+        if not args.keep_password and _forget_secrets(acct.id):
+            say("Removed its password and sign-in from your keychain.")
         say(f"Removed '{acct.id}'.")
         return EXIT_OK
     if action == "test":
@@ -893,7 +928,33 @@ def cmd_config(args: argparse.Namespace, ctx: Ctx) -> int:
         except OSError:
             raise UserError(f"Couldn't open an editor. Open this file yourself: {ctx.path}") from None
         return _check(ctx)
+    if args.config_action == "ai-key":
+        return _ai_key(args, ctx)
     return _check(ctx)
+
+
+def _ai_key(args: argparse.Namespace, ctx: Ctx) -> int:
+    """Save (or with --remove, delete) the Anthropic API key in the keychain, where the schedule finds it."""
+    auth = _auth()
+    try:
+        if args.remove:
+            auth.delete_ai_key()
+            say("Removed your Anthropic API key from the keychain.")
+            return EXIT_OK
+        say("MailTidy keeps your Anthropic API key in your computer's keychain, so the background")
+        say("schedule can use it too. Make a key at https://console.anthropic.com (API Keys).")
+        key = "".join(getpass.getpass("Paste the API key here (it stays hidden while you type): ").split())
+        if not key:
+            say("No key entered; nothing changed.")
+            return EXIT_ERROR
+        auth.set_ai_key(key)
+        del key
+    except BackendError as e:   # auth.CredentialError: no usable keychain
+        raise UserError(f"Couldn't reach your keychain: {e}") from None
+    say("Saved. MailTidy will use this key when `ai: enabled: yes` is set in your settings.")
+    if not ctx.cfg.ai.enabled:
+        say("The AI helper is still off: run `mailtidy config edit` and set `enabled: yes` under `ai:`.")
+    return EXIT_OK
 
 
 # ---- argument parsing -----------------------------------------------------------------------------------
@@ -984,6 +1045,8 @@ def build_parser() -> argparse.ArgumentParser:
     co.add_parser("path", help="show where the settings file is")
     co.add_parser("edit", help="open the settings file in an editor, then check it")
     co.add_parser("check", help="look for mistakes in the settings file")
+    k = co.add_parser("ai-key", help="save your Anthropic API key in the keychain (for the optional AI)")
+    k.add_argument("--remove", action="store_true", help="delete the saved key instead")
     s.set_defaults(func=cmd_config)
     _accept_config_everywhere(p)
     return p
@@ -1022,7 +1085,10 @@ def main(argv: list[str] | None = None) -> int:
         return EXIT_USAGE
     path = Path(args.config).expanduser() if args.config else default_config_path()
     ctx = Ctx(path=path, quiet=bool(getattr(args, "quiet", False)))
+    # Linux/macOS: everything MailTidy creates (memory, log, report, settings) is readable by this user only.
+    old_umask = os.umask(0o077) if os.name == "posix" else None
     try:
+        _private_folders(ctx)
         return args.func(args, ctx)
     except UserError as e:
         warn(str(e))
@@ -1035,11 +1101,30 @@ def main(argv: list[str] | None = None) -> int:
     except ImportError as e:
         if os.environ.get("MAILTIDY_DEBUG"):
             raise
-        warn(f"Part of MailTidy is missing ({e.name or e}). Try reinstalling: pip install --upgrade mailtidy")
+        warn(f"Part of MailTidy is missing ({e.name or e}). {REINSTALL_HINT}")
     except Exception as e:
         if os.environ.get("MAILTIDY_DEBUG"):
             raise
         warn(f"Something went wrong: {type(e).__name__}: {e}\n"
              "Set MAILTIDY_DEBUG=1 and run it again to see details for a bug report "
              "(remove any email addresses before sharing).")
+    finally:
+        if old_umask is not None:
+            os.umask(old_umask)
     return EXIT_ERROR
+
+
+def _private_folders(ctx: Ctx) -> None:
+    """Tighten MailTidy's own settings and memory folders made by older versions (Linux/macOS).
+
+    Only the usual folders (or the ones named by $MAILTIDY_CONFIG / $MAILTIDY_DATA) are changed, never a
+    folder someone pointed `--config` or `data_dir:` at, such as Documents. New files and folders are
+    private anyway because of the umask set in main()."""
+    if os.name != "posix":
+        return
+    if ctx.path == default_config_path():
+        make_private(ctx.path.parent)
+    with contextlib.suppress(ConfigError):   # a broken settings file is reported by the command itself
+        folder = data_dir(load_config(ctx.path, warnings=[]))
+        if folder == default_data_dir():
+            make_private(folder)

@@ -2,23 +2,23 @@ from mailtidy.imap import PROVIDERS, detect_provider
 
 
 def test_detect_known_domains():
-    assert detect_provider("someone@gmail.com").key == "gmail"
-    assert detect_provider("Someone@GoogleMail.com").key == "gmail"
-    assert detect_provider("a@hotmail.co.uk").key == "outlook"
-    assert detect_provider("a@outlook.com").key == "outlook"
-    assert detect_provider("a@ymail.com").key == "yahoo"
-    assert detect_provider("a@me.com").key == "icloud"
-    assert detect_provider("a@mac.com").key == "icloud"
-    assert detect_provider("a@aol.com").key == "aol"
-    assert detect_provider("a@fastmail.com").key == "fastmail"
-    assert detect_provider("a@zohomail.com").key == "zoho"
-    assert detect_provider("a@gmx.com").key == "gmx"
-    assert detect_provider("a@gmx.de").key == "gmx-net"
-    assert detect_provider("a@proton.me").key == "protonmail-bridge"
+    assert detect_provider("user@gmail.com").key == "gmail"
+    assert detect_provider("User@GoogleMail.com").key == "gmail"
+    assert detect_provider("user@hotmail.co.uk").key == "outlook"
+    assert detect_provider("user@outlook.com").key == "outlook"
+    assert detect_provider("user@ymail.com").key == "yahoo"
+    assert detect_provider("user@me.com").key == "icloud"
+    assert detect_provider("user@mac.com").key == "icloud"
+    assert detect_provider("user@aol.com").key == "aol"
+    assert detect_provider("user@fastmail.com").key == "fastmail"
+    assert detect_provider("user@zohomail.com").key == "zoho"
+    assert detect_provider("user@gmx.com").key == "gmx"
+    assert detect_provider("user@gmx.de").key == "gmx-net"
+    assert detect_provider("user@proton.me").key == "protonmail-bridge"
 
 
 def test_unknown_and_malformed_give_custom():
-    assert detect_provider("a@example.com").key == "custom"
+    assert detect_provider("user@example.com").key == "custom"
     assert detect_provider("not-an-address").key == "custom"
     assert detect_provider("").key == "custom"
 

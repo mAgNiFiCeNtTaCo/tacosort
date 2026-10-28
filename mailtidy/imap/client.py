@@ -9,6 +9,9 @@ Safety promises kept here:
   the originals are left flagged \\Deleted (their mail app hides or purges them later) and nothing is
   expunged.
 - Passwords and tokens never appear in error messages or logs.
+- A MOVE/COPY is never blindly repeated after a dropped connection: MailTidy reconnects and looks
+  (by Message-ID) at what the server already did, so a message is never copied twice and a move that
+  did happen is still reported (and so can be undone).
 
 Gmail note: Gmail folders are labels. MOVE out of INBOX removes the Inbox label and adds the target
 label, which is exactly "moving" in Gmail's web interface. COPY would only add a label.
@@ -21,6 +24,7 @@ import email.header
 import email.policy
 import email.utils
 import html
+import logging
 import re
 import socket
 import ssl
@@ -62,8 +66,20 @@ _NAME_FLAGS = {
 }
 _SPECIAL = {"\\Sent", "\\Drafts", "\\Trash", "\\Junk", "\\All", "\\Archive", "\\Flagged", "\\Important"}
 
-# Connection problems worth one reconnect + retry.
+# Connection problems worth one reconnect + retry (only for reads; moves are checked instead).
 _DROPPED = (imap_errors.IMAPClientAbortError, OSError, EOFError)   # OSError covers socket + SSL errors
+MESSAGE_ID_FETCH = "BODY.PEEK[HEADER.FIELDS (MESSAGE-ID)]"
+
+_logger = logging.getLogger("mailtidy.imap")
+
+
+class _Copied(Exception):
+    """COPY worked, but marking the originals \\Deleted (or expunging them) failed afterwards."""
+
+    def __init__(self, mapping: dict[int, int], cause: Exception):
+        super().__init__(type(cause).__name__)
+        self.mapping = mapping
+        self.cause = cause
 
 
 # ---- small decoding helpers (never raise on bad input) ------------------------------------------
@@ -218,8 +234,10 @@ class ImapBackend:
         timeout: int = 60,
         client_factory: Callable[..., IMAPClient] = IMAPClient,
         sleep: Callable[[float], None] = time.sleep,
+        log: Callable[[str], object] | None = None,
     ):
         self.account = account
+        self._log = log or _logger.warning   # plain-English notes about things that half-worked
         self.account_id = account.id
         self._secret_getter = secret_getter
         self._token_getter = token_getter
@@ -441,22 +459,30 @@ class ImapBackend:
                 raise BackendError("A folder name was empty.")
             plain = delim.join(parts)
             existing = {_text(n) for _f, _d, n in client.list_folders()}
-            # Already there (with or without the prefix)? Use it as-is.
+            # Already there (with or without the prefix, in any capitals)? Use the server's name.
             for candidate in (prefix + plain, plain):
-                if candidate in existing:
-                    return candidate
+                found = _same_folder(existing, candidate)
+                if found:
+                    return found
             if prefix and plain.upper().startswith(prefix.upper()):
                 prefix = ""   # caller already gave a full name
             full = ""
-            for i in range(1, len(parts) + 1):
-                full = prefix + delim.join(parts[:i])
-                if full in existing:
+            for i, part in enumerate(parts):
+                full = f"{full}{delim}{part}" if i else prefix + part
+                found = _same_folder(existing, full)
+                if found:
+                    full = found     # an existing parent keeps its own spelling
                     continue
                 try:
                     client.create_folder(full)
                 except imap_errors.IMAPClientError:
-                    if not client.folder_exists(full):   # someone else may have just made it
+                    # Someone else may have just made it (maybe in other capitals): look again.
+                    found = _same_folder({_text(n) for _f, _d, n in client.list_folders()}, full)
+                    if not found:
                         raise
+                    full = found
+                    existing.add(full)
+                    continue
                 try:
                     client.subscribe_folder(full)
                 except imap_errors.IMAPClientError:
@@ -467,10 +493,20 @@ class ImapBackend:
         return self._call(run, f"creating the folder '{name}'")
 
     def folder_state(self, folder: str) -> FolderState:
-        """UIDVALIDITY, UIDNEXT and message count (STATUS: changes nothing, selects nothing)."""
-        st = self._call(lambda c: c.folder_status(folder, ["UIDVALIDITY", "UIDNEXT", "MESSAGES"]),
-                        f"checking the folder '{folder}'")
-        return FolderState(int(st.get(b"UIDVALIDITY", 0)), int(st.get(b"UIDNEXT", 0)), int(st.get(b"MESSAGES", 0)))
+        """UIDVALIDITY, UIDNEXT and message count (STATUS: changes nothing).
+
+        A server that leaves UIDNEXT out of its answer gets "highest UID + 1" from a search instead,
+        because 0 would make MailTidy think the whole folder is new."""
+        what = f"checking the folder '{folder}'"
+        st = self._call(lambda c: c.folder_status(folder, ["UIDVALIDITY", "UIDNEXT", "MESSAGES"]), what)
+        uidnext = int(st.get(b"UIDNEXT") or 0)
+        if uidnext <= 0:
+            uidnext = self._call(lambda c: self._highest_uid(c, folder), what) + 1
+        return FolderState(int(st.get(b"UIDVALIDITY") or 0), uidnext, int(st.get(b"MESSAGES") or 0))
+
+    def _highest_uid(self, client: IMAPClient, folder: str) -> int:
+        self._select(client, folder, readonly=True)
+        return max((int(u) for u in client.search("ALL")), default=0)
 
     # ---- reading --------------------------------------------------------------------------------
     def search_uids(self, folder: str, *, min_uid: int | None = None, limit: int | None = None) -> list[int]:
@@ -561,32 +597,32 @@ class ImapBackend:
         )
 
     def find_message_id(self, folder: str, message_id: str) -> list[int]:
-        """UIDs in `folder` whose Message-ID header equals `message_id` exactly."""
+        """UIDs in `folder` whose Message-ID header equals `message_id` exactly, skipping messages
+        flagged \\Deleted (originals left behind by a move on a server without UIDPLUS)."""
         message_id = (message_id or "").strip()
         if not message_id:
             return []
+        return self._call(lambda c: self._find_ids(c, folder, message_id), f"looking for a message in '{folder}'")
 
-        def run(client: IMAPClient) -> list[int]:
-            self._select(client, folder, readonly=True)
-            charset = None
-            try:
-                message_id.encode("ascii")
-            except UnicodeEncodeError:
-                charset = "UTF-8"
-            # HEADER search matches substrings, so confirm each hit by reading its Message-ID.
-            hits = sorted(int(u) for u in client.search(["HEADER", "Message-ID", message_id], charset))
-            if not hits:
-                return []
-            data = client.fetch(hits, ["BODY.PEEK[HEADER.FIELDS (MESSAGE-ID)]"])
-            same = []
-            for uid in hits:
-                raw = _find_key(data.get(uid, {}), b"BODY[HEADER") or b""
-                found = email.message_from_bytes(raw, policy=email.policy.compat32).get("Message-ID", "")
-                if decode_header_value(found).strip() == message_id:
-                    same.append(uid)
-            return same
-
-        return self._call(run, f"looking for a message in '{folder}'")
+    def _find_ids(self, client: IMAPClient, folder: str, message_id: str) -> list[int]:
+        self._select(client, folder, readonly=True)
+        charset = None
+        try:
+            message_id.encode("ascii")
+        except UnicodeEncodeError:
+            charset = "UTF-8"
+        # HEADER search matches substrings, so confirm each hit by reading its Message-ID.
+        hits = sorted(int(u) for u in client.search(["HEADER", "Message-ID", message_id, "UNDELETED"], charset))
+        if not hits:
+            return []
+        data = client.fetch(hits, ["FLAGS", MESSAGE_ID_FETCH])
+        same = []
+        for uid in hits:
+            row = data.get(uid, {})
+            raw = _find_key(row, b"BODY[HEADER")
+            if raw is not None and not _is_deleted(row) and _message_id(raw) == message_id:
+                same.append(uid)
+        return same
 
     # ---- moving ---------------------------------------------------------------------------------
     def move(self, folder: str, uids: list[int], dest: str) -> dict[int, int | None]:
@@ -594,37 +630,157 @@ class ImapBackend:
 
         MOVE when the server has it; otherwise COPY, then \\Deleted + UID EXPUNGE of exactly those
         UIDs (UIDPLUS). Without UIDPLUS the originals stay flagged \\Deleted and are NOT expunged,
-        because a plain EXPUNGE would also remove anything else marked deleted in that folder."""
+        because a plain EXPUNGE would also remove anything else marked deleted in that folder.
+
+        A UID missing from the result was not moved (or its outcome is unknown). If a later batch
+        fails after earlier ones were moved, the earlier moves are still returned (so they are
+        recorded and can be undone) and the problem is logged."""
         result: dict[int, int | None] = {}
         for batch in _chunks(sorted({int(u) for u in uids})):
-            result.update(self._call(lambda c, b=batch: self._move_batch(c, folder, b, dest),
-                                     f"moving messages from '{folder}' to '{dest}'"))
+            try:
+                result.update(self._move_batch(folder, batch, dest))
+            except BackendError as exc:
+                if not result:
+                    raise
+                self._log(f"Moved {len(result)} message(s) from '{folder}' to '{dest}', then stopped: {exc}")
+                break
         return result
 
-    def _move_batch(self, client: IMAPClient, folder: str, uids: list[int], dest: str) -> dict[int, int | None]:
+    def _move_batch(self, folder: str, uids: list[int], dest: str) -> dict[int, int | None]:
+        what = f"moving messages from '{folder}' to '{dest}'"
+        # Reading first is safe to repeat: which UIDs are really here (not already on their way out),
+        # and their Message-IDs, so a dropped connection can be checked instead of guessed.
+        here = self._call(lambda c: self._peek(c, folder, uids), what)
+        todo = sorted(u for u, (_mid, deleted) in here.items() if not deleted)
+        ids = {u: here[u][0] for u in todo}
+        result: dict[int, int | None] = {}
+        for attempt in (1, 2):
+            if not todo:
+                break
+            try:
+                if self._client is None:
+                    self.connect()
+                result.update(self._move_now(self._client, folder, todo, dest))
+                break
+            except BackendError:
+                raise
+            except _Copied as done:
+                result.update(self._finish_copy(folder, todo, dest, done))
+                break
+            except _DROPPED:
+                self.close()
+                moved, todo = self._after_drop(folder, todo, ids, dest)
+                result.update(moved)
+                if todo and attempt == 2:
+                    self._log(f"The connection to {self.host} dropped twice while {what}; "
+                              f"{len(todo)} message(s) stay where they are until the next run.")
+            except imap_errors.IMAPClientError as exc:
+                raise BackendError(f"The server said no while {what}: {self._scrub(exc)}") from None
+        return result
+
+    def _peek(self, client: IMAPClient, folder: str, uids: list[int]) -> dict[int, tuple[str, bool]]:
+        """uid -> (Message-ID, flagged \\Deleted) for those `uids` that exist in `folder`."""
         self._select(client, folder, readonly=False)
-        # Only UIDs that really exist here (missing ones are skipped, like the contract says).
-        present = sorted(int(u) for u in client.search(["UID", ",".join(str(u) for u in uids)]))
-        present = [u for u in present if u in set(uids)]
-        if not present:
-            return {}
+        data = client.fetch(uids, ["FLAGS", MESSAGE_ID_FETCH])
+        out: dict[int, tuple[str, bool]] = {}
+        for uid in uids:
+            row = data.get(uid)
+            raw = _find_key(row, b"BODY[HEADER") if row else None
+            if raw is not None:      # no header part: an unsolicited FLAGS update, not our answer
+                out[uid] = (_message_id(raw), _is_deleted(row))
+        return out
+
+    def _move_now(self, client: IMAPClient, folder: str, uids: list[int], dest: str) -> dict[int, int | None]:
+        """One MOVE (or COPY + delete step) on the live connection, with no retry of its own."""
+        self._select(client, folder, readonly=False)
         _take_copyuid(client)  # forget any stale COPYUID from earlier commands
         if client.has_capability("MOVE"):
-            response = client.move(present, dest)
+            response = client.move(uids, dest)
             mapping = parse_copyuid(response) or parse_copyuid(_take_copyuid(client))
-        else:
-            response = client.copy(present, dest)
-            mapping = parse_copyuid(response) or parse_copyuid(_take_copyuid(client))
-            client.add_flags(present, [b"\\Deleted"], silent=True)
-            if client.has_capability("UIDPLUS"):
-                client.uid_expunge(present)   # removes only these UIDs
-            # else: no expunge at all (see docstring).
-        return {u: mapping.get(u) for u in present}
+            return {u: mapping.get(u) for u in uids}
+        response = client.copy(uids, dest)
+        mapping = parse_copyuid(response) or parse_copyuid(_take_copyuid(client))
+        # From here on the copies exist: whatever goes wrong next, these messages count as moved.
+        try:
+            self._delete_originals(client, uids)
+        except Exception as exc:  # noqa: BLE001 (a drop or a refusal: handled by _finish_copy)
+            raise _Copied(mapping, exc) from None
+        return {u: mapping.get(u) for u in uids}
+
+    @staticmethod
+    def _delete_originals(client: IMAPClient, uids: list[int]) -> None:
+        """\\Deleted + UID EXPUNGE of exactly `uids` (no expunge at all without UIDPLUS). Safe to repeat."""
+        client.add_flags(uids, [b"\\Deleted"], silent=True)
+        if client.has_capability("UIDPLUS"):
+            client.uid_expunge(uids)   # removes only these UIDs
+
+    def _finish_copy(self, folder: str, uids: list[int], dest: str, done: _Copied) -> dict[int, int | None]:
+        """COPY worked but the delete step did not. Finish it after a drop; either way report the
+        messages as moved, because their copies are in `dest` and must be recorded (and undoable)."""
+        moved: dict[int, int | None] = {u: done.mapping.get(u) for u in uids}
+        problem = done.cause
+        if isinstance(problem, _DROPPED):
+            self.close()
+            try:
+                self._call(lambda c: (self._select(c, folder, readonly=False), self._delete_originals(c, uids)),
+                           f"finishing the move from '{folder}' to '{dest}'")
+                return moved
+            except BackendError as exc:
+                problem = exc
+        self._log(
+            f"MailTidy copied {len(uids)} message(s) from '{folder}' to '{dest}' but could not remove the "
+            f"originals from '{folder}' ({self._scrub(problem)}). They are counted as moved; the originals "
+            "stay where they were, and MailTidy will not copy them again."
+        )
+        return moved
+
+    def _after_drop(self, folder: str, uids: list[int], ids: dict[int, str],
+                    dest: str) -> tuple[dict[int, int | None], list[int]]:
+        """The line dropped during MOVE/COPY: reconnect and look at what the server really did.
+
+        Returns (moved: old uid -> new uid found in `dest`, safe to try again). A message counts as
+        moved when `dest` has its Message-ID (not \\Deleted) and it left the source (MOVE), or a COPY
+        clearly happened (then only the delete step is finished). It is tried again only when that is
+        sure not to make a second copy. Anything unclear is left out (not moved / unknown)."""
+        def run(client: IMAPClient) -> tuple[dict[int, int | None], list[int], list[int]]:
+            uses_move = client.has_capability("MOVE")
+            now = self._peek(client, folder, uids)
+            moved: dict[int, int | None] = {}
+            again: list[int] = []
+            finish: list[int] = []
+            for uid in uids:
+                mid = ids.get(uid, "")
+                still_here = uid in now and not now[uid][1]
+                in_dest = self._find_ids(client, dest, mid) if mid else []
+                if uses_move:
+                    if still_here:
+                        again.append(uid)                 # MOVE did not happen: repeating is safe
+                    elif in_dest:
+                        moved[uid] = max(in_dest)
+                elif in_dest:
+                    moved[uid] = max(in_dest)             # the copy is there: never copy again
+                    if uid in now:
+                        finish.append(uid)
+                elif still_here and mid:
+                    again.append(uid)                     # no copy in dest: COPY did not happen
+            return moved, again, finish
+
+        moved, again, finish = self._call(
+            run, f"checking a move from '{folder}' to '{dest}' after the connection dropped")
+        if finish:
+            mapping = {u: n for u, n in moved.items() if u in finish and n is not None}
+            try:
+                self._call(lambda c: (self._select(c, folder, readonly=False), self._delete_originals(c, finish)),
+                           f"finishing the move from '{folder}' to '{dest}'")
+            except BackendError as exc:
+                self._finish_copy(folder, finish, dest, _Copied(mapping, exc))   # logs it; still moved
+        return moved, again
 
     # ---- waiting for new mail -------------------------------------------------------------------
     def idle(self, folder: str, timeout: int) -> bool:
-        """Wait up to `timeout` seconds for a change in `folder`. IMAP IDLE when supported, else a
-        STATUS poll every 30 seconds. True when something changed."""
+        """Wait up to `timeout` seconds for new mail in `folder`. IMAP IDLE when supported, else a
+        STATUS poll every 30 seconds. True when new mail arrived; flag changes (the person reading a
+        message on their phone) and deletions do not count."""
         if self._call(lambda c: c.has_capability("IDLE"), "checking for new mail"):
             return bool(self._call(lambda c: self._idle(c, folder, timeout), f"waiting for mail in '{folder}'"))
         return self._poll(folder, timeout)
@@ -642,7 +798,7 @@ class ImapBackend:
             finally:
                 client.idle_done()
             for resp in responses:
-                if len(resp) >= 2 and _text(resp[1]).upper() in ("EXISTS", "EXPUNGE", "RECENT", "FETCH"):
+                if len(resp) >= 2 and _text(resp[1]).upper() in ("EXISTS", "RECENT"):
                     return True
 
     def _poll(self, folder: str, timeout: int) -> bool:
@@ -651,7 +807,8 @@ class ImapBackend:
         while time.monotonic() < deadline:
             self._sleep(min(POLL_EVERY, max(deadline - time.monotonic(), 0)))
             self._call(lambda c: c.noop(), "checking for new mail")
-            if self.folder_state(folder) != before:
+            now = self.folder_state(folder)
+            if (now.uidnext, now.uidvalidity) != (before.uidnext, before.uidvalidity):
                 return True
         return False
 
@@ -663,6 +820,27 @@ def _find_key(row: dict, prefix: bytes) -> bytes | None:
         if k.upper().startswith(prefix):
             return value if isinstance(value, bytes) else (_text(value).encode() if value else b"")
     return None
+
+
+def _message_id(raw_headers: bytes) -> str:
+    """The Message-ID from a fetched header block ("" when missing)."""
+    try:
+        found = email.message_from_bytes(raw_headers or b"", policy=email.policy.compat32).get("Message-ID", "")
+    except Exception:  # noqa: BLE001 (never crash on odd server data)
+        return ""
+    return decode_header_value(found).strip()
+
+
+def _is_deleted(row: dict) -> bool:
+    return any(_text(f).lower() == "\\deleted" for f in row.get(b"FLAGS", ()))
+
+
+def _same_folder(existing: set[str], name: str) -> str | None:
+    """The server's own spelling of `name`: exact match first, else one differing only in capitals."""
+    if name in existing:
+        return name
+    lower = name.lower()
+    return next((e for e in sorted(existing) if e.lower() == lower), None)
 
 
 def _label(value: object) -> str:

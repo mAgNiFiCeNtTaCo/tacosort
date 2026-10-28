@@ -17,16 +17,16 @@ For example:
 
 - a password, app password or token ending up in a file, log, error message or report;
 - a crafted email that makes MailTidy do something unexpected: run code, inject HTML or script into
-  the report, move or delete mail it shouldn't, or change the AI's instructions so it moves mail
-  wrongly;
+  the report, delete mail, or move mail from a person out of the Inbox (including by fooling the AI;
+  see *What the AI can and can't be tricked into* below);
 - MailTidy deleting mail, marking mail as read, or touching Sent / Drafts / Trash / Junk / All Mail;
 - insecure connections (e.g. not checking the server's certificate);
 - the background job running something other than MailTidy, or with more rights than needed.
 
 ## Supported versions
 
-Security fixes go into the latest release. Please update with `pipx upgrade mailtidy` (or
-`pip install --upgrade mailtidy`).
+Security fixes go into the latest version on this repository. Please update with
+`pipx upgrade mailtidy` (MailTidy is installed from GitHub, not from PyPI; see the README).
 
 ## How MailTidy protects you
 
@@ -37,5 +37,18 @@ Security fixes go into the latest release. Please update with `pipx upgrade mail
 - Mail is read with IMAP "peek"; MailTidy never deletes, and only removes the exact messages it has
   just copied when a server can't move mail directly.
 - The HTML report has no scripts, loads nothing from the internet, and escapes all email text.
+- On Linux and macOS, MailTidy's settings and memory files can be opened only by your own user account.
 - The optional AI is off by default and receives only From, Subject and a short snippet; see
   [docs/privacy.md](docs/privacy.md).
+
+## What the AI can and can't be tricked into
+
+An email can contain text written to fool the AI ("prompt injection"). MailTidy limits what that can do,
+but it can't promise the AI is never fooled:
+
+- the AI can only pick one of your folders; it can't delete, send, reply or run anything;
+- mail from people you know (people you've written to, VIPs, replies, starred mail) is never sent to it;
+- mail that looks written by a person is never moved on the AI's word alone;
+- a crafted email *could* still make the AI file **automated** mail in the wrong folder. That is a known
+  limit, not a vulnerability; `mailtidy undo` puts it back. Please do report a way to get past the
+  first three points, or to make the AI move mail from a person.

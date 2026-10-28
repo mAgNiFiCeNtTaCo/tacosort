@@ -1,9 +1,13 @@
 """Run MailTidy in the background every few minutes, using the computer's own scheduler.
 
-- Windows: a Task Scheduler task "MailTidy" for the current user (no admin needed), every N minutes
-  and at logon, running `pythonw.exe -m mailtidy run --quiet` (pythonw = no console window).
+- Windows: a Task Scheduler task "MailTidy-<your user name>" for the current user (no admin needed),
+  every N minutes and at logon, running `pythonw.exe -m mailtidy run --quiet` (pythonw = no console
+  window). Older versions named the task plain "MailTidy"; status and uninstall still find that one.
 - macOS: a LaunchAgent (~/Library/LaunchAgents/com.mailtidy.run.plist), every N minutes and at login.
 - Linux: a systemd user timer (mailtidy.timer), or a crontab line when systemd isn't available.
+
+The scheduled job starts in MailTidy's own data folder and, on Python 3.11 or newer, with `-P`, so a
+stray file such as `yaml.py` lying in the home folder can never be loaded into MailTidy.
 
 The `build_*` functions only build commands and file contents (easy to test); `install`, `uninstall`
 and `status` run them.
@@ -11,18 +15,21 @@ and `status` run them.
 
 from __future__ import annotations
 
+import contextlib
 import os
 import plistlib
+import re
 import shlex
 import shutil
 import subprocess
 import sys
 import tempfile
+import xml.etree.ElementTree as ET
 from datetime import datetime
 from pathlib import Path
 from xml.sax.saxutils import escape
 
-TASK_NAME = "MailTidy"
+TASK_NAME = "MailTidy"        # the old, machine-wide task name (still found by status and uninstall)
 LAUNCHD_LABEL = "com.mailtidy.run"
 SYSTEMD_NAME = "mailtidy"
 CRON_MARKER = "# mailtidy"
@@ -61,16 +68,58 @@ def windowless_python(executable: str | None = None) -> str:
     return str(candidate) if candidate.exists() else str(exe)
 
 
+def python_options(version_info: tuple[int, ...] | None = None) -> list[str]:
+    """Options for the scheduled Python: `-P` (Python 3.11+) keeps the current folder out of the
+    import path, so only the installed MailTidy and its libraries are ever loaded."""
+    version = tuple(version_info or sys.version_info)[:2]
+    return ["-P"] if version >= (3, 11) else []
+
+
 def run_arguments(config_path: Path | str) -> list[str]:
+    """The MailTidy part of the scheduled command line (after Python and its options)."""
     return ["-m", "mailtidy", "run", "--quiet", "--config", str(config_path)]
 
 
+def _command(python: str, config_path: Path | str) -> list[str]:
+    return [python, *python_options(), *run_arguments(config_path)]
+
+
+def _data_dir(config_path: Path | str | None = None) -> Path | None:
+    """MailTidy's data folder for this config (where the scheduled job starts), or None if unknown."""
+    try:
+        from .config import data_dir, default_data_dir, load_config
+    except ImportError:
+        return None
+    if config_path is not None:
+        # A broken config must not stop the schedule: then the default folder is used.
+        with contextlib.suppress(Exception):
+            return Path(data_dir(load_config(Path(config_path))))
+    return Path(default_data_dir())
+
+
+def _prepare_dir(path: Path | None) -> Path | None:
+    """Make sure the folder exists (only its owner may open it), so the job can start there."""
+    if path is None:
+        return None
+    path.mkdir(mode=0o700, parents=True, exist_ok=True)
+    return path
+
+
 # ---- Windows --------------------------------------------------------------------------------------
+def windows_task_name(user: str | None = None) -> str:
+    """The Task Scheduler name for this Windows user, e.g. "MailTidy-Some_One". Task names are
+    machine-wide, so each user on a shared PC gets their own."""
+    user = os.environ.get("USERNAME", "") if user is None else user
+    clean = re.sub(r"[^A-Za-z0-9._-]+", "_", user.split("\\")[-1]).strip("._")[:64]
+    return f"{TASK_NAME}-{clean}" if clean else TASK_NAME
+
+
 def build_windows_command(pythonw: str, config_path: Path | str, interval_minutes: int,
                           task_name: str = TASK_NAME) -> list[str]:
     """Plain `schtasks /Create` for an every-N-minutes task (the fallback when the XML is refused)."""
     n = _check_interval(interval_minutes)
-    tr = f'"{pythonw}" -m mailtidy run --quiet --config "{config_path}"'
+    opts = "".join(f"{o} " for o in python_options())
+    tr = f'"{pythonw}" {opts}-m mailtidy run --quiet --config "{config_path}"'
     if len(tr) > SCHTASKS_TR_LIMIT:
         raise ScheduleError("The path to Python or to the config file is too long for Windows Task "
                             "Scheduler. Move the config file to a shorter path and try again.")
@@ -78,17 +127,20 @@ def build_windows_command(pythonw: str, config_path: Path | str, interval_minute
 
 
 def build_windows_task_xml(pythonw: str, config_path: Path | str, interval_minutes: int, *, user: str,
-                           start: datetime, at_logon: bool = True) -> str:
+                           start: datetime, at_logon: bool = True,
+                           work_dir: Path | str | None = None) -> str:
     """Task Scheduler XML: every N minutes (and at logon), only while the user is logged on, runs on
     battery too, never two copies at once, stopped after an hour if it hangs."""
     n = _check_interval(interval_minutes)
-    args = " ".join(f'"{a}"' if (" " in a or not a) else a for a in run_arguments(config_path))
+    args = " ".join(f'"{a}"' if (" " in a or not a) else a
+                    for a in [*python_options(), *run_arguments(config_path)])
     logon = (f"""
     <LogonTrigger>
       <Enabled>true</Enabled>
       <UserId>{escape(user)}</UserId>
       <Delay>PT2M</Delay>
     </LogonTrigger>""" if at_logon else "")
+    workdir = (f"\n      <WorkingDirectory>{escape(str(work_dir))}</WorkingDirectory>" if work_dir else "")
     return f"""<?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
   <RegistrationInfo>
@@ -123,7 +175,7 @@ def build_windows_task_xml(pythonw: str, config_path: Path | str, interval_minut
   <Actions Context="Author">
     <Exec>
       <Command>{escape(pythonw)}</Command>
-      <Arguments>{escape(args)}</Arguments>
+      <Arguments>{escape(args)}</Arguments>{workdir}
     </Exec>
   </Actions>
 </Task>
@@ -140,31 +192,63 @@ def _windows_user() -> str:
     return f"{domain}\\{user}" if domain and user else user
 
 
+def _legacy_task_is_ours() -> bool | None:
+    """The old plain "MailTidy" task: None when there is none, True when it runs as this Windows user
+    (or its owner can't be read), False when it belongs to someone else on this PC."""
+    result = _run(["schtasks", "/Query", "/TN", TASK_NAME, "/XML"])
+    if result.returncode != 0:
+        return None
+    try:
+        root = ET.fromstring(re.sub(r"^<\?xml[^>]*\?>", "", (result.stdout or "").strip()))
+        owner = next((el.text or "" for el in root.iter() if el.tag.endswith("UserId")), "")
+    except ET.ParseError:
+        owner = ""
+    if not owner or owner.upper().startswith("S-1-"):
+        return True
+    me = os.environ.get("USERNAME", "")
+    return not me or owner.split("\\")[-1].lower() == me.lower()
+
+
+def _delete_legacy_task() -> bool:
+    """Remove the old plain "MailTidy" task when it is this user's. True when one was removed."""
+    if _legacy_task_is_ours() is not True:
+        return False
+    return _run(["schtasks", "/Delete", "/TN", TASK_NAME, "/F"]).returncode == 0
+
+
 def _install_windows(n: int, config_path: Path) -> str:
     pythonw = windowless_python()
+    name = windows_task_name()
+    work_dir = _prepare_dir(_data_dir(config_path))
     errors = []
+    done = ""
     for at_logon in (True, False):
         xml = build_windows_task_xml(pythonw, config_path, n, user=_windows_user(), start=datetime.now(),
-                                     at_logon=at_logon)
+                                     at_logon=at_logon, work_dir=work_dir)
         fd, tmp = tempfile.mkstemp(suffix=".xml", prefix="mailtidy-task-")
         os.close(fd)
         try:
             Path(tmp).write_text(xml, encoding="utf-16")
-            result = _run(build_windows_xml_command(tmp))
+            result = _run(build_windows_xml_command(tmp, name))
         finally:
             Path(tmp).unlink(missing_ok=True)
         if result.returncode == 0:
             extra = " and when you log in" if at_logon else ""
-            return (f"MailTidy will now run every {n} minutes{extra} while you are logged in to Windows "
-                    f"(Task Scheduler task \"{TASK_NAME}\").")
+            done = (f"MailTidy will now run every {n} minutes{extra} while you are logged in to Windows "
+                    f"(Task Scheduler task \"{name}\").")
+            break
         errors.append((result.stderr or result.stdout).strip())
-    result = _run(build_windows_command(pythonw, config_path, n))
-    if result.returncode == 0:
-        return (f"MailTidy will now run every {n} minutes while you are logged in to Windows "
-                f"(Task Scheduler task \"{TASK_NAME}\"). Note: Windows may skip runs while a laptop is "
+    if not done:
+        result = _run(build_windows_command(pythonw, config_path, n, name))
+        if result.returncode != 0:
+            errors.append((result.stderr or result.stdout).strip())
+            raise ScheduleError("Windows Task Scheduler refused to create the MailTidy task: " + errors[-1])
+        done = (f"MailTidy will now run every {n} minutes while you are logged in to Windows "
+                f"(Task Scheduler task \"{name}\"). Note: Windows may skip runs while a laptop is "
                 "on battery.")
-    errors.append((result.stderr or result.stdout).strip())
-    raise ScheduleError("Windows Task Scheduler refused to create the MailTidy task: " + errors[-1])
+    if name != TASK_NAME and _delete_legacy_task():
+        done += f" The old task \"{TASK_NAME}\" from an earlier version was removed."
+    return done
 
 
 def _parse_list(text: str) -> dict[str, str]:
@@ -177,11 +261,15 @@ def _parse_list(text: str) -> dict[str, str]:
 
 
 def _status_windows() -> str:
-    result = _run(["schtasks", "/Query", "/TN", TASK_NAME, "/FO", "LIST", "/V"])
+    name = windows_task_name()
+    result = _run(["schtasks", "/Query", "/TN", name, "/FO", "LIST", "/V"])
     if result.returncode != 0:
+        if name != TASK_NAME and _legacy_task_is_ours():
+            return (f"The background schedule is on (Task Scheduler task \"{TASK_NAME}\", made by an "
+                    "earlier MailTidy version). Run `mailtidy schedule on` once to update it.")
         return "The background schedule is off (no MailTidy task in Windows Task Scheduler)."
     info = _parse_list(result.stdout)
-    parts = [f"The background schedule is on (Task Scheduler task \"{TASK_NAME}\")."]
+    parts = [f"The background schedule is on (Task Scheduler task \"{name}\")."]
     if info.get("next run time"):
         parts.append(f"Next run: {info['next run time']}.")
     if info.get("last run time"):
@@ -190,8 +278,11 @@ def _status_windows() -> str:
 
 
 def _uninstall_windows() -> str:
-    result = _run(["schtasks", "/Delete", "/TN", TASK_NAME, "/F"])
-    if result.returncode != 0:
+    name = windows_task_name()
+    removed = _run(["schtasks", "/Delete", "/TN", name, "/F"]).returncode == 0
+    if name != TASK_NAME:
+        removed = _delete_legacy_task() or removed
+    if not removed:
         return "The background schedule was already off."
     return "The background schedule is off. MailTidy will only run when you start it."
 
@@ -202,16 +293,18 @@ def launchd_plist_path() -> Path:
 
 
 def build_launchd_plist(python: str, config_path: Path | str, interval_minutes: int,
-                        log_dir: Path | str | None = None) -> bytes:
+                        log_dir: Path | str | None = None, work_dir: Path | str | None = None) -> bytes:
     n = _check_interval(interval_minutes)
     plist = {
         "Label": LAUNCHD_LABEL,
-        "ProgramArguments": [python, *run_arguments(config_path)],
+        "ProgramArguments": _command(python, config_path),
         "StartInterval": n * 60,
         "RunAtLoad": True,
         "ProcessType": "Background",
         "LowPriorityIO": True,
     }
+    if work_dir:
+        plist["WorkingDirectory"] = str(work_dir)
     if log_dir:
         plist["StandardErrorPath"] = str(Path(log_dir) / "launchd-error.log")
         plist["StandardOutPath"] = "/dev/null"
@@ -226,21 +319,11 @@ def build_launchd_commands(uid: int, plist_path: Path | str) -> list[list[str]]:
     ]
 
 
-def _log_dir() -> Path | None:
-    try:
-        from .config import default_data_dir
-    except ImportError:
-        return None
-    return Path(default_data_dir())
-
-
 def _install_macos(n: int, config_path: Path) -> str:
     path = launchd_plist_path()
     path.parent.mkdir(parents=True, exist_ok=True)
-    log_dir = _log_dir()
-    if log_dir:
-        log_dir.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(build_launchd_plist(sys.executable, config_path, n, log_dir))
+    work_dir = _prepare_dir(_data_dir(config_path))
+    path.write_bytes(build_launchd_plist(sys.executable, config_path, n, work_dir, work_dir))
     unload, load = build_launchd_commands(os.getuid(), path)
     _run(unload)
     result = _run(load)
@@ -281,17 +364,20 @@ def _systemd_quote(arg: str) -> str:
     return arg
 
 
-def build_systemd_units(python: str, config_path: Path | str, interval_minutes: int) -> dict[str, str]:
+def build_systemd_units(python: str, config_path: Path | str, interval_minutes: int,
+                        work_dir: Path | str | None = None) -> dict[str, str]:
     """{file name: contents} for a oneshot service and a timer that starts it every N minutes."""
     n = _check_interval(interval_minutes)
-    exec_start = " ".join(_systemd_quote(a) for a in [python, *run_arguments(config_path)])
+    exec_start = " ".join(_systemd_quote(a) for a in _command(python, config_path))
+    # WorkingDirectory takes the path as it is (no quotes); only % needs escaping.
+    workdir = f"WorkingDirectory={str(work_dir).replace('%', '%%')}\n" if work_dir else ""
     service = f"""[Unit]
 Description=MailTidy: keep email folders organized
 After=network-online.target
 
 [Service]
 Type=oneshot
-ExecStart={exec_start}
+{workdir}ExecStart={exec_start}
 Nice=10
 """
     timer = f"""[Unit]
@@ -308,11 +394,31 @@ WantedBy=timers.target
     return {f"{SYSTEMD_NAME}.service": service, f"{SYSTEMD_NAME}.timer": timer}
 
 
-def build_cron_line(python: str, config_path: Path | str, interval_minutes: int) -> str:
+def build_cron_line(python: str, config_path: Path | str, interval_minutes: int,
+                    work_dir: Path | str | None = None) -> str:
     n = _check_interval(interval_minutes)
     when = f"*/{n} * * * *" if n < 60 else f"0 */{max(1, n // 60)} * * *"
-    cmd = " ".join(shlex.quote(a) for a in [python, *run_arguments(config_path)]).replace("%", "\\%")
+    cmd = " ".join(shlex.quote(a) for a in _command(python, config_path))
+    if work_dir:
+        cmd = f"cd {shlex.quote(str(work_dir))} && {cmd}"
+    cmd = cmd.replace("%", "\\%")          # cron turns a bare % into a line break
     return f"{when} {cmd} >/dev/null 2>&1 {CRON_MARKER}"
+
+
+def cron_interval_text(interval_minutes: int) -> str:
+    """How often cron really runs the job, in plain English (cron can't do every interval exactly)."""
+    n = _check_interval(interval_minutes)
+    if n < 60:
+        if 60 % n == 0:
+            return f"every {n} minutes"
+        return f"every {n} minutes, starting again at the top of each hour (cron can't do {n} exactly)"
+    hours = max(1, n // 60)
+    text = "every hour" if hours == 1 else f"every {hours} hours"
+    if n % 60:
+        text += f" (cron only repeats in whole hours, so {n} minutes was rounded down)"
+    if 24 % hours:
+        text += ", starting again at midnight"
+    return text
 
 
 def _has_systemd_user() -> bool:
@@ -326,10 +432,11 @@ def _crontab_without_us() -> list[str]:
 
 
 def _install_linux(n: int, config_path: Path) -> str:
+    work_dir = _prepare_dir(_data_dir(config_path))
     if _has_systemd_user():
         unit_dir = systemd_user_dir()
         unit_dir.mkdir(parents=True, exist_ok=True)
-        for name, text in build_systemd_units(sys.executable, config_path, n).items():
+        for name, text in build_systemd_units(sys.executable, config_path, n, work_dir).items():
             (unit_dir / name).write_text(text, encoding="utf-8")
         _run(["systemctl", "--user", "daemon-reload"])
         result = _run(["systemctl", "--user", "enable", "--now", f"{SYSTEMD_NAME}.timer"])
@@ -342,11 +449,16 @@ def _install_linux(n: int, config_path: Path) -> str:
     if not shutil.which("crontab"):
         raise ScheduleError("This computer has neither a systemd user session nor cron, so MailTidy "
                             "can't schedule itself. Use `mailtidy watch` instead.")
-    lines = _crontab_without_us() + [build_cron_line(sys.executable, config_path, n)]
+    lines = _crontab_without_us() + [build_cron_line(sys.executable, config_path, n, work_dir)]
     result = _run(["crontab", "-"], input="\n".join(lines) + "\n")
     if result.returncode != 0:
         raise ScheduleError("cron refused the MailTidy entry: " + (result.stderr or result.stdout).strip())
-    return f"MailTidy will now run every {n} minutes (a line in your crontab)."
+    return (f"MailTidy will now run {cron_interval_text(n)} (a line in your crontab, because this computer "
+            "has no systemd user session; MailTidy prefers a systemd user timer when there is one).\n"
+            "Please check that it works: cron jobs run without your desktop session, so they often can't "
+            "open the keychain where your password is saved, and then every run fails with \"No password "
+            "is saved\". Run `mailtidy status` after a while. If the runs fail, use `mailtidy watch` in a "
+            "terminal instead, or turn on a systemd user session and run `mailtidy schedule on` again.")
 
 
 def _status_linux() -> str:

@@ -188,3 +188,54 @@ def test_failed_transaction_rolls_back(store):
         c.execute("INSERT INTO contacts (address, account, added) VALUES ('x@example.com', '', 'now')")
         raise RuntimeError("stop")
     assert store.contacts() == set()
+
+
+def test_learned_decisions_say_whether_the_user_taught_them(store):
+    store.learned.learn_from_folder("a", "address", "school@example.org", category="folder", folder="Kids",
+                                    weight=0.9, evidence=3)
+    store.learned.learn_correction("a", "address", "shop@example.com", category="receipts")
+    assert store.learned.lookup("school@example.org", "", "", "a").explicit is False
+    assert store.learned.lookup("shop@example.com", "", "", "a").explicit is True
+
+
+def test_correction_checks_get_rarer_as_a_move_ages(store):
+    store.record_moves([move(mid="<new@example.com>", at=NOW), move(mid="<week@example.com>", at=NOW - timedelta(days=3)),
+                        move(mid="<month@example.com>", at=NOW - timedelta(days=10))])
+    since = NOW - timedelta(days=30)
+    due = store.moves_to_check("a", since, now=NOW)
+    assert len(due) == 3                                     # never checked: all due at once
+    for m in due:
+        store.mark_move_checked(m.id, "", now=NOW)
+    assert store.moves_to_check("a", since, now=NOW + timedelta(minutes=30)) == []
+
+    def due_at(**delta):
+        return {m.message_id for m in store.moves_to_check("a", since, now=NOW + timedelta(**delta))}
+
+    assert due_at(minutes=61) == {"<new@example.com>"}               # first day: hourly
+    assert due_at(hours=25) == {"<new@example.com>", "<week@example.com>"}   # first week: daily
+    assert due_at(days=8) == {"<new@example.com>", "<week@example.com>", "<month@example.com>"}   # then weekly
+
+
+def test_moves_for_message(store):
+    store.record_moves([move(mid="<1@example.com>"), move(mid="<1@example.com>", to="Finance"), move(mid="<2@example.com>")])
+    assert [m.to_folder for m in store.moves_for_message("a", "<1@example.com>")] == ["Receipts", "Finance"]
+    assert store.moves_for_message("b", "<1@example.com>") == [] and store.moves_for_message("a", "") == []
+
+
+def test_a_first_version_state_file_is_upgraded(tmp_path):
+    from mailtidy.store import MIGRATIONS
+
+    path = tmp_path / "state.sqlite3"
+    conn = sqlite3.connect(path)
+    for statement in MIGRATIONS[1]:
+        conn.execute(statement)
+    conn.execute("CREATE TABLE schema_version (version INTEGER NOT NULL)")
+    conn.execute("INSERT INTO schema_version VALUES (1)")
+    conn.execute("INSERT INTO moves (run_id, account, message_id, sender, subject, from_folder, to_folder, category, "
+                 "source, reason, at) VALUES ('r', 'a', '<1@example.com>', 's@example.com', 'x', 'INBOX', 'Receipts', "
+                 "'receipts', 'heuristic', '', ?)", (NOW.isoformat(),))
+    conn.commit()
+    conn.close()
+    with Store(path) as s:
+        assert s.schema_version == SCHEMA_VERSION == 2
+        assert [m.message_id for m in s.moves_to_check("a", NOW - timedelta(days=1), now=NOW)] == ["<1@example.com>"]

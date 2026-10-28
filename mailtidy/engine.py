@@ -21,6 +21,7 @@ import secrets
 import threading
 import time
 from collections.abc import Callable
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from . import learner
@@ -43,13 +44,15 @@ logger = logging.getLogger("mailtidy")
 Log = Callable[[str], None]
 
 BATCH = 200                    # messages fetched and classified at a time
-RESCAN_AFTER_RESET = 1000      # newest messages re-checked when a server renumbers a folder
+CONTACTS_EVERY = timedelta(days=1)   # how often the people you write to are re-read from Sent
 IDLE_SECONDS = 25 * 60         # servers drop IDLE after ~29 minutes
 MIN_CYCLE_SECONDS = 30         # never loop faster than this when nothing happened
 BACKOFF = (30, 60, 120, 300, 600, 900)
 NEVER_TOUCH = {"\\Sent", "\\Trash", "\\Junk", "\\All", "\\Drafts"}
 LOCK_NAME = "mailtidy.lock"
 LOG_NAME = "mailtidy.log"
+# A message without a Message-ID can't be recognised again (put back, undone), so it is never moved.
+UNTRACKABLE = Decision(INBOX, 1.0, "guard", "MailTidy can't track this message safely, so it leaves it alone")
 
 
 class EngineBusy(RuntimeError):
@@ -192,12 +195,15 @@ def _make_classifier(config: AppConfig, store: Store, classifier, log: Log = pri
 
 
 def _anthropic_key(config: AppConfig) -> str | None:
+    """The AI key: from the environment variable the settings name, else the one saved in the keychain
+    with `mailtidy config ai-key` (never any other keychain entry, such as a mail password)."""
     key = os.environ.get(config.ai.api_key_env or "ANTHROPIC_API_KEY")
     if key:
         return key
     try:
-        from .imap.auth import get_secret
-        return get_secret("anthropic")
+        from .imap import auth
+        get_ai_key = getattr(auth, "get_ai_key", None)
+        return get_ai_key() if get_ai_key is not None else None
     except Exception:  # noqa: BLE001 - no keychain means no key, not a crash
         return None
 
@@ -208,8 +214,8 @@ def _make_ai(config: AppConfig, log: Log):
         return None
     key = _anthropic_key(config)
     if not key:
-        _say(log, f"AI is turned on but no API key was found in {config.ai.api_key_env} or in the keychain "
-                  "(entry \"anthropic\"), so AI was skipped this time.")
+        _say(log, f"AI is turned on but no API key was found in {config.ai.api_key_env or 'ANTHROPIC_API_KEY'} "
+                  "or saved with `mailtidy config ai-key`, so AI was skipped this time.")
         return None
     try:
         from .classify.ai import AIClassifier
@@ -229,6 +235,52 @@ def _norm(name: str) -> str:
     return name.strip().lower()
 
 
+def _find_folder(folders: dict[str, FolderInfo], name: str) -> FolderInfo | None:
+    """The server's folder for a name from the settings: the exact name first, then ignoring capitals
+    ("Inbox" finds "INBOX"). Watermarks are always kept under the server's name."""
+    return folders.get(name) or next((f for n, f in folders.items() if _norm(n) == _norm(name)), None)
+
+
+def _folder_key(info: FolderInfo) -> str:
+    """Name for matching a destination like "MailTidy/Receipts" whatever the server's delimiter."""
+    return _norm(info.name.replace(info.delimiter, "/") if info.delimiter else info.name)
+
+
+def _has_watermark(store: Store, account_id: str, folder: str) -> bool:
+    """True when the folder (as written in the settings) already has a start point. Without the server
+    list only INBOX's spelling is known for sure; run_once also finds other names stored as typed."""
+    names = {folder, "INBOX"} if folder.upper() == "INBOX" else {folder}
+    return any(store.get_watermark(account_id, n) is not None for n in names)
+
+
+def _top_uid(backend: MailBackend, folder: str) -> int:
+    """Highest UID in the folder now (0 when empty): everything up to it counts as "already there"."""
+    return max(backend.search_uids(folder, limit=1), default=0)
+
+
+def _refresh_contacts(store: Store, backend: MailBackend, account: AccountConfig, clf) -> None:
+    """Re-read the people the user writes to from Sent, at most once a day per account, so people they
+    started writing to after setup are protected too. Skipped quietly when the learner can't do it."""
+    refresh = getattr(learner, "refresh_contacts", None)
+    if refresh is None:
+        return
+    key = f"contacts_refreshed:{account.id}"
+    last = store.get_meta(key)
+    now = utcnow()
+    with contextlib.suppress(ValueError):
+        if last and now - datetime.fromisoformat(last) < CONTACTS_EVERY:
+            return
+    try:
+        refresh(store, backend, account)
+    except Exception as e:  # noqa: BLE001 - contacts are a bonus; sorting goes on without them
+        logger.warning("%s: could not re-read contacts from Sent: %s", account.id, e)
+        return
+    store.set_meta(key, now.isoformat())
+    known = getattr(clf, "contacts", None)
+    if isinstance(known, set):                     # let this run already protect the new people
+        known.update(store.contacts())
+
+
 # ---- run_once -------------------------------------------------------------------------------------
 def run_once(config: AppConfig, store: Store, backends: dict[str, MailBackend], *, dry_run: bool,
              backlog: bool = False, log: Log = print, classifier=None,
@@ -237,9 +289,11 @@ def run_once(config: AppConfig, store: Store, backends: dict[str, MailBackend], 
     server and no progress is saved: `report.moves` lists what would happen. With `backlog`, the
     whole watched folder is sorted (newest first), not just new mail.
 
-    A folder with no watermark yet is sorted completely; call `start_from_now` first to sort only mail
-    that arrives later. If another run is working, returns at once with `run_id == ""` and
-    `skipped=True`, and does nothing."""
+    Without `backlog`, a folder with no watermark yet (or one the server renumbered) is never sorted
+    completely: the mail there now counts as handled and only later mail is sorted. Messages without a
+    Message-ID are never moved. Once a day per account, the people the user writes to are re-read from
+    Sent. If another run is working, returns at once with `run_id == ""` and `skipped=True`, and does
+    nothing."""
     data_dir = data_dir_for(config, store)
     setup_logging(data_dir)
     report = RunReport(run_id="", dry_run=dry_run, started=utcnow())
@@ -286,13 +340,15 @@ def run_once(config: AppConfig, store: Store, backends: dict[str, MailBackend], 
 def _run_account(config: AppConfig, store: Store, backend: MailBackend, account: AccountConfig, clf,
                  report: RunReport, *, dry_run: bool, backlog: bool, log: Log) -> None:
     folders = {f.name: f for f in backend.list_folders()}
+    if not dry_run:
+        _refresh_contacts(store, backend, account, clf)
     if config.learn_from_corrections and not dry_run:
         found = learner.detect_corrections(store, backend, account, config=config, log=log)
         report.learned += found
     dest_cache: dict[str, str] = {}
     moves_left = [config.max_moves_per_run]
     for folder in account.watch_folders:
-        info = folders.get(folder) or next((f for n, f in folders.items() if _norm(n) == _norm(folder)), None)
+        info = _find_folder(folders, folder)
         if info is None:
             report.errors.append(f"{account.id}: the folder {folder!r} does not exist, so it was skipped.")
             continue
@@ -301,7 +357,7 @@ def _run_account(config: AppConfig, store: Store, backend: MailBackend, account:
                                  "MailTidy never sorts it, so it was skipped.")
             continue
         _run_folder(config, store, backend, account, info.name, folders, clf, report, dest_cache, moves_left,
-                    dry_run=dry_run, backlog=backlog, log=log)
+                    dry_run=dry_run, backlog=backlog, log=log, config_name=folder)
         if moves_left[0] <= 0:
             break
 
@@ -314,23 +370,37 @@ def _destination(config: AppConfig, decision: Decision) -> str | None:
 
 def _run_folder(config: AppConfig, store: Store, backend: MailBackend, account: AccountConfig, folder: str,
                 folders: dict[str, FolderInfo], clf, report: RunReport, dest_cache: dict[str, str],
-                moves_left: list[int], *, dry_run: bool, backlog: bool, log: Log) -> None:
+                moves_left: list[int], *, dry_run: bool, backlog: bool, log: Log,
+                config_name: str = "") -> None:
     state = backend.folder_state(folder)
     mark = store.get_watermark(account.id, folder)
+    legacy = False
+    if mark is None and config_name and config_name != folder:
+        # Saved by an older MailTidy under the name as typed in the settings ("Inbox"): adopt it.
+        mark = store.get_watermark(account.id, config_name)
+        legacy = mark is not None
     reset = mark is not None and mark[0] != state.uidvalidity
-    if reset:
-        _say(log, f"{account.id}: the server renumbered {folder}; re-checking its newest "
-                  f"{RESCAN_AFTER_RESET} messages (already handled mail is skipped).")
+    if not backlog and (mark is None or reset):
+        # Without --backlog a folder is never sorted completely just because its start point is missing
+        # or the server renumbered it: the mail there now counts as already handled.
+        if not dry_run:
+            store.set_watermark(account.id, folder, state.uidvalidity, _top_uid(backend, folder))
+        if reset:
+            _say(log, f"{account.id}: the server renumbered the messages in {folder}, so MailTidy can't tell "
+                      "old mail from new this time. It left them where they are and sorts new mail from now on.")
+        else:
+            _say(log, f"{account.id}: first look at {folder}. MailTidy sorts mail that arrives from now on; "
+                      "`mailtidy run --backlog` sorts the mail already there.")
+        return
     if backlog:
         candidates = backend.search_uids(folder)
-    elif reset:
-        candidates = backend.search_uids(folder, limit=RESCAN_AFTER_RESET)
     else:
-        last_uid = mark[1] if mark else 0
+        last_uid = mark[1]
         candidates = [u for u in backend.search_uids(folder, min_uid=last_uid + 1) if u > last_uid]
     candidates = sorted(set(candidates), reverse=True)        # newest first
     done: set[int] = set()
-    by_name = {_norm(n): f for n, f in folders.items()}
+    by_name = {_folder_key(f): f for f in folders.values()}
+    untracked = 0
 
     for i in range(0, len(candidates), BATCH):
         if moves_left[0] <= 0:
@@ -345,20 +415,28 @@ def _run_folder(config: AppConfig, store: Store, backend: MailBackend, account: 
             m = fetched.get(uid)
             if m is None:
                 continue
+            if not m.message_id:
+                # Nothing could recognise it later (put back by you, undo), so it is never moved.
+                report.scanned += 1
+                report.kept += 1
+                untracked += 1
+                done.add(uid)
+                continue
             seen = store.seen(account.id, m.message_id)
-            if seen is not None:
-                if seen.override:
-                    done.add(uid)
-                    continue
-                if seen.decision.startswith("moved:"):
+            if seen is not None and seen.override:
+                done.add(uid)
+                continue
+            if seen is not None and seen.decision.startswith("moved:"):
+                if _same_message(store, account.id, m):
                     # We moved it before and it is back here: the user put it back. Never fight that.
                     if not dry_run:
                         store.mark_seen(account.id, m.message_id, seen.decision, override=True)
                     done.add(uid)
                     continue
-                if not backlog:
-                    done.add(uid)
-                    continue
+                seen = None                # a different message reusing the Message-ID: sort it as new mail
+            if seen is not None and not backlog:
+                done.add(uid)
+                continue
             todo.append(m)
         if not todo:
             continue
@@ -370,6 +448,8 @@ def _run_folder(config: AppConfig, store: Store, backend: MailBackend, account: 
             report.scanned += 1
             dest = None if d is None else _destination(config, d)
             target = by_name.get(_norm(dest)) if dest else None
+            if target is not None:
+                dest = target.name                 # the server's own spelling ("receipts" stays "receipts")
             if (dest is None or d.confidence < config.min_confidence or _norm(dest) == _norm(folder)
                     or (config.keep_flagged and m.is_flagged)
                     or (target is not None and target.flags & NEVER_TOUCH)):
@@ -393,24 +473,30 @@ def _run_folder(config: AppConfig, store: Store, backend: MailBackend, account: 
                 report.moved += len(records)
                 done.update(m.uid for m, _ in items)
                 continue
-            server_dest = dest_cache.get(dest)
+            server_dest = dest if dest in folders else dest_cache.get(dest)    # existing: no CREATE needed
             if server_dest is None:
                 server_dest = backend.ensure_folder(dest)
                 dest_cache[dest] = server_dest
             result = backend.move(folder, [m.uid for m, _ in items], server_dest)
             moved = []
             for (m, _), rec in zip(items, records):
-                if m.uid in result:
+                if m.uid in result:        # only what the server confirms; the rest is tried again next run
                     rec.to_folder = server_dest
                     rec.new_uid = result[m.uid]
                     moved.append(rec)
-                done.add(m.uid)            # moved, or gone from the folder: either way handled
+                    done.add(m.uid)
             store.record_moves(moved)
             store.mark_seen_many(account.id, [(r.message_id, f"moved:{server_dest}") for r in moved])
             report.moves.extend(moved)
             report.moved += len(moved)
             logger.info("%s: moved %d message(s) from %s to %s", account.id, len(moved), folder, server_dest)
+            if len(moved) < len(items):
+                _say(log, f"{account.id}: the server did not confirm {len(items) - len(moved)} move(s) to "
+                          f"{server_dest}; MailTidy will try those again next time.")
 
+    if untracked:
+        logger.info("%s: left %d message(s) in %s that have no Message-ID (%s)", account.id, untracked, folder,
+                    UNTRACKABLE.reason)
     if moves_left[0] <= 0 and len(done) < len(candidates):
         _say(log, f"{account.id}: reached the safety limit of {config.max_moves_per_run} moves for one run; "
                   "the rest will be sorted next time.")
@@ -424,8 +510,17 @@ def _run_folder(config: AppConfig, store: Store, backend: MailBackend, account: 
         handled = candidates
     old = mark[1] if mark and not reset else 0
     new_last = max([old, *handled]) if handled else old
-    if reset or mark is None or new_last != old:
+    if reset or mark is None or legacy or new_last != old:
         store.set_watermark(account.id, folder, state.uidvalidity, new_last)
+
+
+def _same_message(store: Store, account_id: str, msg: Message) -> bool:
+    """True when the message we moved earlier with this Message-ID had the same sender and subject (so
+    this is it, put back), False when a different message reuses the Message-ID."""
+    moves = store.moves_for_message(account_id, msg.message_id)
+    if not moves:
+        return True
+    return any(mv.sender == msg.from_.email and mv.subject == msg.subject for mv in moves)
 
 
 # ---- start from now -------------------------------------------------------------------------------
@@ -433,29 +528,44 @@ def start_from_now(config: AppConfig, store: Store, backends: dict[str, MailBack
                    log: Log = print) -> list[str]:
     """For watched folders MailTidy has never sorted, remember the newest message as "already handled",
     so the next run only sorts mail that arrives after this (`backlog=True` still sorts everything).
-    Folders that already have a watermark are left alone. Returns the ids of accounts that were set."""
+    Folders that already have a watermark are left alone. Returns the ids of accounts that were set.
+
+    If this can't reach an account (or another run holds the lock), nothing is lost: a run without
+    `backlog` sets the start point itself the first time it sees a folder and sorts nothing there."""
+    data_dir = data_dir_for(config, store)
+    setup_logging(data_dir)
+    lock = RunLock(data_dir)
+    if not lock.acquire():
+        logger.info("start_from_now: another run is working; the next run sets the start point itself")
+        return []
     started: list[str] = []
-    for account in config.accounts:
-        backend = backends.get(account.id)
-        if not account.enabled or backend is None:
-            continue
-        missing = [f for f in account.watch_folders if store.get_watermark(account.id, f) is None]
-        if not missing:
-            continue
-        try:
-            backend.connect()
-            names = {_norm(f.name): f for f in backend.list_folders()}
-            for folder in missing:
-                info = names.get(_norm(folder))
-                if info is None or info.flags & NEVER_TOUCH:
-                    continue
-                state = backend.folder_state(info.name)
-                store.set_watermark(account.id, folder, state.uidvalidity, max(state.uidnext - 1, 0))
-            started.append(account.id)
-        except Exception as e:  # noqa: BLE001 - run_once reports the account's problem properly
-            logger.warning("start_from_now %s: %s", account.id, e)
-        finally:
-            _close(backend)
+    try:
+        for account in config.accounts:
+            backend = backends.get(account.id)
+            if not account.enabled or backend is None:
+                continue
+            missing = [f for f in account.watch_folders if not _has_watermark(store, account.id, f)]
+            if not missing:
+                continue
+            try:
+                backend.connect()
+                folders = {f.name: f for f in backend.list_folders()}
+                for folder in missing:
+                    info = _find_folder(folders, folder)
+                    if info is None or info.flags & NEVER_TOUCH:
+                        continue
+                    if store.get_watermark(account.id, info.name) is not None:
+                        continue
+                    state = backend.folder_state(info.name)
+                    top = max(_top_uid(backend, info.name), state.uidnext - 1, 0)
+                    store.set_watermark(account.id, info.name, state.uidvalidity, top)
+                started.append(account.id)
+            except Exception as e:  # noqa: BLE001 - run_once reports the account's problem properly
+                logger.warning("start_from_now %s: %s", account.id, e)
+            finally:
+                _close(backend)
+    finally:
+        lock.release()
     if started:
         _say(log, f"{', '.join(started)}: from now on MailTidy sorts new mail as it arrives. The mail already "
                   "in your Inbox stays put; `mailtidy run --backlog` sorts that too.")
@@ -525,9 +635,16 @@ def undo(config: AppConfig, store: Store, backends: dict[str, MailBackend], *, r
 def _undo_account(store: Store, backend: MailBackend, account_id: str, moves: list, log: Log) -> int:
     existing = {f.name for f in backend.list_folders()}
     groups: dict[tuple[str, str], list[tuple[int, object]]] = {}
+    taken: dict[str, set[int]] = {}           # folder -> UIDs already picked (two moves, one Message-ID)
     for mv in moves:
         if mv.to_folder not in existing or mv.from_folder not in existing:
             _say(log, f"{account_id}: a folder for one move no longer exists; skipped it.")
+            continue
+        if not mv.message_id and not mv.new_uid:
+            _say(log, f"{account_id}: MailTidy can't track one message in {mv.to_folder} (it has no Message-ID "
+                      "and the server gave no number for it), so it can't put it back; it is still there "
+                      "unless you moved it.")
+            store.mark_undone([mv.id])
             continue
         uids = backend.find_message_id(mv.to_folder, mv.message_id) if mv.message_id else []
         if not uids and not mv.message_id and mv.new_uid:
@@ -535,11 +652,14 @@ def _undo_account(store: Store, backend: MailBackend, account_id: str, moves: li
             same = [m for m in backend.fetch(mv.to_folder, [mv.new_uid])
                     if m.from_.email == mv.sender and m.subject == mv.subject]
             uids = [m.uid for m in same]
+        used = taken.setdefault(mv.to_folder, set())
+        uids = [u for u in uids if u not in used]
         if not uids:
             _say(log, f"{account_id}: one message is no longer in {mv.to_folder} (you moved or deleted it); "
                       "left it alone.")
             store.mark_undone([mv.id])
             continue
+        used.add(uids[0])
         groups.setdefault((mv.to_folder, mv.from_folder), []).append((uids[0], mv))
     restored = 0
     for (src, dest), items in groups.items():

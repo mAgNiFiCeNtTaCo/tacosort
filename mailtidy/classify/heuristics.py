@@ -107,12 +107,20 @@ LOCAL_PARTS: tuple[tuple[str, float, tuple[str, ...]], ...] = (
 ROBOT_LOCAL_PARTS = (
     "noreply", "no-reply", "no_reply", "donotreply", "do-not-reply", "do_not_reply", "mailer",
     "mailer-daemon", "postmaster", "bounce", "bounces", "notifications", "notification", "notify",
-    "alerts", "alert", "info", "news", "newsletter", "marketing", "updates", "hello", "team",
-    "support", "help", "service", "customerservice", "contact", "auto-confirm", "order", "orders",
+    "alerts", "alert", "news", "newsletter", "marketing", "updates",
+    "auto-confirm", "order", "orders",
     "receipts", "billing", "statements", "offers", "deals", "promo", "store-news", "digest",
-    "account", "accounts", "security", "reservations", "booking", "admin", "system", "automated",
-    "transaction", "store", "shop", "email", "mail", "bestellung", "commandes", "facturas",
-    "jira", "confluence", "github", "gitlab", "calendar", "reply", "invitations", "feedback",
+    "account", "accounts", "security", "reservations", "booking", "system", "automated",
+    "transaction", "store", "shop", "bestellung", "commandes", "facturas",
+    "jira", "confluence", "github", "gitlab", "calendar", "invitations",
+)
+# Role-looking local parts that real people use too: families write from mail@familyname.de,
+# freelancers and small firms from info@, hello@ or team@. Alone they are weak evidence: they count
+# as "machine-sent" only from a known company domain (the tables above); otherwise a bulk header
+# (List-Unsubscribe, an email service, Auto-Submitted, ...) is needed before the mail counts as automated.
+WEAK_ROLE_LOCAL_PARTS = (
+    "info", "hello", "hi", "team", "support", "help", "service", "customerservice", "contact",
+    "admin", "email", "mail", "reply", "feedback", "office", "enquiries", "inquiries",
 )
 
 # Words/phrases in the subject: (category, weight, phrases). Snippet text counts at half weight.
@@ -203,6 +211,17 @@ SECURITY_PHRASES = (
     "verify it's you", "verify it’s you", "is this you", "was this you", "código de verificación",
     "sicherheitscode", "bestätigungscode", "code de vérification", "mot de passe",
 )
+# "Verify your email address" / "confirm your account" mail stays in the Inbox too: the person just
+# signed up somewhere and is waiting for it, and the link usually expires.
+ACCOUNT_CONFIRM_PHRASES = (
+    "verify your email", "verify your e-mail", "verify your email address", "verify your account",
+    "verify email address", "verify your address", "confirm your email", "confirm your e-mail",
+    "confirm your email address", "confirm your account", "confirm your registration",
+    "confirm your sign-up", "confirm your signup", "confirm your subscription",
+    "activate your account", "email verification", "e-mail verification", "email confirmation",
+    "confirm email address", "e-mail-adresse bestätigen", "bestätigen sie ihre e-mail",
+    "konto aktivieren", "confirmez votre adresse", "confirma tu correo", "verifica tu correo",
+)
 _SECURITY_CODE_IN_SUBJECT = re.compile(r"(?<!\d)\d{4,8}(?!\d).{0,40}\bcode\b|\bcode\b.{0,40}(?<!\d)\d{4,8}(?!\d)",
                                        re.IGNORECASE)
 
@@ -258,6 +277,8 @@ def _phrase_regex(phrase: str) -> re.Pattern[str]:
 
 _KEYWORD_PATTERNS = [(cat, w, [(p, _phrase_regex(p)) for p in phrases]) for cat, w, phrases in KEYWORDS]
 _SECURITY_PATTERNS = [(p, _phrase_regex(p)) for p in SECURITY_PHRASES]
+_CONFIRM_PATTERNS = [(p, _phrase_regex(p)) for p in ACCOUNT_CONFIRM_PHRASES]
+_ALL_DOMAINS = tuple(d for _, domains in DOMAINS.values() for d in domains)
 
 
 def domain_in(domain: str, domains: Iterable[str]) -> str | None:
@@ -312,16 +333,27 @@ def bulk_markers(msg: Message) -> list[str]:
 
 def automation_markers(msg: Message) -> list[str]:
     """Plain-English reasons the message looks machine-sent (empty = looks written by a person):
-    the bulk headers above plus a role sender address such as noreply@, orders@ or support@."""
+    the bulk headers above plus a robot sender address such as noreply@, orders@ or billing@.
+    A role address that people use too (info@, mail@, team@, ...) counts only from a known company."""
     found = bulk_markers(msg)
-    if _local_matches(msg.from_.local, ROBOT_LOCAL_PARTS) or "noreply" in msg.from_.local.lower():
-        found.append(f"comes from a role address ({msg.from_.local}@)")
+    local = msg.from_.local
+    if _local_matches(local, ROBOT_LOCAL_PARTS) or "noreply" in local.lower():
+        found.append(f"comes from a robot address ({local}@)")
+    elif _local_matches(local, WEAK_ROLE_LOCAL_PARTS):
+        company = domain_in(msg.from_.domain, _ALL_DOMAINS)
+        if company:
+            found.append(f"comes from a role address ({local}@) at {company}")
     return found
 
 
 def looks_automated(msg: Message) -> bool:
     """True when the message has mailing-list, bulk or robot-sender markers."""
     return bool(automation_markers(msg))
+
+
+def looks_personal(msg: Message) -> bool:
+    """True when nothing marks the message as machine-sent, so it may well be written by a person."""
+    return not automation_markers(msg)
 
 
 def is_security_message(msg: Message) -> str | None:
@@ -337,6 +369,20 @@ def is_security_message(msg: Message) -> str | None:
         for phrase, rx in _SECURITY_PATTERNS:
             if phrase in ("otp", "passcode", "2fa", "mot de passe"):
                 continue
+            if rx.search(snippet):
+                return phrase
+    return None
+
+
+def is_account_confirmation(msg: Message) -> str | None:
+    """The phrase that makes this a "verify your email / confirm your account" message."""
+    subject = msg.subject.lower()
+    for phrase, rx in _CONFIRM_PATTERNS:
+        if rx.search(subject):
+            return phrase
+    snippet = msg.snippet.lower()[:300]
+    if snippet and not msg.headers.get("list-unsubscribe"):
+        for phrase, rx in _CONFIRM_PATTERNS:
             if rx.search(snippet):
                 return phrase
     return None
@@ -478,6 +524,10 @@ def heuristic_decision(msg: Message, *, own_addresses: Iterable[str] = ()) -> De
     phrase = is_security_message(msg)
     if phrase:
         return Decision(INBOX, 0.95, "heuristic", f'Security message (mentions "{phrase}"): kept in the Inbox')
+    phrase = is_account_confirmation(msg)
+    if phrase:
+        return Decision(INBOX, 0.95, "heuristic",
+                        f'Account confirmation (mentions "{phrase}"): kept in the Inbox so you can finish it')
     if is_calendar_invite(msg):
         return Decision(INBOX, 0.9, "heuristic", "Calendar invitation: kept in the Inbox so you can answer")
 

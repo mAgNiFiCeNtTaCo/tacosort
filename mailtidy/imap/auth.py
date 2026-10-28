@@ -1,8 +1,13 @@
 """Passwords and sign-in tokens.
 
 Secrets live in the operating system's password store (Windows Credential Manager, macOS Keychain,
-Linux Secret Service) through the `keyring` package, under the service name "mailtidy" and the
-account's id. Nothing secret is ever written to the config file or to logs.
+Linux Secret Service) through the `keyring` package, under the service name "mailtidy". Each kind of
+secret has its own entry name, so they can never be mixed up:
+- `account:<id>`: an account's password, or its OAuth2 refresh token
+- `account:<id>:client-secret`: the Google client secret of an oauth2-google account
+- `ai:anthropic`: the Anthropic API key for the optional AI step
+Older versions saved an account's password under the bare `<id>`; it is moved to `account:<id>` the
+first time it is read. Nothing secret is ever written to the config file or to logs.
 
 Optional OAuth2 sign-in (XOAUTH2) for two providers:
 - Microsoft (Outlook.com / Hotmail): the "device code" flow. MailTidy shows a short code, the person
@@ -11,7 +16,7 @@ Optional OAuth2 sign-in (XOAUTH2) for two providers:
 - Google: the "installed app" flow. MailTidy opens the browser, Google sends the person back to a tiny
   web server on this computer (http://127.0.0.1:<port>), protected with PKCE. Needs the person's own
   Google "Desktop app" client id and client secret.
-In both cases the long-lived refresh token is stored in the keychain under the account id; short-lived
+In both cases the long-lived refresh token is stored in the keychain as `account:<id>`; short-lived
 access tokens are only kept in memory. Only the standard library is used for HTTP (urllib).
 """
 
@@ -22,6 +27,7 @@ import hashlib
 import http.server
 import json
 import secrets
+import threading
 import time
 import urllib.error
 import urllib.parse
@@ -72,31 +78,99 @@ def _keychain_failed(exc: Exception) -> CredentialError:
     return CredentialError(_NO_KEYCHAIN.format(detail=type(exc).__name__))
 
 
-def get_secret(account_id: str) -> str | None:
-    """The saved password/token for `account_id`, or None when nothing is saved."""
+AI_KEY_ENTRY = "ai:anthropic"
+# Before 2026-10-28 the bare name "anthropic" was used both as an account id and (in docs) for the AI
+# key, so that one old entry is never migrated or deleted: nobody can tell which of the two it holds.
+_NO_LEGACY = {"anthropic"}
+
+
+def _get(entry: str) -> str | None:
     try:
-        return _keyring().get_password(SERVICE, account_id)
+        return _keyring().get_password(SERVICE, entry)
     except Exception as exc:  # noqa: BLE001 (any keychain failure: none installed, locked, D-Bus missing)
         raise _keychain_failed(exc) from None
 
 
-def set_secret(account_id: str, value: str) -> None:
-    """Save (or replace) the password/token for `account_id`."""
+def _set(entry: str, value: str) -> None:
     try:
-        _keyring().set_password(SERVICE, account_id, value)
+        _keyring().set_password(SERVICE, entry, value)
     except Exception as exc:  # noqa: BLE001 (keychain backends fail in many ways)
         raise _keychain_failed(exc) from None
+
+
+def _delete(entry: str) -> None:
+    try:
+        kr = _keyring()
+        try:
+            kr.delete_password(SERVICE, entry)
+        except kr.errors.PasswordDeleteError:
+            pass   # nothing saved under that name
+    except Exception as exc:  # noqa: BLE001 (keychain backends fail in many ways)
+        raise _keychain_failed(exc) from None
+
+
+def _account_entry(account_id: str, suffix: str = "") -> str:
+    if not account_id or ":" in account_id:
+        raise CredentialError(
+            f"The account name '{account_id}' can't be used for saving a password (it must not be empty "
+            "or contain ':'). Rename the account in the config file, then run 'mailtidy setup'."
+        )
+    return f"account:{account_id}{suffix}"
+
+
+def _read_migrating(entry: str, legacy: str, legacy_id: str) -> str | None:
+    """Read `entry`; if missing, read the old `legacy` name once and move it to `entry`."""
+    value = _get(entry)
+    if value is not None or legacy_id in _NO_LEGACY:
+        return value
+    old = _get(legacy)
+    if old is not None:
+        try:
+            _set(entry, old)
+            _delete(legacy)
+        except CredentialError:
+            pass   # moving it is a nicety: the value still works, and is tried again next time
+    return old
+
+
+def get_secret(account_id: str) -> str | None:
+    """The saved password/token for `account_id`, or None when nothing is saved."""
+    return _read_migrating(_account_entry(account_id), account_id, account_id)
+
+
+def set_secret(account_id: str, value: str) -> None:
+    """Save (or replace) the password/token for `account_id`."""
+    _set(_account_entry(account_id), value)
 
 
 def delete_secret(account_id: str) -> None:
     """Forget the saved password/token for `account_id`. Nothing happens when none is saved."""
-    kr = _keyring()
-    try:
-        kr.delete_password(SERVICE, account_id)
-    except kr.errors.PasswordDeleteError:
-        pass
-    except Exception as exc:  # noqa: BLE001 (keychain backends fail in many ways)
-        raise _keychain_failed(exc) from None
+    _delete(_account_entry(account_id))
+    if account_id not in _NO_LEGACY:
+        _delete(account_id)          # an old-style entry that was never read (and so never moved)
+
+
+def delete_account_secrets(account_id: str) -> None:
+    """Forget everything saved for an account: password or sign-in token, and Google client secret."""
+    delete_secret(account_id)
+    _delete(_client_secret_entry(account_id))
+    if account_id not in _NO_LEGACY:
+        _delete(f"{account_id}:client-secret")
+
+
+def get_ai_key() -> str | None:
+    """The Anthropic API key saved for the AI step, or None."""
+    return _get(AI_KEY_ENTRY)
+
+
+def set_ai_key(value: str) -> None:
+    """Save (or replace) the Anthropic API key."""
+    _set(AI_KEY_ENTRY, value)
+
+
+def delete_ai_key() -> None:
+    """Forget the saved Anthropic API key. Nothing happens when none is saved."""
+    _delete(AI_KEY_ENTRY)
 
 
 # ---- HTTP helper ---------------------------------------------------------------------------------
@@ -215,8 +289,12 @@ def _microsoft_refresh(account: AccountConfig, refresh_token: str) -> str:
 
 # ---- Google: installed-app loopback flow with PKCE -----------------------------------------------
 
-def _client_secret_key(account_id: str) -> str:
-    return f"{account_id}:client-secret"
+def _client_secret_entry(account_id: str) -> str:
+    return _account_entry(account_id, ":client-secret")
+
+
+def _get_client_secret(account_id: str) -> str | None:
+    return _read_migrating(_client_secret_entry(account_id), f"{account_id}:client-secret", account_id)
 
 
 def pkce_pair() -> tuple[str, str]:
@@ -244,22 +322,56 @@ def google_auth_url(client_id: str, redirect_uri: str, challenge: str, state: st
 
 
 class _RedirectHandler(http.server.BaseHTTPRequestHandler):
-    """Catches Google's redirect back to http://127.0.0.1:<port>/?code=...&state=..."""
+    """Catches Google's redirect back to http://127.0.0.1:<port>/?code=...&state=...
+
+    Only a request carrying this sign-in's secret `state` counts; anything else gets 400 and the
+    server keeps waiting, so another program on this computer can't end or fake the sign-in."""
+
+    timeout = 10   # a client that connects and sends nothing is dropped after 10 seconds
 
     def do_GET(self):
-        query = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+        query = {k: v[0] for k, v in urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query).items()}
         if "code" not in query and "error" not in query:
-            self.send_response(404)
-            self.end_headers()
+            self._answer(404, "Not found.")
             return
-        self.server.result = {k: v[0] for k, v in query.items()}  # type: ignore[attr-defined]
-        self.send_response(200)
+        server: _RedirectServer = self.server  # type: ignore[assignment]
+        if not secrets.compare_digest(query.get("state", "").encode(), server.state.encode()):
+            self._answer(400, "This answer does not belong to the MailTidy sign-in that is waiting.")
+            return
+        server.accept(query)
+        if "code" in query:
+            self._answer(200, "MailTidy got your sign-in. You can close this tab and go back to MailTidy.")
+        else:
+            self._answer(200, "The sign-in was cancelled. You can close this tab.")
+
+    def _answer(self, status: int, text: str) -> None:
+        self.send_response(status)
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.end_headers()
-        self.wfile.write(b"<p>MailTidy is signed in. You can close this tab.</p>")
+        self.wfile.write(f"<p>{text}</p>".encode())
 
     def log_message(self, *args):  # keep the code out of the console
         pass
+
+
+class _RedirectServer(http.server.ThreadingHTTPServer):
+    """The one-off web server on 127.0.0.1 (never the network) that waits for Google's redirect."""
+
+    daemon_threads = True
+    block_on_close = False      # closing never waits for a stuck connection
+
+    def __init__(self, state: str):
+        super().__init__(("127.0.0.1", 0), _RedirectHandler)
+        self.state = state
+        self.result: dict[str, str] | None = None
+        self.done = threading.Event()
+        self._lock = threading.Lock()
+
+    def accept(self, query: dict[str, str]) -> None:
+        with self._lock:
+            if self.result is None:
+                self.result = query
+                self.done.set()
 
 
 def google_loopback_login(account: AccountConfig, client_secret: str, *,
@@ -268,24 +380,21 @@ def google_loopback_login(account: AccountConfig, client_secret: str, *,
     client_id = _need_client_id(account)
     verifier, challenge = pkce_pair()
     state = secrets.token_urlsafe(16)
-    server = http.server.HTTPServer(("127.0.0.1", 0), _RedirectHandler)
-    server.result = None  # type: ignore[attr-defined]
-    server.timeout = 1
+    server = _RedirectServer(state)
     redirect_uri = f"http://127.0.0.1:{server.server_address[1]}"
+    worker = threading.Thread(target=server.serve_forever, kwargs={"poll_interval": 0.2}, daemon=True)
+    worker.start()
     try:
         url = google_auth_url(client_id, redirect_uri, challenge, state, account.email)
         log(f"Opening your browser to sign in to Google. If it does not open, visit:\n{url}")
         _open_browser(url)
-        deadline = time.time() + timeout
-        while server.result is None and time.time() < deadline:  # type: ignore[attr-defined]
-            server.handle_request()
-        result = server.result  # type: ignore[attr-defined]
+        server.done.wait(timeout)
+        result = server.result
     finally:
+        server.shutdown()
         server.server_close()
     if result is None:
         raise CredentialError("Google sign-in timed out: nothing came back from the browser. Please try again.")
-    if result.get("state") != state:
-        raise CredentialError("Google sign-in was rejected: the answer did not match this sign-in. Please try again.")
     if "code" not in result:
         raise _explain(result, "Google sign-in")
     answer = _post_form(GOOGLE_TOKEN_URL, {
@@ -303,13 +412,13 @@ def google_loopback_login(account: AccountConfig, client_secret: str, *,
             "Google did not hand out a lasting sign-in (refresh token). Remove MailTidy's access at "
             "https://myaccount.google.com/permissions and run 'mailtidy setup' again."
         )
-    set_secret(_client_secret_key(account.id), client_secret)
+    _set(_client_secret_entry(account.id), client_secret)
     _remember(account, answer)
     log("Signed in to Google. MailTidy saved the sign-in in your keychain.")
 
 
 def _google_refresh(account: AccountConfig, refresh_token: str) -> str:
-    client_secret = get_secret(_client_secret_key(account.id)) or ""
+    client_secret = _get_client_secret(account.id) or ""
     answer = _post_form(GOOGLE_TOKEN_URL, {
         "grant_type": "refresh_token",
         "client_id": _need_client_id(account),

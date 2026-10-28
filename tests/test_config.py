@@ -220,3 +220,62 @@ def test_example_config_is_valid() -> None:
     assert len(cfg.accounts) == 2 and len(cfg.rules) == 3 and cfg.vip
     assert cfg.ai.enabled is False
     assert cfg.folder_for("notifications") is None and cfg.folder_for("kids") == "Kids School"
+
+
+# ---- fix wave (2026-10-28) ------------------------------------------------------------------------
+
+@pytest.mark.parametrize("bad_id", ["anthropic", "Anthropic", "ai", "AI", "x:client-secret", "account:me",
+                                    "has space", "-starts-with-dash", "x" * 41])
+def test_account_ids_from_the_file_are_checked(bad_id: str) -> None:
+    """S-S1: an id from config.yaml names a keychain entry, so the same rules apply as in the wizard."""
+    cfg = AppConfig(accounts=[AccountConfig(id=bad_id, email="sam@example.com", provider="gmail")])
+    text = "\n".join(config_problems(cfg))
+    assert "can't use that id" in text, bad_id
+
+
+def test_good_account_ids_pass() -> None:
+    for good in ("gmail", "work-2", "alice.smith", "anthropic-mail", "a_i"):
+        cfg = AppConfig(accounts=[AccountConfig(id=good, email="sam@example.com", provider="gmail")])
+        assert config_problems(cfg) == [], good
+
+
+def test_default_id_from_email_is_usable(tmp_path: Path) -> None:
+    path = tmp_path / "config.yaml"
+    path.write_text("accounts:\n  - email: alice+news@example.com\n    provider: gmail\n", encoding="utf-8")
+    cfg = load_config(path)
+    assert cfg.accounts[0].id == "alice-news"
+    assert config_problems(cfg) == []
+
+
+@pytest.mark.parametrize("written", ["Inbox", "inbox", "INBOX", " iNbOx "])
+def test_inbox_spelling_is_normalised(tmp_path: Path, written: str) -> None:
+    """C-S1: the watermark is keyed by the server's name, which is always INBOX."""
+    path = tmp_path / "config.yaml"
+    path.write_text("accounts:\n  - id: a\n    email: a@example.com\n    provider: gmail\n"
+                    f"    watch_folders: ['{written}', Later]\n", encoding="utf-8")
+    assert load_config(path).accounts[0].watch_folders == ["INBOX", "Later"]
+
+
+def test_make_private_skips_windows_and_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[tuple] = []
+    monkeypatch.setattr(cfgmod.os, "chmod", lambda p, m: calls.append((str(p), m)))
+    monkeypatch.setattr(cfgmod.os, "name", "posix")
+    monkeypatch.setattr(cfgmod.Path, "home", classmethod(lambda cls: tmp_path))
+    folder = tmp_path / "mailtidy"
+    folder.mkdir()
+    cfgmod.make_private(folder)
+    cfgmod.make_private(tmp_path)             # the home folder: never changed
+    cfgmod.make_private(tmp_path / "nope")    # missing: nothing to do
+    assert calls == [(str(folder), 0o700)]
+    monkeypatch.setattr(cfgmod.os, "name", "nt")
+    cfgmod.make_private(folder)
+    assert len(calls) == 1
+
+
+@pytest.mark.skipif(cfgmod.os.name != "posix", reason="file permissions are a Linux/macOS matter")
+def test_make_private_really_changes_mode(tmp_path: Path) -> None:
+    folder = tmp_path / "data"
+    folder.mkdir(mode=0o755)
+    folder.chmod(0o755)
+    cfgmod.make_private(folder)
+    assert folder.stat().st_mode & 0o777 == 0o700

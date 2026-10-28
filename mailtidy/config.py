@@ -7,6 +7,7 @@ operating system's keychain (see `mailtidy.imap.auth`).
 from __future__ import annotations
 
 import os
+import re
 import sys
 import tempfile
 from dataclasses import fields
@@ -32,6 +33,20 @@ _OFF_WORDS = {"off", "none", "no", "false", "disabled", ""}
 
 # Keys that must never appear in the file (we refuse to write them and warn when reading them).
 _SECRET_KEYS = {"password", "app_password", "secret", "token", "refresh_token", "access_token", "api_key"}
+
+# An account id names the account's keychain entry, so it is kept short and plain. A few names are
+# reserved because the keychain uses them for other things (the AI key, for one).
+ACCOUNT_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,39}$")
+RESERVED_IDS = {"anthropic", "ai"}
+
+
+def account_id_problem(account_id: str) -> str | None:
+    """Why `account_id` can't be used as an account's short name, or None when it is fine."""
+    if account_id.lower() in RESERVED_IDS:
+        return f"'{account_id}' is reserved for MailTidy's own use; pick another short name."
+    if not ACCOUNT_ID_RE.match(account_id):
+        return "Use letters, numbers, dots, dashes or underscores (no spaces), up to 40 characters."
+    return None
 
 _HEADER = """\
 # MailTidy settings
@@ -109,6 +124,21 @@ def state_path(cfg: AppConfig) -> Path:
     return data_dir(cfg) / STATE_FILENAME
 
 
+def make_private(folder: Path) -> None:
+    """On Linux and macOS, let only this user open `folder` (it holds senders, subjects and contacts).
+
+    Windows keeps these folders per user already, so nothing is done there. The home folder itself is
+    never changed, in case someone points `data_dir` at it."""
+    if os.name != "posix" or not folder.is_dir():
+        return
+    try:
+        if folder.resolve() == Path.home().resolve():
+            return
+        os.chmod(folder, 0o700)
+    except OSError:
+        pass   # someone else's folder (data_dir set by hand): leave it as it is
+
+
 # ---- loading ---------------------------------------------------------------------------------------
 
 def _as_list(value: Any, where: str) -> list[str]:
@@ -175,7 +205,8 @@ def _account_from(data: Any, n: int, warnings: list[str]) -> AccountConfig:
     if not data.get("email"):
         raise ConfigError(f"{where} has no 'email'.")
     email = str(data["email"]).strip()
-    acct = AccountConfig(id=str(data.get("id") or email.split("@")[0]), email=email)
+    default_id = re.sub(r"[^A-Za-z0-9._-]", "-", email.split("@")[0]).strip("-.") or f"account{n}"
+    acct = AccountConfig(id=str(data.get("id") or default_id), email=email)
     where = f"Account '{acct.id}'"
     if "provider" in data:
         acct.provider = str(data["provider"] or "custom").strip().lower()
@@ -192,7 +223,9 @@ def _account_from(data: Any, n: int, warnings: list[str]) -> AccountConfig:
     if "oauth_client_id" in data:
         acct.oauth_client_id = str(data["oauth_client_id"] or "")
     if "watch_folders" in data:
-        acct.watch_folders = _as_list(data["watch_folders"], f"{where}: watch_folders")
+        # Servers always call the Inbox "INBOX"; people write "Inbox" or "inbox".
+        acct.watch_folders = ["INBOX" if f.strip().lower() == "inbox" else f
+                              for f in _as_list(data["watch_folders"], f"{where}: watch_folders")]
     if "enabled" in data:
         acct.enabled = _to_bool(data["enabled"], f"{where}: enabled")
     return acct
@@ -408,7 +441,7 @@ def dump_config(cfg: AppConfig) -> str:
 def save_config(cfg: AppConfig, path: Path | str | None = None) -> Path:
     """Write the settings file atomically (a half-written file can never replace a good one)."""
     path = Path(path) if path else default_config_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
+    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     text = dump_config(cfg)
     fd, tmp = tempfile.mkstemp(prefix=".config-", suffix=".tmp", dir=path.parent)
     try:
@@ -462,6 +495,8 @@ def config_problems(cfg: AppConfig) -> list[str]:
             problems.append(f"An account ({a.email}) has an empty id.")
         elif a.id in seen:
             problems.append(f"Two accounts are both called '{a.id}'. Each account needs its own id.")
+        elif (issue := account_id_problem(a.id)) is not None:
+            problems.append(f"{label} ({a.email}) can't use that id. {issue}")
         seen.add(a.id)
         if "@" not in a.email:
             problems.append(f"{label}: '{a.email}' doesn't look like an email address.")

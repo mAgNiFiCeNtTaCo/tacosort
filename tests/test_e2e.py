@@ -12,6 +12,7 @@ from __future__ import annotations
 import dataclasses
 import re
 from collections import Counter
+from datetime import timedelta
 
 import pytest
 
@@ -82,32 +83,36 @@ INBOX_MAIL = [
 ]
 
 SCHOOL = "lincoln-elementary.example.org"
+SCHOOL_LIST = {"List-Id": f"Lincoln families <families.{SCHOOL}>"}   # the school writes through a mailing list
 SCHOOL_INBOX = [   # Gmail only: the user already files this school's mail in "Kids School"
-    (f"office@{SCHOOL}", "Lincoln Elementary Office", "Picture day is Friday", {}, (), "Kids School"),
-    (f"ms.chen@{SCHOOL}", "Ms. Chen", "Field trip permission slip", {}, (), "Kids School"),
+    (f"office@{SCHOOL}", "Lincoln Elementary Office", "Picture day is Friday", SCHOOL_LIST, (), "Kids School"),
+    (f"ms.chen@{SCHOOL}", "Ms. Chen", "Field trip permission slip", SCHOOL_LIST, (), "Kids School"),
 ]
-SCHOOL_FILED = [
+SCHOOL_FILED = [   # far more of it filed than left in the Inbox: a clear habit
     (f"office@{SCHOOL}", "Lincoln Elementary Office", "Half day on Wednesday"),
     (f"office@{SCHOOL}", "Lincoln Elementary Office", "Book fair next week"),
     (f"office@{SCHOOL}", "Lincoln Elementary Office", "Lunch menu for October"),
+    (f"office@{SCHOOL}", "Lincoln Elementary Office", "Parent-teacher evening"),
+    (f"office@{SCHOOL}", "Lincoln Elementary Office", "School closed on Monday"),
     (f"ms.chen@{SCHOOL}", "Ms. Chen", "Spelling words for this week"),
     (f"ms.chen@{SCHOOL}", "Ms. Chen", "Class newsletter: pumpkins!"),
+    (f"ms.chen@{SCHOOL}", "Ms. Chen", "Reading log reminder"),
+    (f"ms.chen@{SCHOOL}", "Ms. Chen", "Class photos are online"),
+]
+# Gmail only: a filter labels the swim coach's mail "Family" but KEEPS it in the Inbox. MailTidy must not
+# learn "this sender goes to Family" from that, and must never move her mail out of the Inbox.
+FAMILY = [
+    ("coach.amy@swimclub.example.org", "Coach Amy", "Practice moved to 6pm"),
+    ("coach.amy@swimclub.example.org", "Coach Amy", "Swim meet carpool"),
+    ("coach.amy@swimclub.example.org", "Coach Amy", "Team photo on Saturday"),
 ]
 SENT_TO = ["jordan.park@example.org", "rose.rivera@example.org", "coach.dave@example.org"]
+GMAIL_ALL = "[Gmail]/All Mail"
 
 
-class GmailLike(FakeBackend):
-    """Gmail's folder layout: [Gmail]/Sent Mail, [Gmail]/All Mail, [Gmail]/Trash, [Gmail]/Spam."""
-
-    def __init__(self, account_id: str):
-        super().__init__(account_id)
-        for name in ("Sent", "Trash", "Spam"):
-            for table in (self._folders, self._flags, self._uidnext, self._uidvalidity):
-                del table[name]
-        self._create("[Gmail]", frozenset({"\\Noselect", "\\HasChildren"}))
-        for name, flag in (("[Gmail]/Sent Mail", "\\Sent"), ("[Gmail]/All Mail", "\\All"),
-                           ("[Gmail]/Trash", "\\Trash"), ("[Gmail]/Spam", "\\Junk"), ("[Gmail]/Drafts", "\\Drafts")):
-            self._create(name, frozenset({flag}))
+def GmailLike(account_id: str) -> FakeBackend:
+    """Gmail: labels, [Gmail]/All Mail holding every message, [Gmail]/Sent Mail, Trash, Spam, Drafts."""
+    return FakeBackend(account_id, gmail=True)
 
 
 class YahooLike(FakeBackend):
@@ -131,7 +136,8 @@ def mail(acct: str, me: str, sender: str, name: str, subject: str, headers=None,
 
 
 def where(backend: FakeBackend, subject: str) -> list[str]:
-    return [f for f in backend._folders if subject in backend.subjects(f)]
+    """Folders (Gmail: labels) showing the message; All Mail, which shows everything, is left out."""
+    return [f for f in backend._folders if f != GMAIL_ALL and subject in backend.subjects(f)]
 
 
 def snapshot(backend: FakeBackend) -> dict[str, list[str]]:
@@ -162,7 +168,9 @@ def world(tmp_path, monkeypatch):
         for to in SENT_TO:
             backend.add(sent, mail(backend.account_id, to, me, "Sam Rivera", f"Hi from Sam to {to}"))
     for sender, name, subject in SCHOOL_FILED:
-        gmail.add("Kids School", mail("gmail", ME_GMAIL, sender, name, subject))
+        gmail.add("Kids School", mail("gmail", ME_GMAIL, sender, name, subject, SCHOOL_LIST))
+    for sender, name, subject in FAMILY:
+        gmail.add_labeled(mail("gmail", ME_GMAIL, sender, name, subject), ["INBOX", "Family"])
 
     fakes = {"gmail": gmail, "yahoo": yahoo}
     monkeypatch.setattr(cli, "make_backend", lambda account: fakes[account.id])
@@ -197,9 +205,16 @@ def check_sorted(backend: FakeBackend, expected: list[tuple]) -> list[str]:
     return misses
 
 
-def test_full_journey(world, capsys):
+def check_family_kept(gmail: FakeBackend, subjects: list[str]) -> list[str]:
+    """Mail labelled Family while kept in the Inbox must still be in the Inbox (and keep its label)."""
+    return [f"gmail: {s!r} is in {where(gmail, s)}, expected INBOX + Family" for s in subjects
+            if sorted(where(gmail, s)) != ["Family", "INBOX"]]
+
+
+def test_full_journey(world, capsys, monkeypatch):
     gmail, yahoo = world.gmail, world.yahoo
     expected_gmail, expected_yahoo = INBOX_MAIL + SCHOOL_INBOX, INBOX_MAIL
+    family = [subject for _, _, subject in FAMILY]
 
     # 1. Before any preview, `run` refuses to move anything.
     code, out = mailtidy(capsys, "run")
@@ -212,6 +227,8 @@ def test_full_journey(world, capsys):
     with world.store() as st:
         assert set(SENT_TO) <= st.contacts()
         assert st.learned.lookup(f"office@{SCHOOL}", SCHOOL, "", "gmail").folder == "Kids School"
+        coach = st.learned.lookup(FAMILY[0][0], "swimclub.example.org", "", "gmail")
+        assert coach is None or coach.keeps, "a label on mail kept in the Inbox was learned as a move"
 
     # 3. preview shows the plan and changes nothing.
     before = {n: snapshot(b) for n, b in (("gmail", gmail), ("yahoo", yahoo))}
@@ -227,7 +244,8 @@ def test_full_journey(world, capsys):
     assert "--backlog" in out and moves_made(gmail) == moves_made(yahoo) == 0
     code, out = mailtidy(capsys, "run", "--backlog", "--yes")
     assert code == 0, out
-    misses = check_sorted(gmail, expected_gmail) + check_sorted(yahoo, expected_yahoo)
+    misses = (check_sorted(gmail, expected_gmail) + check_sorted(yahoo, expected_yahoo)
+              + check_family_kept(gmail, family))
     assert not misses, "\n".join(misses)
 
     # Same folder scheme on both accounts, and no message lost or duplicated.
@@ -235,13 +253,15 @@ def test_full_journey(world, capsys):
         return {f for f in b._folders if b.messages(f) and f in CATEGORY_FOLDERS}
 
     assert made(gmail) == made(yahoo) == CATEGORY_FOLDERS
-    for b, n in ((gmail, len(expected_gmail) + len(SCHOOL_FILED) + len(SENT_TO)),
-                 (yahoo, len(expected_yahoo) + len(SENT_TO))):
-        assert sum(len(b.messages(f)) for f in b._folders) == n
+    gmail_total = len(expected_gmail) + len(SCHOOL_FILED) + len(SENT_TO) + len(FAMILY)
+    assert len(gmail.messages(GMAIL_ALL)) == gmail_total               # Gmail: every message exactly once
+    for b, n, labels in ((gmail, gmail_total, {GMAIL_ALL, "Family"}), (yahoo, len(expected_yahoo) + len(SENT_TO), set())):
+        assert sum(len(b.messages(f)) for f in b._folders if f not in labels) == n
     # Special folders are never touched.
-    for b, special in ((gmail, ["[Gmail]/All Mail", "[Gmail]/Trash", "[Gmail]/Spam", "[Gmail]/Drafts"]),
+    for b, special in ((gmail, ["[Gmail]/Trash", "[Gmail]/Spam", "[Gmail]/Drafts"]),
                        (yahoo, ["Trash", "Bulk", "Draft"])):
         assert all(not b.messages(f) for f in special)
+        special = [*special, GMAIL_ALL]
         assert not any(c[0] == "move" and (c[1] in special or c[3] in special) for c in b.calls)
 
     # 5. A second run (plain or backlog) changes nothing.
@@ -259,17 +279,24 @@ def test_full_journey(world, capsys):
          {**UNSUB, "List-Id": "The Weekly Byte <weeklybyte.substack.com>"}, (), "Newsletters"),
         ("jordan.park@example.org", "Jordan Park", "Running late, see you at 7", {}, (), "INBOX"),
     ]
-    new_school = [(f"ms.chen@{SCHOOL}", "Ms. Chen", "Science fair projects", {}, (), "Kids School")]
+    new_school = [(f"ms.chen@{SCHOOL}", "Ms. Chen", "Science fair projects", SCHOOL_LIST, (), "Kids School")]
     for b, me, extra in ((gmail, ME_GMAIL, new_school), (yahoo, ME_YAHOO, [])):
         for sender, name, subject, headers, flags, _ in new + extra:
             b.add("INBOX", mail(b.account_id, me, sender, name, subject, headers, flags))
+    gmail.add_labeled(mail("gmail", ME_GMAIL, FAMILY[0][0], FAMILY[0][1], "Pool closed tomorrow"), ["INBOX", "Family"])
     code, out = mailtidy(capsys, "run")
     assert code == 0, out
-    misses = check_sorted(gmail, new + new_school) + check_sorted(yahoo, new)
+    misses = (check_sorted(gmail, new + new_school) + check_sorted(yahoo, new)
+              + check_family_kept(gmail, [*family, "Pool closed tomorrow"]))
     assert not misses, "\n".join(misses)
 
-    # 7. The user corrects MailTidy in their mail app: one sale back to the Inbox, one newsletter
-    #    into a folder of their own. Both stick, and future mail from those senders follows.
+    # 7. Two hours later the user corrects MailTidy in their mail app: one sale back to the Inbox, one
+    #    newsletter into a folder of their own. Both stick, and future mail from those senders follows.
+    #    (Moves are re-checked for corrections hourly in their first day, so the clock moves on.)
+    from mailtidy import store as store_module
+
+    real_now = store_module.utcnow
+    monkeypatch.setattr(store_module, "utcnow", lambda: real_now() + timedelta(hours=2))
     gmail.user_move("Last chance: doorbuster deals end tonight", "Promotions", "INBOX")
     gmail.user_move("The Morning: Your Tuesday briefing", "Newsletters", "Reading")
     code, out = mailtidy(capsys, "run")
@@ -333,6 +360,7 @@ def test_full_journey(world, capsys):
         assert where(b, "The Weekly Byte #42: chips and dips") == ["INBOX"]
     assert where(gmail, "Picture day is Friday") == ["INBOX"]
     assert where(gmail, "The Morning: Your Tuesday briefing") == ["Reading"]    # the user's own move stays
+    assert not check_family_kept(gmail, [*family, "Pool closed tomorrow"])
 
 
 def test_background_schedule_command_line_works(world, capsys, monkeypatch):
@@ -361,8 +389,12 @@ def test_background_schedule_command_line_works(world, capsys, monkeypatch):
 def test_rules_test_uses_what_was_learned(world, capsys):
     assert mailtidy(capsys, "learn")[0] == 0
     code, out = mailtidy(capsys, "rules", "test", "--from", f"office@{SCHOOL}", "--subject", "Snow day",
-                         "--account", "gmail")
+                         "--list-id", SCHOOL_LIST["List-Id"], "--account", "gmail")
     assert code == 0 and "Kids School" in out, out
+    # A folder habit never moves mail that looks written by a person (no mailing-list or robot markers).
+    code, out = mailtidy(capsys, "rules", "test", "--from", f"office@{SCHOOL}", "--subject", "Can you call me?",
+                         "--account", "gmail")
+    assert code == 0 and "stays in the Inbox" in out, out
     code, out = mailtidy(capsys, "rules", "test", "--from", "jordan.park@example.org", "--subject", "Hi")
     assert code == 0 and "stays in the Inbox" in out, out
 

@@ -18,13 +18,13 @@ import threading
 from collections.abc import Iterable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from .models import INBOX, Decision, MoveRecord, RunReport
 
 # Bump when MIGRATIONS gets a new entry. Each entry upgrades the file from the previous version.
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 MIGRATIONS: dict[int, list[str]] = {
     1: [
@@ -95,7 +95,19 @@ MIGRATIONS: dict[int, list[str]] = {
         )""",
         "CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
     ],
+    2: [
+        # When a move is due for its next correction check (NULL = at the next run).
+        "ALTER TABLE moves ADD COLUMN next_check TEXT",
+    ],
 }
+
+# How often a move is re-checked for user corrections, by its age: young moves often, old ones rarely.
+RECHECK_EVERY = (
+    (timedelta(days=1), timedelta(hours=1)),
+    (timedelta(days=7), timedelta(days=1)),
+    (timedelta(days=30), timedelta(days=7)),
+)
+RECHECK_LATE = timedelta(days=30)
 
 # Learned-rule kinds, strongest first (this is the lookup order).
 KINDS = ("address", "list_id", "domain")
@@ -276,6 +288,7 @@ def _decision(rule: LearnedRule) -> Decision:
         source="learned",
         reason=reason,
         folder=rule.folder or None,
+        explicit=rule.source == FROM_CORRECTION,
     )
 
 
@@ -474,21 +487,37 @@ class Store:
         return bool(self._scalar("SELECT 1 FROM moves WHERE account = ? AND message_id = ? LIMIT 1",
                                  (account, message_id)))
 
-    def moves_to_check(self, account: str, since: datetime, limit: int = 200) -> list[StoredMove]:
-        """Recent, not undone moves whose message we still watch for user corrections. Least recently
-        checked first, so a bounded check eventually covers all of them."""
+    def moves_for_message(self, account: str, message_id: str) -> list[StoredMove]:
+        """Every move of this Message-ID in this account, oldest first."""
+        if not message_id:
+            return []
+        return [_move(r) for r in self._query("SELECT * FROM moves WHERE account = ? AND message_id = ? "
+                                              "ORDER BY id", (account, message_id))]
+
+    def moves_to_check(self, account: str, since: datetime, limit: int = 200, *,
+                       now: datetime | None = None) -> list[StoredMove]:
+        """Recent, not undone moves whose message we still watch for user corrections and that are due
+        for a check (never checked yet, or their next check time has come, see RECHECK_EVERY). Never
+        checked and longest overdue first, so a bounded check eventually covers all of them."""
         rows = self._query(
             "SELECT * FROM moves WHERE account = ? AND undone = 0 AND check_state = '' AND message_id != '' "
-            "AND at >= ? ORDER BY last_checked IS NOT NULL, last_checked, id DESC LIMIT ?",
-            (account, _ts(since), limit),
+            "AND at >= ? AND (next_check IS NULL OR next_check <= ?) "
+            "ORDER BY next_check IS NOT NULL, next_check, id DESC LIMIT ?",
+            (account, _ts(since), _ts(now or utcnow()), limit),
         )
         return [_move(r) for r in rows]
 
-    def mark_move_checked(self, move_id: int, state: str = "") -> None:
-        """Record a correction check: state "" = still in place, "gone", or "corrected:<folder>"."""
+    def mark_move_checked(self, move_id: int, state: str = "", *, now: datetime | None = None) -> None:
+        """Record a correction check: state "" = still in place, "gone", or "corrected:<folder>".
+        A move still in place is checked again later: hourly in its first day, daily in its first week,
+        weekly in its first month."""
+        now = now or utcnow()
         with self._tx() as c:
-            c.execute("UPDATE moves SET last_checked = ?, check_state = ? WHERE id = ?",
-                      (_ts(utcnow()), state, move_id))
+            row = c.execute("SELECT at FROM moves WHERE id = ?", (move_id,)).fetchone()
+            age = now - _dt(row["at"]) if row else RECHECK_LATE
+            every = next((gap for limit, gap in RECHECK_EVERY if age < limit), RECHECK_LATE)
+            c.execute("UPDATE moves SET last_checked = ?, check_state = ?, next_check = ? WHERE id = ?",
+                      (_ts(now), state, _ts(now + every), move_id))
 
     def corrections(self, limit: int = 100) -> list[dict]:
         """Moves the user changed by hand, newest first: dicts with at (when we noticed), account,

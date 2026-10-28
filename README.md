@@ -55,34 +55,48 @@ INBOX (2,341)                            INBOX (37)        <- people, replies, s
 
 ## Install
 
-You need Python 3.10 or newer ([python.org/downloads](https://www.python.org/downloads/); on Windows,
-tick "Add python.exe to PATH" during installation).
+MailTidy is installed straight from this GitHub page. It is **not** published on PyPI, so don't
+`pip install` it by name: a package with a similar name there would be someone else's program.
 
-The easiest way is [pipx](https://pipx.pypa.io), which keeps MailTidy in its own little space:
+**1. Install Python** 3.10 or newer from [python.org/downloads](https://www.python.org/downloads/).
+On Windows, tick **"Add python.exe to PATH"** on the first screen of the installer.
+
+**2. Install pipx**, a small helper that keeps MailTidy in its own space so it can't clash with
+anything else. Open a terminal (Windows: *PowerShell*; macOS: *Terminal*; Linux: your terminal) and type:
+
+- **Windows:** `py -m pip install --user pipx` then `py -m pipx ensurepath`
+- **macOS:** `brew install pipx` then `pipx ensurepath` (no Homebrew? use
+  `python3 -m pip install --user pipx` then `python3 -m pipx ensurepath`)
+- **Linux:** `sudo apt install pipx` (Debian/Ubuntu) or `sudo dnf install pipx` (Fedora), then
+  `pipx ensurepath`
+
+Then **close the terminal and open a new one**, so it finds the `pipx` command.
+
+**3. Install MailTidy:**
 
 ```
-pipx install mailtidy
+pipx install git+https://github.com/OWNER/REPO
 ```
 
-or with plain pip:
+With the optional AI helper (see *AI* below) instead:
 
 ```
-pip install mailtidy
+pipx install "mailtidy[ai] @ git+https://github.com/OWNER/REPO"
 ```
 
-For the optional AI helper, install it with the extra: `pipx install "mailtidy[ai]"`.
+(Already installed without it? `pipx inject mailtidy anthropic` adds it.)
 
-From the source code (for trying the newest version or helping out):
+**4. Check it works:** `mailtidy --version`. To update later: `pipx upgrade mailtidy`.
+
+**From the source code** (for trying the newest changes or helping out):
 
 ```
-git clone <this repository's URL>
-cd mailtidy
+git clone https://github.com/OWNER/REPO
+cd REPO
 python -m venv .venv
 .venv\Scripts\activate          (Windows)   or   source .venv/bin/activate   (macOS / Linux)
 pip install -e ".[dev]"
 ```
-
-Check it works: `mailtidy --version`.
 
 ## Quick start (about 5 minutes)
 
@@ -120,6 +134,7 @@ That's it. From then on:
 | `mailtidy rules test --from someone@example.com --subject "Hello"` | where would this message go? |
 | `mailtidy schedule on --every 30` / `off` / `status` | the background schedule |
 | `mailtidy config path` / `edit` / `check` | find, edit or check the settings file |
+| `mailtidy config ai-key` | save your Anthropic API key for the optional AI (`--remove` deletes it) |
 
 Add `--help` to any command for its options. `--config PATH` uses a different settings file.
 
@@ -210,9 +225,24 @@ All the options: [docs/rules.md](docs/rules.md).
 ## AI (optional)
 
 MailTidy's built-in checks handle most mail. For the few it is unsure about, it can ask Claude (an AI
-by Anthropic) using **your own** API key. It is off by default. To turn it on: install with
-`pip install "mailtidy[ai]"`, put your key in the `ANTHROPIC_API_KEY` environment variable, and set
-`ai: enabled: yes` in the settings.
+by Anthropic) using **your own** API key. It is off by default. To turn it on:
+
+1. Install MailTidy with the AI helper (see *Install* above, or `pipx inject mailtidy anthropic`).
+2. Make an API key at [console.anthropic.com](https://console.anthropic.com) (API Keys).
+3. Run `mailtidy config ai-key` and paste the key. It is kept in your computer's keychain, like your
+   mail passwords, so the background schedule can use it too. (`mailtidy config ai-key --remove`
+   deletes it again.)
+4. Run `mailtidy config edit` and set `enabled: yes` under `ai:`.
+
+You can also put the key in the `ANTHROPIC_API_KEY` environment variable, which wins over the keychain.
+But a variable you set in one terminal window is only seen by that window: the background schedule
+won't see it, and AI is then quietly skipped. That's why `mailtidy config ai-key` is the recommended way.
+
+**What it can and can't do:** the AI can only pick one of your folders for a message. It can't delete,
+send or reply to anything. Mail from people you know (people you've written to, VIPs, replies) never
+reaches it, and mail that looks written by a person is never moved on the AI's word alone. A cleverly
+written email *could* still trick it into filing automated mail in the wrong folder; `mailtidy undo`
+puts it back.
 
 **What is sent:** only the sender's name and address, the subject, whether it's from a mailing list, and
 (unless you set `send_snippet: no`) up to 300 characters of the text. It is sent only for messages the
@@ -234,6 +264,14 @@ Yes. In Gmail a folder is shown as a label. When MailTidy moves a message out of
 the "Receipts" (etc.) label and loses the "Inbox" label, exactly as if you'd dragged it there in Gmail.
 Gmail's own tabs (Promotions, Social...) are separate and unaffected; when Gmail shows them to mail
 programs, MailTidy uses them as a hint.
+
+Labels you put on mail **that you keep in the Inbox** are respected: if you label a message "Family"
+but leave it in the Inbox, MailTidy takes that as "this belongs in my Inbox" and never moves that
+mail (or similar mail from that sender) out of it.
+
+**Some messages are never moved.** A few emails have no *Message-ID* (a hidden label that mail
+programs use to tell messages apart). MailTidy can't keep track of those safely, so it leaves them in
+the Inbox and says so in the report.
 
 **Will my phone's mail app see the folders?**
 Yes. The folders live on your mail server, so every app and device sees the same thing. Nothing
@@ -259,9 +297,10 @@ you can cancel at your provider at any time.
 
 1. `mailtidy schedule off` (stops the background job).
 2. `mailtidy accounts remove ID` for each account (this also deletes its password from the keychain).
-3. `pipx uninstall mailtidy` (or `pip uninstall mailtidy`).
-4. Optionally delete the settings and memory folders shown by `mailtidy config path`.
-5. Optionally cancel the app passwords at your provider.
+3. `mailtidy config ai-key --remove` if you saved an AI key.
+4. `pipx uninstall mailtidy`.
+5. Optionally delete the settings and memory folders shown by `mailtidy config path`.
+6. Optionally cancel the app passwords at your provider.
 
 Your folders and mail stay exactly as they are. Nothing is deleted.
 
