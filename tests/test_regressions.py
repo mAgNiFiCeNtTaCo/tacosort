@@ -1,6 +1,8 @@
 """Regression tests for problems the re-check review found after the fix wave (2026-10-28).
 Each test asserts the safe behaviour."""
 
+import dataclasses
+
 from tacosort import engine
 from tacosort.classify.pipeline import Classifier
 from tacosort.models import AccountConfig, AppConfig
@@ -61,3 +63,29 @@ def test_repeated_run_id_never_overwrites_an_earlier_run(tmp_path, monkeypatch):
     second = engine.run_once(config, store, {"a": b}, dry_run=False, log=quiet)
     assert first.run_id != second.run_id
     assert {r.run_id for r in store.runs(10)} == {first.run_id, second.run_id}
+
+
+# D. First real Gmail preview (2026-10-28): GitHub's "a third-party OAuth application has been added"
+#    alert went to Notifications, and Gmail's tab (never in X-GM-LABELS) was missing as a clue.
+def test_new_app_access_alerts_stay_in_the_inbox():
+    config = AppConfig(accounts=[AccountConfig(id="a", email="me@example.com")])
+    clf = Classifier(config, None, set())
+    for sender, subject in (
+        ("noreply@github.com", "[GitHub] A third-party OAuth application has been added to your account"),
+        ("noreply@github.com", "[GitHub] A new SSH key was added to your account"),
+        ("noreply-accounts@google.com", "You shared some Google Account data with GitHub"),
+        ("no-reply@accounts.nintendo.com", "[796751] Nintendo Account: E-mail address verification"),
+    ):
+        msg = dataclasses.replace(make_message(sender, subject), gmail_labels=frozenset({"CATEGORY_UPDATES"}))
+        d = clf.classify(msg)
+        assert d.keeps, (subject, d)
+
+
+def test_gmail_tab_is_a_strong_clue():
+    config = AppConfig(accounts=[AccountConfig(id="a", email="me@example.com")])
+    clf = Classifier(config, None, set())
+    msg = make_message("hello@mail.example-anime.com", "How's it gonna end?!",
+                       headers={"List-Unsubscribe": "<mailto:u@mail.example-anime.com>"})
+    msg = dataclasses.replace(msg, gmail_labels=frozenset({"\\Inbox", "CATEGORY_PROMOTIONS"}))
+    d = clf.classify(msg)
+    assert d.category == "promotions" and d.confidence >= config.min_confidence

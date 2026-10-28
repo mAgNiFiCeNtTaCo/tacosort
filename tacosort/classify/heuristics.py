@@ -210,6 +210,10 @@ SECURITY_PHRASES = (
     "sign-in attempt", "login attempt", "new device", "unrecognized device", "account locked",
     "verify it's you", "verify it’s you", "is this you", "was this you", "código de verificación",
     "sicherheitscode", "bestätigungscode", "code de vérification", "mot de passe",
+    # Something new got access to the account: an app, a key or a token the person may not have added.
+    "oauth application", "third-party application", "third-party app", "authorized application",
+    "was added to your account", "has been added to your account", "new ssh key", "ssh key was added",
+    "personal access token", "google account data", "access to your google account",
 )
 # "Verify your email address" / "confirm your account" mail stays in the Inbox too: the person just
 # signed up somewhere and is waiting for it, and the link usually expires.
@@ -219,7 +223,8 @@ ACCOUNT_CONFIRM_PHRASES = (
     "confirm your email address", "confirm your account", "confirm your registration",
     "confirm your sign-up", "confirm your signup", "confirm your subscription",
     "activate your account", "email verification", "e-mail verification", "email confirmation",
-    "confirm email address", "e-mail-adresse bestätigen", "bestätigen sie ihre e-mail",
+    "confirm email address", "email address verification", "e-mail address verification",
+    "e-mail-adresse bestätigen", "bestätigen sie ihre e-mail",
     "konto aktivieren", "confirmez votre adresse", "confirma tu correo", "verifica tu correo",
 )
 _SECURITY_CODE_IN_SUBJECT = re.compile(r"(?<!\d)\d{4,8}(?!\d).{0,40}\bcode\b|\bcode\b.{0,40}(?<!\d)\d{4,8}(?!\d)",

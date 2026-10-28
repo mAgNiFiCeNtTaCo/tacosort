@@ -33,12 +33,13 @@ class FakeIMAP:
     """Just enough of IMAPClient. Records every call in `calls`."""
 
     def __init__(self, caps=("IMAP4REV1", "MOVE", "UIDPLUS", "NAMESPACE", "IDLE"), *, delimiter="/",
-                 prefix="", folders=None, messages=None, login_error=None):
+                 prefix="", folders=None, messages=None, login_error=None, tabs=None):
         self.caps = {c.upper() for c in caps}
         self.delimiter = delimiter
         self.prefix = prefix
         self.folders = dict(folders or {"INBOX": (b"\\HasNoChildren",)})
         self.messages = dict(messages or {})      # uid -> fetch row
+        self.tabs = dict(tabs or {})              # Gmail tab ("promotions") -> uids, for X-GM-RAW search
         self.login_error = login_error
         self.calls = []
         self.fail_next = []                       # exceptions to raise on the next calls
@@ -117,6 +118,13 @@ class FakeIMAP:
             uids = [u for u in uids if b"\\Deleted" not in self.messages[u][b"FLAGS"]]
         if criteria in ("ALL", ["UNDELETED"]):
             return uids
+        if "X-GM-RAW" in criteria:
+            if "X-GM-EXT-1" not in self.caps:
+                raise imap_errors.IMAPClientError("SEARCH command error: BAD [b'Could not parse command']")
+            tab = criteria[criteria.index("X-GM-RAW") + 1].removeprefix("category:")
+            in_tab = set(self.tabs.get(tab, ()))
+            criteria = [c for c in criteria if c not in ("X-GM-RAW", f"category:{tab}")]
+            return [u for u in self.search(criteria, charset) if u in in_tab]
         if criteria[0] == "UID":
             spec = criteria[1]
             if spec.endswith(":*"):
@@ -515,6 +523,38 @@ def test_fetch_parses_headers_and_never_sets_seen():
             assert item in ("UID", "FLAGS", "RFC822.SIZE", "INTERNALDATE", "X-GM-LABELS") \
                 or item.startswith("BODY.PEEK["), item
     assert [c for c in fake.calls if c[0] == "select_folder"] == [("select_folder", "INBOX", True)]
+
+
+def test_gmail_tabs_become_labels_most_specific_first():
+    # Real Gmail never lists its tabs in X-GM-LABELS; only an X-GM-RAW "category:" search finds them.
+    msgs = {u: row(header_block(From=f"s{u}@example.com"), labels=(b"\\Inbox",)) for u in (1, 2, 3, 4)}
+    fake = FakeIMAP(caps=("IMAP4REV1", "X-GM-EXT-1"), messages=msgs,
+                    tabs={"promotions": [1], "updates": [2, 3], "purchases": [3]})
+    b = backend(fake)
+    b.connect()
+    got = {m.uid: m.gmail_labels for m in b.fetch("INBOX", [1, 2, 3, 4])}
+    assert got[1] == {"\\Inbox", "CATEGORY_PROMOTIONS"}
+    assert got[2] == {"\\Inbox", "CATEGORY_UPDATES"}
+    assert got[3] == {"\\Inbox", "CATEGORY_PURCHASES"}      # a purchase is in Updates too
+    assert got[4] == {"\\Inbox"}
+    searches = [c[1] for c in fake.calls if c[0] == "search"]
+    assert all(s[:2] == ["UID", "1,2,3,4"] for s in searches)  # only this batch, never the whole folder
+
+
+def test_gmail_tab_search_failure_still_fetches():
+    fake = FakeIMAP(caps=("IMAP4REV1", "X-GM-EXT-1"), messages={1: row(header_block(From="a@example.com"))})
+    plain_search = fake.search
+
+    def search(criteria="ALL", charset=None):
+        if "X-GM-RAW" in criteria:
+            raise imap_errors.IMAPClientError("SEARCH command error: BAD")
+        return plain_search(criteria, charset)
+
+    fake.search = search
+    b = backend(fake)
+    b.connect()
+    [m] = b.fetch("INBOX", [1])
+    assert m.from_.email == "a@example.com" and not any(lb.startswith("CATEGORY_") for lb in m.gmail_labels)
 
 
 def test_fetch_survives_bad_encodings():

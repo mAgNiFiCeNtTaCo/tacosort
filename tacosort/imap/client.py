@@ -19,6 +19,7 @@ label, which is exactly "moving" in Gmail's web interface. COPY would only add a
 
 from __future__ import annotations
 
+import dataclasses
 import email
 import email.header
 import email.policy
@@ -52,6 +53,7 @@ HEADER_FETCH = f"BODY.PEEK[HEADER.FIELDS ({' '.join(h.upper() for h in HEADER_FI
 SNIPPET_FETCH = "BODY.PEEK[TEXT]<0.8192>"   # first 8 KB of the body, enough for a ~500 char snippet
 SNIPPET_CHARS = 500
 BATCH = 200                                 # UIDs per FETCH / MOVE command
+GMAIL_TABS = ("purchases", "social", "forums", "promotions", "updates")   # Gmail tab searches, specific first
 MAX_IDLE = 25 * 60                          # servers drop IDLE after ~29 minutes; re-issue before that
 POLL_EVERY = 30                             # seconds between checks when the server has no IDLE
 
@@ -546,6 +548,7 @@ class ImapBackend:
         if with_snippet:
             items.append(SNIPPET_FETCH)
         data = client.fetch(uids, items)
+        tabs = self._gmail_tabs(client, uids) if gmail else {}
         wanted = set(uids)
         messages = []
         for uid in uids:
@@ -555,8 +558,27 @@ class ImapBackend:
             raw_headers = _find_key(row, b"BODY[HEADER")
             if raw_headers is None:
                 continue  # an unsolicited FLAGS update, not our answer
-            messages.append(self._to_message(folder, uid, row, raw_headers, with_snippet))
+            msg = self._to_message(folder, uid, row, raw_headers, with_snippet)
+            if uid in tabs:
+                msg = dataclasses.replace(msg, gmail_labels=msg.gmail_labels | {tabs[uid]})
+            messages.append(msg)
         return messages
+
+    @staticmethod
+    def _gmail_tabs(client: IMAPClient, uids: list[int]) -> dict[int, str]:
+        """Gmail's own tab for each UID ("CATEGORY_PROMOTIONS"...). X-GM-LABELS never includes the
+        tabs, but an X-GM-RAW search does. A failed search only loses the hint, never the fetch."""
+        spec = ",".join(str(u) for u in uids)
+        tabs: dict[int, str] = {}
+        for tab in GMAIL_TABS:        # most specific first: a purchase is also in Updates
+            try:
+                hits = client.search(["UID", spec, "X-GM-RAW", f"category:{tab}"])
+            except Exception as e:  # noqa: BLE001
+                _logger.debug("Gmail tab search category:%s failed: %s", tab, e)
+                continue
+            for u in hits:
+                tabs.setdefault(int(u), f"CATEGORY_{tab.upper()}")
+        return tabs
 
     def _to_message(self, folder: str, uid: int, row: dict, raw_headers: bytes, with_snippet: bool) -> Message:
         try:
