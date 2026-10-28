@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Local state, never commit (may contain email metadata or credentials)
+*.sqlite3
+*.sqlite3-*
+config.yaml
+!examples/config.example.yaml
+*.token
+*.secret
+.env
+reports/
+
+# Team / tooling folders (not part of the public project)
+_team/
+.nodeterm/
+.claude/
