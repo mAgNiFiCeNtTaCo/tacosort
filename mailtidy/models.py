@@ -87,6 +87,10 @@ class Decision:
     source: str                   # one of SOURCES
     reason: str                   # plain English, shown in reports ("List-Unsubscribe header")
     folder: str | None = None     # explicit target folder (user rule / learned rule may name any folder)
+    # True when the person taught this directly (a user rule, or a correction: they moved a message
+    # MailTidy sorted). Rules guessed from existing folders are False: they may not move mail that
+    # looks written by a person.
+    explicit: bool = False
 
     @property
     def keeps(self) -> bool:

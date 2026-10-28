@@ -29,13 +29,15 @@ class MailBackend(Protocol):
 
     def ensure_folder(self, name: str) -> str:
         """Create `name` if missing (and its parents; "/" in `name` is converted to the server's
-        delimiter). Returns the server's full folder name."""
+        delimiter). An existing folder whose name differs only in capitals is reused, never
+        duplicated. Returns the server's full folder name."""
 
     def folder_state(self, folder: str) -> FolderState:
         """UIDVALIDITY, UIDNEXT and message count, without changing anything."""
 
     def search_uids(self, folder: str, *, min_uid: int | None = None, limit: int | None = None) -> list[int]:
-        """UIDs in `folder`, ascending. `min_uid` keeps UIDs >= it. `limit` keeps the NEWEST n."""
+        """UIDs in `folder`, ascending, skipping messages flagged \\Deleted. `min_uid` keeps UIDs >= it.
+        `limit` keeps the NEWEST n."""
 
     def fetch(self, folder: str, uids: list[int], *, with_snippet: bool = False) -> list[Message]:
         """Envelopes + selected headers for `uids`, read with BODY.PEEK (never sets \\Seen).
@@ -43,10 +45,14 @@ class MailBackend(Protocol):
 
     def move(self, folder: str, uids: list[int], dest: str) -> dict[int, int | None]:
         """Move `uids` from `folder` to `dest` (MOVE, or COPY + \\Deleted + UID EXPUNGE of only those
-        UIDs). Returns old uid -> new uid in `dest` when the server reports it (UIDPLUS), else None."""
+        UIDs). Returns old uid -> new uid in `dest` when the server reports it (UIDPLUS), else None.
+        A UID missing from the result was not moved, or its outcome is unknown. After a dropped
+        connection the move is NOT blindly repeated: the backend reconnects and checks `dest` (by
+        Message-ID) so a message is never copied twice and a finished move is still reported.
+        On Gmail, moving out of INBOX removes the Inbox label and adds the destination label."""
 
     def find_message_id(self, folder: str, message_id: str) -> list[int]:
-        """UIDs in `folder` whose Message-ID header equals `message_id`."""
+        """UIDs in `folder` whose Message-ID header equals `message_id`, skipping \\Deleted ones."""
 
     def idle(self, folder: str, timeout: int) -> bool:
         """Wait up to `timeout` seconds for new mail in `folder` (IMAP IDLE, or a poll if unsupported).
