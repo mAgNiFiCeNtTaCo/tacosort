@@ -199,6 +199,39 @@
         "Short random ids collide on fast CI machines: 4 hex chars overwrote a run record",
         "Fix stations' full-suite failures came from neighbours mid-edit in the shared tree; the orchestrator's run after the wave is the real check"
       ]
+    },
+    {
+      "title": "Rename to TacoSort, first real mailbox, company folders",
+      "date": "2026-10-28",
+      "summary": "One session renamed the tool TacoSort, ran it on the owner's Gmail, fixed what real Gmail showed (tabs, a security alert) and added company folders and an Accounts folder.",
+      "stages": [
+        {
+          "name": "Session",
+          "kind": "solo",
+          "sessions": [
+            {
+              "id": "979da9f6",
+              "role": "Orchestrator (continued)",
+              "start": "2026-10-28T12:02",
+              "end": "2026-10-28T13:05",
+              "did": "Rename, real Gmail preview, Gmail tab search, security phrases, company folders, Accounts folder, backlog sort (31 moved)",
+              "outcome": "done",
+              "files": 22
+            }
+          ]
+        }
+      ],
+      "events": [
+        {
+          "at": "2026-10-28T12:50",
+          "until": "2026-10-28T12:51",
+          "text": "Scheduled run used mid-edit code"
+        }
+      ],
+      "lessons": [
+        "Real Gmail hides its tabs from X-GM-LABELS: only an X-GM-RAW category search finds them",
+        "A live scheduled task on an editable install runs whatever code is on disk: keep it working between edits"
+      ]
     }
   ]
 }
