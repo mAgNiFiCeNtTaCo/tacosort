@@ -9,9 +9,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from tidyinbox.classify.ai import AIClassifier, AIUnavailable
-from tidyinbox.models import INBOX, AIConfig
-from tidyinbox.testing import make_message
+from tacosort.classify.ai import AIClassifier, AIUnavailable
+from tacosort.models import INBOX, AIConfig
+from tacosort.testing import make_message
 
 
 class FakeMessages:

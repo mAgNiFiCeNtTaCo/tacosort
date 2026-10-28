@@ -3,10 +3,10 @@ from __future__ import annotations
 import json
 from types import SimpleNamespace
 
-from tidyinbox.classify import Classifier, pipeline
-from tidyinbox.classify.ai import AIClassifier
-from tidyinbox.models import INBOX, AccountConfig, AIConfig, AppConfig, Decision, Rule
-from tidyinbox.testing import make_message
+from tacosort.classify import Classifier, pipeline
+from tacosort.classify.ai import AIClassifier
+from tacosort.models import INBOX, AccountConfig, AIConfig, AppConfig, Decision, Rule
+from tacosort.testing import make_message
 
 UNSUB = {"List-Unsubscribe": "<https://example.com/u>"}
 
@@ -127,7 +127,7 @@ def test_unknown_rule_category_stays_in_inbox():
 
 def test_folder_rule_and_prefix():
     rules = [Rule(name="Shop", action="folder:Shopping/Amazon", from_=["*@amazon.com"])]
-    d = Classifier(cfg(rules=rules, folder_prefix="TidyInbox")).classify(receipt())
+    d = Classifier(cfg(rules=rules, folder_prefix="TacoSort")).classify(receipt())
     assert d.folder == "Shopping/Amazon" and not d.keeps
 
 

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import pytest
 
-from tidyinbox.classify.heuristics import (
+from tacosort.classify.heuristics import (
     automation_markers,
     collect_signals,
     heuristic_decision,
@@ -21,8 +21,8 @@ from tidyinbox.classify.heuristics import (
     looks_automated,
     looks_personal,
 )
-from tidyinbox.models import INBOX
-from tidyinbox.testing import make_message
+from tacosort.models import INBOX
+from tacosort.testing import make_message
 
 THRESHOLD = 0.75
 UNSUB = {"List-Unsubscribe": "<https://example.com/unsubscribe/abc>, <mailto:u@example.com>"}

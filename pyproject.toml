@@ -3,13 +3,13 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "tidyinbox"
+name = "tacosort"
 version = "0.1.0"
 description = "Automatically organize all your email accounts with one consistent folder scheme, and keep them organized."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
-authors = [{ name = "TidyInbox contributors" }]
+authors = [{ name = "TacoSort contributors" }]
 keywords = ["email", "imap", "gmail", "outlook", "inbox", "organize", "filters", "automation"]
 classifiers = [
     "Programming Language :: Python :: 3",
@@ -29,10 +29,10 @@ ai = ["anthropic>=2.3"]
 dev = ["pytest>=8", "ruff>=0.5"]
 
 [project.scripts]
-tidyinbox = "tidyinbox.cli:main"
+tacosort = "tacosort.cli:main"
 
 [tool.setuptools.packages.find]
-include = ["tidyinbox*"]
+include = ["tacosort*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

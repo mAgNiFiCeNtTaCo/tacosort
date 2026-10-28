@@ -1,4 +1,4 @@
-from tidyinbox.imap import PROVIDERS, detect_provider
+from tacosort.imap import PROVIDERS, detect_provider
 
 
 def test_detect_known_domains():

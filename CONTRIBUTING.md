@@ -1,4 +1,4 @@
-# Contributing to TidyInbox
+# Contributing to TacoSort
 
 Thank you for helping! You don't need to be a programmer to contribute: reports of mail that was
 sorted wrongly, corrections to provider steps, and clearer wording are all just as useful as code.
@@ -8,22 +8,22 @@ sorted wrongly, corrections to provider steps, and clearer wording are all just 
 Please **never paste real emails, email addresses, passwords, app passwords or tokens** into issues,
 pull requests, tests or logs. Describe the message instead ("a shipping notice from a shoe shop, with
 a List-Unsubscribe header, subject 'Your order is on its way'"), and use `example.com` addresses.
-`tidyinbox rules test --from ... --subject ...` is a good way to show a wrong decision without
+`tacosort rules test --from ... --subject ...` is a good way to show a wrong decision without
 sharing the mail.
 
 ## Ideas for contributions
 
 - **Sorting:** new shop, bank, airline or app domains, and subject words in more languages. These live in
-  tables at the top of `tidyinbox/classify/heuristics.py`. Add an example to the tests with them.
-- **Providers:** server details or setup steps that changed (`tidyinbox/imap/providers.py` and
+  tables at the top of `tacosort/classify/heuristics.py`. Add an example to the tests with them.
+- **Providers:** server details or setup steps that changed (`tacosort/imap/providers.py` and
   `docs/providers.md`).
 - **Docs:** anything confusing in the README or `docs/`.
 
 ## Setting up for development
 
 ```
-git clone https://github.com/mAgNiFiCeNtTaCo/tidyinbox
-cd tidyinbox
+git clone https://github.com/mAgNiFiCeNtTaCo/tacosort
+cd tacosort
 python -m venv .venv
 .venv\Scripts\activate          (Windows)   or   source .venv/bin/activate   (macOS / Linux)
 pip install -e ".[dev,ai]"
@@ -36,27 +36,27 @@ python -m pytest -q
 python -m ruff check .
 ```
 
-The tests run fully offline. They use `tidyinbox.testing.FakeBackend` (an in-memory mail server) and
+The tests run fully offline. They use `tacosort.testing.FakeBackend` (an in-memory mail server) and
 never touch a real mailbox or your keychain. Please keep it that way: no network, no real accounts.
 
 ## How the code is organised
 
 | Part | What it does |
 |---|---|
-| `tidyinbox/models.py`, `backend.py` | the shared data types and the mailbox interface |
-| `tidyinbox/imap/` | talking to mail servers, providers, passwords (keychain) and OAuth |
-| `tidyinbox/classify/` | deciding where a message goes (safety checks, rules, learned, built-in checks, AI) |
-| `tidyinbox/store.py`, `learner.py`, `engine.py`, `schedule.py` | memory, learning, runs, undo, background job |
-| `tidyinbox/cli.py`, `config.py`, `report.py` | the `tidyinbox` command, the settings file, the HTML report |
+| `tacosort/models.py`, `backend.py` | the shared data types and the mailbox interface |
+| `tacosort/imap/` | talking to mail servers, providers, passwords (keychain) and OAuth |
+| `tacosort/classify/` | deciding where a message goes (safety checks, rules, learned, built-in checks, AI) |
+| `tacosort/store.py`, `learner.py`, `engine.py`, `schedule.py` | memory, learning, runs, undo, background job |
+| `tacosort/cli.py`, `config.py`, `report.py` | the `tacosort` command, the settings file, the HTML report |
 
 [docs/how-it-works.md](docs/how-it-works.md) explains the decision order and learning.
 
 ## Ground rules for code
 
-- **Safety first.** TidyInbox must never delete mail, mark it read (always `BODY.PEEK`), touch Sent/
+- **Safety first.** TacoSort must never delete mail, mark it read (always `BODY.PEEK`), touch Sent/
   Drafts/Trash/Junk/All Mail, or move flagged mail. Anything that moves mail must be logged and
   undoable. When unsure, leave mail in the Inbox.
-- **Secrets** go through `tidyinbox.imap.auth` (the keychain) only: never into the settings file, logs,
+- **Secrets** go through `tacosort.imap.auth` (the keychain) only: never into the settings file, logs,
   error messages or test fixtures.
 - **Plain English** in everything a user can see: messages, errors, docs. Say what happened and what
   to do next.

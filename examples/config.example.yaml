@@ -1,10 +1,10 @@
-# TidyInbox example settings
+# TacoSort example settings
 #
-# Copy this file to your settings location (run `tidyinbox config path` to see where), or just run
-# `tidyinbox setup`, which writes the file for you. Lines starting with # are comments.
-# Check your edits with:  tidyinbox config check
+# Copy this file to your settings location (run `tacosort config path` to see where), or just run
+# `tacosort setup`, which writes the file for you. Lines starting with # are comments.
+# Check your edits with:  tacosort config check
 #
-# Passwords are NEVER written here. `tidyinbox setup` keeps them in your computer's keychain.
+# Passwords are NEVER written here. `tacosort setup` keeps them in your computer's keychain.
 
 # ---- Your mailboxes ---------------------------------------------------------------------------------
 accounts:
@@ -13,7 +13,7 @@ accounts:
     provider: gmail               # gmail, outlook, yahoo, icloud, aol, fastmail, zoho, gmx, gmx-net,
                                   # protonmail-bridge or custom
     auth: password                # an app password (see docs/providers.md)
-    watch_folders: [INBOX]        # folders TidyInbox sorts (almost always just the Inbox)
+    watch_folders: [INBOX]        # folders TacoSort sorts (almost always just the Inbox)
 
   - id: work
     email: alice@work.example.com
@@ -46,12 +46,12 @@ categories:
   notifications: "off"            # turned off: app notifications stay in the Inbox
   kids: Kids School               # your own category; rules below send mail to it
 
-# Put all TidyInbox folders inside one parent folder (TidyInbox/Receipts, TidyInbox/Money, ...):
-# folder_prefix: TidyInbox
+# Put all TacoSort folders inside one parent folder (TacoSort/Receipts, TacoSort/Money, ...):
+# folder_prefix: TacoSort
 folder_prefix: ""
 
 # ---- Your own rules ---------------------------------------------------------------------------------
-# Checked in order; the first rule that matches wins, before any of TidyInbox's own guesses.
+# Checked in order; the first rule that matches wins, before any of TacoSort's own guesses.
 # Inside a rule every condition must match; inside a list any item may match.
 # action: a category above, `inbox` (leave it alone), or `folder:<any folder name>`.
 rules:
@@ -74,20 +74,20 @@ vip:
   - mom@example.com
   - family.example.org
 
-# ---- How careful TidyInbox is ------------------------------------------------------------------------
+# ---- How careful TacoSort is ------------------------------------------------------------------------
 min_confidence: 0.75              # only move mail when at least this sure (0 to 1; higher = more careful)
 keep_flagged: yes                 # never move starred / flagged mail
 keep_contacts: yes                # people you have written to always stay in the Inbox
-learn_from_corrections: yes       # when you move something back, TidyInbox remembers
+learn_from_corrections: yes       # when you move something back, TacoSort remembers
 max_moves_per_run: 500            # safety cap per account per run
 
 # ---- Background schedule ----------------------------------------------------------------------------
-interval_minutes: 15              # used by `tidyinbox schedule on`
+interval_minutes: 15              # used by `tacosort schedule on`
 
 # ---- Optional AI help (off unless you turn it on) ---------------------------------------------------
-# Only mail TidyInbox is unsure about is asked about, and only From, Subject and (if send_snippet is yes)
-# a few lines of text are sent to Anthropic. Needs TidyInbox installed with the AI helper (see the README)
-# and your own API key: save it with `tidyinbox config ai-key` so the background schedule can use it too.
+# Only mail TacoSort is unsure about is asked about, and only From, Subject and (if send_snippet is yes)
+# a few lines of text are sent to Anthropic. Needs TacoSort installed with the AI helper (see the README)
+# and your own API key: save it with `tacosort config ai-key` so the background schedule can use it too.
 ai:
   enabled: no
   model: claude-haiku-5-5
@@ -95,5 +95,5 @@ ai:
   send_snippet: yes
   api_key_env: ANTHROPIC_API_KEY  # an environment variable with this name wins over the saved key
 
-# Where TidyInbox keeps its memory (empty = the usual place for your system):
+# Where TacoSort keeps its memory (empty = the usual place for your system):
 data_dir: ""

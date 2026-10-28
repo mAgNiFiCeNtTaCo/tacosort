@@ -1,6 +1,6 @@
 {
   "project": "Email_Organization",
-  "about": "TidyInbox: open-source tool that sorts every email account into one folder scheme and keeps it sorted",
+  "about": "TacoSort (was TidyInbox): open-source tool that sorts every email account into one folder scheme and keeps it sorted",
   "runs": [
     {
       "title": "TidyInbox built by a nodeterm team, reviewed, fixed, published",

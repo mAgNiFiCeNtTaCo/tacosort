@@ -12,10 +12,10 @@ from datetime import timedelta
 
 import pytest
 
-from tidyinbox import engine, learner
-from tidyinbox.models import INBOX, AccountConfig, AppConfig, Decision, MoveRecord
-from tidyinbox.store import Store, utcnow
-from tidyinbox.testing import FakeBackend, make_message
+from tacosort import engine, learner
+from tacosort.models import INBOX, AccountConfig, AppConfig, Decision, MoveRecord
+from tacosort.store import Store, utcnow
+from tacosort.testing import FakeBackend, make_message
 
 DOMAINS = {
     "shop.example.com": "receipts",
@@ -100,7 +100,7 @@ def run(config, store, backends, **kw):
 
 
 def sort_all(config, store, backends, **kw):
-    """`tidyinbox run --backlog`: sort the mail that is already there too."""
+    """`tacosort run --backlog`: sort the mail that is already there too."""
     return run(config, store, backends, backlog=True, **kw)
 
 
@@ -266,7 +266,7 @@ def test_watch_folder_spelled_inbox_uses_the_server_name(store, fb):
 def test_old_watermark_saved_under_the_typed_name_is_adopted(store, fb):
     config = cfg()
     config.accounts[0].watch_folders = ["Inbox"]
-    store.set_watermark("a", "Inbox", fb._uidvalidity["INBOX"], 5)      # what an older TidyInbox saved
+    store.set_watermark("a", "Inbox", fb._uidvalidity["INBOX"], 5)      # what an older TacoSort saved
     assert start(config, store, {"a": fb}) == []
     assert run(config, store, {"a": fb}).moved == 0
     assert store.get_watermark("a", "INBOX") == (fb._uidvalidity["INBOX"], 5)
@@ -657,7 +657,7 @@ def test_log_file_is_written_without_subjects(store, fb, tmp_path):
     sort_all(cfg(), store, {"a": fb})
     for h in engine.logger.handlers:
         h.flush()
-    text = (tmp_path / "tidyinbox.log").read_text(encoding="utf-8")
+    text = (tmp_path / "tacosort.log").read_text(encoding="utf-8")
     assert "moved 2 message(s) from INBOX to Receipts" in text
     assert "Your order" not in text
 
@@ -737,15 +737,15 @@ def _fake_pipeline(monkeypatch):
         def __init__(self, ai_config, key):
             made["key"] = key
 
-    monkeypatch.setitem(sys.modules, "tidyinbox.classify.pipeline", types.SimpleNamespace(Classifier=Recorder))
-    monkeypatch.setitem(sys.modules, "tidyinbox.classify.ai", types.SimpleNamespace(AIClassifier=FakeAI))
+    monkeypatch.setitem(sys.modules, "tacosort.classify.pipeline", types.SimpleNamespace(Classifier=Recorder))
+    monkeypatch.setitem(sys.modules, "tacosort.classify.ai", types.SimpleNamespace(AIClassifier=FakeAI))
     return made, FakeAI
 
 
 @pytest.fixture
 def keychain(monkeypatch):
     """A fake keychain: the AI key under its own name, and a mail password under the bare 'anthropic'."""
-    from tidyinbox.imap import auth
+    from tacosort.imap import auth
 
     saved = {"ai": None}
     monkeypatch.setattr(auth, "get_ai_key", lambda: saved["ai"], raising=False)
@@ -784,16 +784,16 @@ def test_ai_without_key_is_skipped_with_a_plain_message(store, fb, monkeypatch, 
     engine.run_once(config, store, {"a": fb}, dry_run=True, log=lines.append)
     assert made["ai"] is None
     note = [line for line in lines if "no API key was found" in line]
-    assert len(note) == 1 and "ANTHROPIC_API_KEY" in note[0] and "tidyinbox config ai-key" in note[0]
+    assert len(note) == 1 and "ANTHROPIC_API_KEY" in note[0] and "tacosort config ai-key" in note[0]
     config.ai.enabled = False
     lines.clear()
     engine.run_once(config, store, {"a": fb}, dry_run=True, log=lines.append)
     assert made["ai"] is None and not any("AI" in line for line in lines)
 
 
-# ---- the store file of an older TidyInbox -------------------------------------------------------------------
+# ---- the store file of an older TacoSort -------------------------------------------------------------------
 def test_engine_works_on_a_state_file_from_the_first_version(tmp_path, fb):
-    from tidyinbox.store import MIGRATIONS
+    from tacosort.store import MIGRATIONS
 
     path = tmp_path / "state.sqlite3"
     conn = sqlite3.connect(path)

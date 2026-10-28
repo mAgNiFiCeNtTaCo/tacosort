@@ -6,7 +6,7 @@ the strongest category wins, and a close runner-up lowers the confidence. Two th
 scoring because they must stay in the Inbox: security messages (codes, password resets, sign-in
 alerts) and calendar invitations.
 
-To teach TidyInbox a new shop, bank, airline or keyword, add it to the tables just below; no other
+To teach TacoSort a new shop, bank, airline or keyword, add it to the tables just below; no other
 code needs to change. Domains match the domain itself and any subdomain (amazon.com also matches
 email.amazon.com). Keywords match whole words, case-insensitively.
 """

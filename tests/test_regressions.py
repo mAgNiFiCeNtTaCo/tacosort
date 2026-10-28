@@ -1,12 +1,12 @@
 """Regression tests for problems the re-check review found after the fix wave (2026-10-28).
 Each test asserts the safe behaviour."""
 
+from tacosort import engine
+from tacosort.classify.pipeline import Classifier
+from tacosort.models import AccountConfig, AppConfig
+from tacosort.store import Store
+from tacosort.testing import FakeBackend, make_message
 from tests.test_imap_move import MIDS, MailServer, connect, inbox_with
-from tidyinbox import engine
-from tidyinbox.classify.pipeline import Classifier
-from tidyinbox.models import AccountConfig, AppConfig
-from tidyinbox.store import Store
-from tidyinbox.testing import FakeBackend, make_message
 
 
 def quiet(_m):

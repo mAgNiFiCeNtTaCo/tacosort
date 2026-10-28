@@ -1,4 +1,4 @@
-"""The `tidyinbox` command, with every real part (imap, engine, schedule, classifier) replaced by fakes."""
+"""The `tacosort` command, with every real part (imap, engine, schedule, classifier) replaced by fakes."""
 
 from __future__ import annotations
 
@@ -11,11 +11,11 @@ from types import SimpleNamespace
 import pytest
 import yaml
 
-from tidyinbox import __version__, cli
-from tidyinbox.backend import BackendError
-from tidyinbox.config import load_config, save_config
-from tidyinbox.models import AccountConfig, AppConfig, Decision, LearnReport, MoveRecord, RunReport
-from tidyinbox.testing import FakeBackend
+from tacosort import __version__, cli
+from tacosort.backend import BackendError
+from tacosort.config import load_config, save_config
+from tacosort.models import AccountConfig, AppConfig, Decision, LearnReport, MoveRecord, RunReport
+from tacosort.testing import FakeBackend
 
 GOOD = "abcdefghijklmnop"     # the app password the fake server accepts
 
@@ -29,7 +29,7 @@ class Provider:
     ssl: bool = True
     auth: str = "password"
     app_password_url: str = "https://example.com/app-passwords"
-    notes: str = "1. Turn on 2-Step Verification.\n2. Create an app password called TidyInbox."
+    notes: str = "1. Turn on 2-Step Verification.\n2. Create an app password called TacoSort."
     domains: tuple = ()
 
 
@@ -119,8 +119,8 @@ def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     """A temporary settings file + data folder, and fakes for every other station's module."""
     cfg_path = tmp_path / "cfg" / "config.yaml"
     data = tmp_path / "data"
-    monkeypatch.setenv("TIDYINBOX_CONFIG", str(cfg_path))
-    monkeypatch.setenv("TIDYINBOX_DATA", str(data))
+    monkeypatch.setenv("TACOSORT_CONFIG", str(cfg_path))
+    monkeypatch.setenv("TACOSORT_DATA", str(data))
     secrets: dict[str, str] = {}
     engine = FakeEngine()
     schedule = SimpleNamespace(calls=[])
@@ -207,7 +207,7 @@ def test_help_and_bad_usage(capsys) -> None:
 
 def test_commands_need_accounts(env, capsys) -> None:
     assert cli.main(["run"]) == 1
-    assert "tidyinbox setup" in capsys.readouterr().err
+    assert "tacosort setup" in capsys.readouterr().err
 
 
 @pytest.mark.parametrize("argv", [
@@ -243,12 +243,12 @@ def test_missing_module_is_friendly(env, monkeypatch, capsys) -> None:
     with_accounts(env, "gmail", previewed=True)
 
     def broken():
-        raise ModuleNotFoundError("No module named 'tidyinbox.engine'", name="tidyinbox.engine")
+        raise ModuleNotFoundError("No module named 'tacosort.engine'", name="tacosort.engine")
 
     monkeypatch.setattr(cli, "_engine", broken)
     assert cli.main(["run"]) == 1
     err = capsys.readouterr().err
-    assert "installing TidyInbox again" in err and "pip install" not in err   # not ours on PyPI (T-B2)
+    assert "installing TacoSort again" in err and "pip install" not in err   # not ours on PyPI (T-B2)
 
 
 # ---- safety: preview before the first real move ------------------------------------------------------
@@ -256,7 +256,7 @@ def test_missing_module_is_friendly(env, monkeypatch, capsys) -> None:
 def test_run_refuses_without_preview(env, capsys) -> None:
     with_accounts(env, "gmail")
     assert cli.main(["run"]) == 1
-    assert "Run `tidyinbox preview` first" in capsys.readouterr().err
+    assert "Run `tacosort preview` first" in capsys.readouterr().err
     assert env.engine.calls == []
 
 
@@ -275,7 +275,7 @@ def test_preview_then_run(env, capsys) -> None:
     assert json.loads((env.data / cli.PREVIEW_FILE).read_text())["accounts"] == ["gmail", "yahoo"]
     assert cli.main(["run", "--backlog"]) == 0
     assert env.engine.calls[-1] == ("run_once", ["gmail", "yahoo"], ["gmail", "yahoo"], False, True)
-    assert "tidyinbox undo" in capsys.readouterr().out
+    assert "tacosort undo" in capsys.readouterr().out
 
 
 def test_run_only_previewed_accounts(env, capsys) -> None:
@@ -326,7 +326,7 @@ def test_watch_needs_preview(env) -> None:
 def test_schedule_on_needs_preview(env, capsys) -> None:
     with_accounts(env, "gmail")
     assert cli.main(["schedule", "on"]) == 1
-    assert "tidyinbox preview" in capsys.readouterr().err
+    assert "tacosort preview" in capsys.readouterr().err
     assert env.schedule.calls == []
     assert cli.main(["schedule", "on", "--yes", "--every", "30"]) == 0
     assert env.schedule.calls == [("install", 30, env.path.resolve())]
@@ -479,7 +479,7 @@ def test_undo(env, capsys) -> None:
 
 def test_rules_list(env, capsys) -> None:
     with_accounts(env, "gmail")
-    from tidyinbox.models import Rule
+    from tacosort.models import Rule
 
     cfg = load_config(env.path)
     cfg.rules = [Rule(name="school", action="folder:Kids", from_=["*@school.example.com"])]
@@ -570,7 +570,7 @@ def test_schedule_interval_limits(env, capsys) -> None:
 
 
 def test_readme_commands_exist() -> None:
-    """Every `tidyinbox <command> [action]` the docs mention must parse."""
+    """Every `tacosort <command> [action]` the docs mention must parse."""
     import re
 
     root = Path(__file__).resolve().parent.parent
@@ -578,12 +578,12 @@ def test_readme_commands_exist() -> None:
     commands = set(parser._subparsers._group_actions[0].choices)
     seen = set()
     for doc in [root / "README.md", *sorted((root / "docs").glob("*.md"))]:
-        for m in re.finditer(r"`tidyinbox ([a-z][a-z-]*)(?: ([a-z][a-z-]*))?", doc.read_text(encoding="utf-8")):
+        for m in re.finditer(r"`tacosort ([a-z][a-z-]*)(?: ([a-z][a-z-]*))?", doc.read_text(encoding="utf-8")):
             cmd, action = m.groups()
-            assert cmd in commands, f"{doc.name}: tidyinbox {cmd}"
+            assert cmd in commands, f"{doc.name}: tacosort {cmd}"
             sub = parser._subparsers._group_actions[0].choices[cmd]
             if sub._subparsers is not None and action:
-                assert action in sub._subparsers._group_actions[0].choices, f"{doc.name}: tidyinbox {cmd} {action}"
+                assert action in sub._subparsers._group_actions[0].choices, f"{doc.name}: tacosort {cmd} {action}"
             seen.add(cmd)
     assert {"setup", "preview", "run", "undo", "status"} <= seen
 
@@ -609,7 +609,7 @@ def test_wizard_refuses_reserved_names(env, capsys) -> None:
            passwords=[GOOD])
     assert cli.main(["accounts", "add"]) == 0
     out = capsys.readouterr().out
-    assert out.count("reserved for TidyInbox's own use") == 2 and "no spaces" in out
+    assert out.count("reserved for TacoSort's own use") == 2 and "no spaces" in out
     assert [a.id for a in load_config(env.path).accounts] == ["anthropic-mail"]
     assert env.secrets == {"anthropic-mail": GOOD}
 
@@ -710,10 +710,10 @@ def test_setup_mentions_ai_key_when_ai_is_on(env, capsys) -> None:
     save_config(cfg, env.path)
     script(env, answers=["n", "n", "n", "n"])   # add another, learn, preview, schedule
     assert cli.main(["setup"]) == 0
-    assert "`tidyinbox config ai-key`" in capsys.readouterr().out
+    assert "`tacosort config ai-key`" in capsys.readouterr().out
 
 
-# S-S3: on Linux/macOS everything TidyInbox writes is private to the user.
+# S-S3: on Linux/macOS everything TacoSort writes is private to the user.
 
 class _PosixOs:
     """`os` as cli.py sees it, pretending to be Linux, with a recorded umask."""

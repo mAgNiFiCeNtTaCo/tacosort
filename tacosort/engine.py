@@ -39,7 +39,7 @@ from .models import (
 )
 from .store import Store, utcnow
 
-logger = logging.getLogger("tidyinbox")
+logger = logging.getLogger("tacosort")
 
 Log = Callable[[str], None]
 
@@ -49,14 +49,14 @@ IDLE_SECONDS = 25 * 60         # servers drop IDLE after ~29 minutes
 MIN_CYCLE_SECONDS = 30         # never loop faster than this when nothing happened
 BACKOFF = (30, 60, 120, 300, 600, 900)
 NEVER_TOUCH = {"\\Sent", "\\Trash", "\\Junk", "\\All", "\\Drafts"}
-LOCK_NAME = "tidyinbox.lock"
-LOG_NAME = "tidyinbox.log"
+LOCK_NAME = "tacosort.lock"
+LOG_NAME = "tacosort.log"
 # A message without a Message-ID can't be recognised again (put back, undone), so it is never moved.
-UNTRACKABLE = Decision(INBOX, 1.0, "guard", "TidyInbox can't track this message safely, so it leaves it alone")
+UNTRACKABLE = Decision(INBOX, 1.0, "guard", "TacoSort can't track this message safely, so it leaves it alone")
 
 
 class EngineBusy(RuntimeError):
-    """Another TidyInbox run is working right now."""
+    """Another TacoSort run is working right now."""
 
 
 # ---- data folder, log file, lock ------------------------------------------------------------------
@@ -69,7 +69,7 @@ def data_dir_for(config: AppConfig, store: Store | None = None) -> Path:
     try:
         from .config import default_data_dir
     except ImportError:
-        return Path.home() / ".tidyinbox"
+        return Path.home() / ".tacosort"
     return Path(default_data_dir())
 
 
@@ -77,7 +77,7 @@ _log_handler: logging.Handler | None = None
 
 
 def setup_logging(data_dir: Path) -> logging.Logger:
-    """Send TidyInbox's log to a rotating file `tidyinbox.log` in the data folder (1 MB x 3).
+    """Send TacoSort's log to a rotating file `tacosort.log` in the data folder (1 MB x 3).
     The log holds counts, folder names and errors: never passwords, tokens or message text."""
     global _log_handler
     path = Path(data_dir) / LOG_NAME
@@ -98,7 +98,7 @@ def setup_logging(data_dir: Path) -> logging.Logger:
 
 class RunLock:
     """A lock file in the data folder so two runs (the schedule and `watch`) never work at once.
-    The operating system releases it if TidyInbox crashes, so it can't get stuck."""
+    The operating system releases it if TacoSort crashes, so it can't get stuck."""
 
     def __init__(self, data_dir: Path):
         self.path = Path(data_dir) / LOCK_NAME
@@ -144,7 +144,7 @@ class RunLock:
 
     def __enter__(self) -> RunLock:  # noqa: PYI034 - typing.Self needs Python 3.11
         if not self.acquire():
-            raise EngineBusy("Another TidyInbox run is working right now.")
+            raise EngineBusy("Another TacoSort run is working right now.")
         return self
 
     def __exit__(self, *exc) -> None:
@@ -152,7 +152,7 @@ class RunLock:
 
 
 def is_running(config: AppConfig, store: Store | None = None) -> bool:
-    """True when some TidyInbox run holds the lock right now."""
+    """True when some TacoSort run holds the lock right now."""
     lock = RunLock(data_dir_for(config, store))
     if lock.acquire():
         lock.release()
@@ -180,7 +180,7 @@ def _plain_error(account_id: str, err: Exception) -> str:
     if isinstance(err, BackendError):
         return f"{account_id}: {err}"
     return (f"{account_id}: something unexpected went wrong ({type(err).__name__}: {err}). "
-            "The other accounts were still processed; details are in tidyinbox.log.")
+            "The other accounts were still processed; details are in tacosort.log.")
 
 
 # ---- classifier -----------------------------------------------------------------------------------
@@ -198,7 +198,7 @@ def _make_classifier(config: AppConfig, store: Store, classifier, log: Log = pri
 
 def _anthropic_key(config: AppConfig) -> str | None:
     """The AI key: from the environment variable the settings name, else the one saved in the keychain
-    with `tidyinbox config ai-key` (never any other keychain entry, such as a mail password)."""
+    with `tacosort config ai-key` (never any other keychain entry, such as a mail password)."""
     key = os.environ.get(config.ai.api_key_env or "ANTHROPIC_API_KEY")
     if key:
         return key
@@ -217,7 +217,7 @@ def _make_ai(config: AppConfig, log: Log):
     key = _anthropic_key(config)
     if not key:
         _say(log, f"AI is turned on but no API key was found in {config.ai.api_key_env or 'ANTHROPIC_API_KEY'} "
-                  "or saved with `tidyinbox config ai-key`, so AI was skipped this time.")
+                  "or saved with `tacosort config ai-key`, so AI was skipped this time.")
         return None
     try:
         from .classify.ai import AIClassifier
@@ -244,7 +244,7 @@ def _find_folder(folders: dict[str, FolderInfo], name: str) -> FolderInfo | None
 
 
 def _folder_key(info: FolderInfo) -> str:
-    """Name for matching a destination like "TidyInbox/Receipts" whatever the server's delimiter."""
+    """Name for matching a destination like "TacoSort/Receipts" whatever the server's delimiter."""
     return _norm(info.name.replace(info.delimiter, "/") if info.delimiter else info.name)
 
 
@@ -301,7 +301,7 @@ def run_once(config: AppConfig, store: Store, backends: dict[str, MailBackend], 
     report = RunReport(run_id="", dry_run=dry_run, started=utcnow())
     lock = RunLock(data_dir)
     if not lock.acquire():
-        _say(log, "Another TidyInbox run is working right now, so this one did nothing.")
+        _say(log, "Another TacoSort run is working right now, so this one did nothing.")
         report.skipped = True
         report.finished = utcnow()
         return report
@@ -357,7 +357,7 @@ def _run_account(config: AppConfig, store: Store, backend: MailBackend, account:
             continue
         if info.flags & NEVER_TOUCH:
             report.errors.append(f"{account.id}: {folder!r} is a special folder (Sent, Trash, Junk...). "
-                                 "TidyInbox never sorts it, so it was skipped.")
+                                 "TacoSort never sorts it, so it was skipped.")
             continue
         _run_folder(config, store, backend, account, info.name, folders, clf, report, dest_cache, moves_left,
                     dry_run=dry_run, backlog=backlog, log=log, config_name=folder)
@@ -379,7 +379,7 @@ def _run_folder(config: AppConfig, store: Store, backend: MailBackend, account: 
     mark = store.get_watermark(account.id, folder)
     legacy = False
     if mark is None and config_name and config_name != folder:
-        # Saved by an older TidyInbox under the name as typed in the settings ("Inbox"): adopt it.
+        # Saved by an older TacoSort under the name as typed in the settings ("Inbox"): adopt it.
         mark = store.get_watermark(account.id, config_name)
         legacy = mark is not None
     reset = mark is not None and mark[0] != state.uidvalidity
@@ -389,11 +389,11 @@ def _run_folder(config: AppConfig, store: Store, backend: MailBackend, account: 
         if not dry_run:
             store.set_watermark(account.id, folder, state.uidvalidity, _top_uid(backend, folder))
         if reset:
-            _say(log, f"{account.id}: the server renumbered the messages in {folder}, so TidyInbox can't tell "
+            _say(log, f"{account.id}: the server renumbered the messages in {folder}, so TacoSort can't tell "
                       "old mail from new this time. It left them where they are and sorts new mail from now on.")
         else:
-            _say(log, f"{account.id}: first look at {folder}. TidyInbox sorts mail that arrives from now on; "
-                      "`tidyinbox run --backlog` sorts the mail already there.")
+            _say(log, f"{account.id}: first look at {folder}. TacoSort sorts mail that arrives from now on; "
+                      "`tacosort run --backlog` sorts the mail already there.")
         return
     if backlog:
         candidates = backend.search_uids(folder)
@@ -495,7 +495,7 @@ def _run_folder(config: AppConfig, store: Store, backend: MailBackend, account: 
             logger.info("%s: moved %d message(s) from %s to %s", account.id, len(moved), folder, server_dest)
             if len(moved) < len(items):
                 _say(log, f"{account.id}: the server did not confirm {len(items) - len(moved)} move(s) to "
-                          f"{server_dest}; TidyInbox will try those again next time.")
+                          f"{server_dest}; TacoSort will try those again next time.")
 
     if untracked:
         logger.info("%s: left %d message(s) in %s that have no Message-ID (%s)", account.id, untracked, folder,
@@ -529,7 +529,7 @@ def _same_message(store: Store, account_id: str, msg: Message) -> bool:
 # ---- start from now -------------------------------------------------------------------------------
 def start_from_now(config: AppConfig, store: Store, backends: dict[str, MailBackend], *,
                    log: Log = print) -> list[str]:
-    """For watched folders TidyInbox has never sorted, remember the newest message as "already handled",
+    """For watched folders TacoSort has never sorted, remember the newest message as "already handled",
     so the next run only sorts mail that arrives after this (`backlog=True` still sorts everything).
     Folders that already have a watermark are left alone. Returns the ids of accounts that were set.
 
@@ -570,20 +570,20 @@ def start_from_now(config: AppConfig, store: Store, backends: dict[str, MailBack
     finally:
         lock.release()
     if started:
-        _say(log, f"{', '.join(started)}: from now on TidyInbox sorts new mail as it arrives. The mail already "
-                  "in your Inbox stays put; `tidyinbox run --backlog` sorts that too.")
+        _say(log, f"{', '.join(started)}: from now on TacoSort sorts new mail as it arrives. The mail already "
+                  "in your Inbox stays put; `tacosort run --backlog` sorts that too.")
     return started
 
 
 # ---- learn ----------------------------------------------------------------------------------------
 def learn_from_folders(config: AppConfig, store: Store, backends: dict[str, MailBackend], *,
                        log: Log = print, sample: int | None = None) -> LearnReport:
-    """Learn the user's own folder scheme and contacts (see `tidyinbox.learner`)."""
+    """Learn the user's own folder scheme and contacts (see `tacosort.learner`)."""
     data_dir = data_dir_for(config, store)
     setup_logging(data_dir)
     lock = RunLock(data_dir)
     if not lock.acquire(wait=120):
-        raise EngineBusy("Another TidyInbox run is working right now. Try again in a minute.")
+        raise EngineBusy("Another TacoSort run is working right now. Try again in a minute.")
     try:
         report = learner.learn_from_folders(config, store, backends, log=lambda m: _say(log, m), sample=sample)
         for err in report.errors:
@@ -610,7 +610,7 @@ def undo(config: AppConfig, store: Store, backends: dict[str, MailBackend], *, r
         return 0
     lock = RunLock(data_dir)
     if not lock.acquire(wait=120):
-        raise EngineBusy("Another TidyInbox run is working right now. Try again in a minute.")
+        raise EngineBusy("Another TacoSort run is working right now. Try again in a minute.")
     restored = 0
     try:
         by_account: dict[str, list] = {}
@@ -644,7 +644,7 @@ def _undo_account(store: Store, backend: MailBackend, account_id: str, moves: li
             _say(log, f"{account_id}: a folder for one move no longer exists; skipped it.")
             continue
         if not mv.message_id and not mv.new_uid:
-            _say(log, f"{account_id}: TidyInbox can't track one message in {mv.to_folder} (it has no Message-ID "
+            _say(log, f"{account_id}: TacoSort can't track one message in {mv.to_folder} (it has no Message-ID "
                       "and the server gave no number for it), so it can't put it back; it is still there "
                       "unless you moved it.")
             store.mark_undone([mv.id])

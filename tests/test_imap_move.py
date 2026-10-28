@@ -9,9 +9,9 @@ import types
 import pytest
 from imapclient import exceptions as imap_errors
 
-from tidyinbox.backend import BackendError
-from tidyinbox.imap.client import ImapBackend
-from tidyinbox.models import AccountConfig
+from tacosort.backend import BackendError
+from tacosort.imap.client import ImapBackend
+from tacosort.models import AccountConfig
 
 
 class MailServer:

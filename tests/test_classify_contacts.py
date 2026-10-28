@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from tidyinbox.classify.contacts import contacts_from_sent, is_robot_address
-from tidyinbox.models import Address
-from tidyinbox.testing import make_message
+from tacosort.classify.contacts import contacts_from_sent, is_robot_address
+from tacosort.models import Address
+from tacosort.testing import make_message
 
 
 def sent(to, cc=(), sender="me@example.com"):

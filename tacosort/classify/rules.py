@@ -92,7 +92,7 @@ def first_matching_rule(rules: list[Rule], msg: Message) -> tuple[Rule, Decision
 
 
 def validate_rules(rules: list[Rule], config: AppConfig) -> list[str]:
-    """Plain-English problems with the rules, for `tidyinbox` to show. Empty list = all fine."""
+    """Plain-English problems with the rules, for `tacosort` to show. Empty list = all fine."""
     problems: list[str] = []
     account_ids = {a.id.lower() for a in config.accounts}
     seen_names: set[str] = set()

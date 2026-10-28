@@ -1,19 +1,28 @@
-# TidyInbox: progress log
+# TacoSort: progress log
 
-TidyInbox is an open-source (MIT) Python tool that sorts every email account a person has (any IMAP
+TacoSort (called TidyInbox until 2026-10-28) is an open-source (MIT) Python tool that sorts every email account a person has (any IMAP
 server, Outlook through OAuth2) into one shared folder scheme and keeps it sorted in the background.
 
 ## Where it stands (2026-10-28)
-- Public at https://github.com/mAgNiFiCeNtTaCo/tidyinbox; people install it with
-  `pipx install git+https://github.com/mAgNiFiCeNtTaCo/tidyinbox` (it is not on PyPI).
-- Start: `tidyinbox setup` → `tidyinbox preview` → `tidyinbox run --backlog --yes` (old mail) →
-  `tidyinbox schedule on` (keeps new mail sorted).
+- Public at https://github.com/mAgNiFiCeNtTaCo/tacosort; people install it with
+  `pipx install git+https://github.com/mAgNiFiCeNtTaCo/tacosort` (it is not on PyPI).
+- Start: `tacosort setup` → `tacosort preview` → `tacosort run --backlog --yes` (old mail) →
+  `tacosort schedule on` (keeps new mail sorted).
 - Tests: `.venv\Scripts\python -m pytest -q`: 567 passed, 2 skipped (POSIX-only), ruff clean.
   GitHub CI (Windows, macOS, Linux × Python 3.10 and 3.13) green on run 40655350677.
 - Not yet tried on a real mailbox. Also untested for real: Outlook/Google OAuth, AI sorting against the
   live API, the Windows at-logon trigger.
 
 ## Log
+### 2026-10-28: Renamed TidyInbox -> TacoSort
+- The owner's other projects all carry "taco" in the name, so the tool is now **TacoSort** (picked from
+  MailTaco / InboxTaco / TacoSort / TacoTidy, all free on PyPI; "tacomail" is taken there).
+- Package folder `tidyinbox/` -> `tacosort/`, command `tacosort`, keychain service `tacosort`, data folder
+  `%APPDATA%\TacoSort`, env vars `TACOSORT_*`, scheduled task / launchd / systemd names. Nobody had set it
+  up yet, so no migration of old settings is needed.
+- GitHub repo renamed to https://github.com/mAgNiFiCeNtTaCo/tacosort (the old tidyinbox link forwards).
+- 567 tests pass, ruff clean.
+
 ### 2026-10-28: TidyInbox built by a nodeterm team, reviewed, fixed, published
 - **Built** by four builder stations in the shared working tree (no git worktrees, as asked): IMAP
   backend (providers, keychain + OAuth, safe moves), classifier (guards, user rules, heuristics,

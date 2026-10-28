@@ -2,15 +2,15 @@ from __future__ import annotations
 
 import pytest
 
-from tidyinbox.classify.rules import (
+from tacosort.classify.rules import (
     address_matches,
     first_matching_rule,
     rule_decision,
     rule_matches,
     validate_rules,
 )
-from tidyinbox.models import INBOX, AccountConfig, AppConfig, Rule
-from tidyinbox.testing import make_message
+from tacosort.models import INBOX, AccountConfig, AppConfig, Rule
+from tacosort.testing import make_message
 
 
 def msg(sender="shop@store.example.com", subject="Your order", **kw):
@@ -50,7 +50,7 @@ def test_to_matches_cc_too():
     m = msg()
     rule = Rule(name="r", action="inbox", to=["*@work.example.com"])
     assert not rule_matches(rule, m)
-    from tidyinbox.models import Address
+    from tacosort.models import Address
     m.cc = [Address("me@work.example.com")]
     assert rule_matches(rule, m)
 

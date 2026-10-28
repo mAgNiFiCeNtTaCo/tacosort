@@ -2,8 +2,8 @@
 
 A Gmail-like and a Yahoo-like account, each with a realistic Inbox (receipts, bank mail, trips,
 newsletters, sales, social alerts, app notices, friends, replies, security codes, a starred sale),
-a Sent folder that tells TidyInbox who the user's people are, and (Gmail) the user's own "Kids School"
-folder. Everything goes through `tidyinbox.cli.main`, exactly as a person would type it. Offline:
+a Sent folder that tells TacoSort who the user's people are, and (Gmail) the user's own "Kids School"
+folder. Everything goes through `tacosort.cli.main`, exactly as a person would type it. Offline:
 the settings file and memory folder live in pytest's tmp_path, and no keychain or network is used.
 """
 
@@ -16,11 +16,11 @@ from datetime import timedelta
 
 import pytest
 
-from tidyinbox import cli
-from tidyinbox.config import save_config
-from tidyinbox.models import AccountConfig, AppConfig
-from tidyinbox.store import Store
-from tidyinbox.testing import FakeBackend, make_message
+from tacosort import cli
+from tacosort.config import save_config
+from tacosort.models import AccountConfig, AppConfig
+from tacosort.store import Store
+from tacosort.testing import FakeBackend, make_message
 
 ME_GMAIL = "sam.rivera@example.com"
 ME_YAHOO = "sam_rivera@example.net"
@@ -99,7 +99,7 @@ SCHOOL_FILED = [   # far more of it filed than left in the Inbox: a clear habit
     (f"ms.chen@{SCHOOL}", "Ms. Chen", "Reading log reminder"),
     (f"ms.chen@{SCHOOL}", "Ms. Chen", "Class photos are online"),
 ]
-# Gmail only: a filter labels the swim coach's mail "Family" but KEEPS it in the Inbox. TidyInbox must not
+# Gmail only: a filter labels the swim coach's mail "Family" but KEEPS it in the Inbox. TacoSort must not
 # learn "this sender goes to Family" from that, and must never move her mail out of the Inbox.
 FAMILY = [
     ("coach.amy@swimclub.example.org", "Coach Amy", "Practice moved to 6pm"),
@@ -152,8 +152,8 @@ def moves_made(backend: FakeBackend) -> int:
 def world(tmp_path, monkeypatch):
     cfg_path = tmp_path / "config" / "config.yaml"
     data = tmp_path / "data"
-    monkeypatch.setenv("TIDYINBOX_CONFIG", str(cfg_path))
-    monkeypatch.setenv("TIDYINBOX_DATA", str(data))
+    monkeypatch.setenv("TACOSORT_CONFIG", str(cfg_path))
+    monkeypatch.setenv("TACOSORT_DATA", str(data))
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     save_config(AppConfig(accounts=[
         AccountConfig(id="gmail", email=ME_GMAIL, provider="gmail"),
@@ -189,7 +189,7 @@ def world(tmp_path, monkeypatch):
         gmail, yahoo, data, tmp_path, store)
 
 
-def tidyinbox(capsys, *argv: str) -> tuple[int, str]:
+def tacosort(capsys, *argv: str) -> tuple[int, str]:
     code = cli.main(list(argv))
     out = capsys.readouterr()
     return code, out.out + out.err
@@ -217,11 +217,11 @@ def test_full_journey(world, capsys, monkeypatch):
     family = [subject for _, _, subject in FAMILY]
 
     # 1. Before any preview, `run` refuses to move anything.
-    code, out = tidyinbox(capsys, "run")
+    code, out = tacosort(capsys, "run")
     assert code == 1 and "preview" in out and moves_made(gmail) == moves_made(yahoo) == 0
 
     # 2. learn: the user's Kids School folder and the people in Sent.
-    code, out = tidyinbox(capsys, "learn")
+    code, out = tacosort(capsys, "learn")
     assert code == 0, out
     assert "Learned" in out
     with world.store() as st:
@@ -232,17 +232,17 @@ def test_full_journey(world, capsys, monkeypatch):
 
     # 3. preview shows the plan and changes nothing.
     before = {n: snapshot(b) for n, b in (("gmail", gmail), ("yahoo", yahoo))}
-    code, out = tidyinbox(capsys, "preview", "--limit", "200")
+    code, out = tacosort(capsys, "preview", "--limit", "200")
     assert code == 0, out
     assert "would be moved" in out and "Kids School" in out and "Receipts" in out
     assert {n: snapshot(b) for n, b in (("gmail", gmail), ("yahoo", yahoo))} == before
     assert moves_made(gmail) == moves_made(yahoo) == 0
 
     # 4. A plain `run` sorts only mail that arrives from now on; --backlog sorts what is already there.
-    code, out = tidyinbox(capsys, "run")
+    code, out = tacosort(capsys, "run")
     assert code == 0, out
     assert "--backlog" in out and moves_made(gmail) == moves_made(yahoo) == 0
-    code, out = tidyinbox(capsys, "run", "--backlog", "--yes")
+    code, out = tacosort(capsys, "run", "--backlog", "--yes")
     assert code == 0, out
     misses = (check_sorted(gmail, expected_gmail) + check_sorted(yahoo, expected_yahoo)
               + check_family_kept(gmail, family))
@@ -267,7 +267,7 @@ def test_full_journey(world, capsys, monkeypatch):
     # 5. A second run (plain or backlog) changes nothing.
     after = {n: snapshot(b) for n, b in (("gmail", gmail), ("yahoo", yahoo))}
     for argv in (["run"], ["run", "--backlog"]):
-        code, out = tidyinbox(capsys, *argv)
+        code, out = tacosort(capsys, *argv)
         assert code == 0, out
         assert {n: snapshot(b) for n, b in (("gmail", gmail), ("yahoo", yahoo))} == after, argv
 
@@ -284,22 +284,22 @@ def test_full_journey(world, capsys, monkeypatch):
         for sender, name, subject, headers, flags, _ in new + extra:
             b.add("INBOX", mail(b.account_id, me, sender, name, subject, headers, flags))
     gmail.add_labeled(mail("gmail", ME_GMAIL, FAMILY[0][0], FAMILY[0][1], "Pool closed tomorrow"), ["INBOX", "Family"])
-    code, out = tidyinbox(capsys, "run")
+    code, out = tacosort(capsys, "run")
     assert code == 0, out
     misses = (check_sorted(gmail, new + new_school) + check_sorted(yahoo, new)
               + check_family_kept(gmail, [*family, "Pool closed tomorrow"]))
     assert not misses, "\n".join(misses)
 
-    # 7. Two hours later the user corrects TidyInbox in their mail app: one sale back to the Inbox, one
+    # 7. Two hours later the user corrects TacoSort in their mail app: one sale back to the Inbox, one
     #    newsletter into a folder of their own. Both stick, and future mail from those senders follows.
     #    (Moves are re-checked for corrections hourly in their first day, so the clock moves on.)
-    from tidyinbox import store as store_module
+    from tacosort import store as store_module
 
     real_now = store_module.utcnow
     monkeypatch.setattr(store_module, "utcnow", lambda: real_now() + timedelta(hours=2))
     gmail.user_move("Last chance: doorbuster deals end tonight", "Promotions", "INBOX")
     gmail.user_move("The Morning: Your Tuesday briefing", "Newsletters", "Reading")
-    code, out = tidyinbox(capsys, "run")
+    code, out = tacosort(capsys, "run")
     assert code == 0, out
     assert "learned 2 corrections" in out
     assert where(gmail, "Last chance: doorbuster deals end tonight") == ["INBOX"]
@@ -313,7 +313,7 @@ def test_full_journey(world, capsys, monkeypatch):
     # "Keep this sender in my Inbox" applies to every account; a personal folder only to its own account.
     yahoo.add("INBOX", mail("yahoo", ME_YAHOO, *later[0][:4]))
     for _ in range(2):
-        code, out = tidyinbox(capsys, "run")
+        code, out = tacosort(capsys, "run")
         assert code == 0, out
         misses = check_sorted(gmail, later) + check_sorted(yahoo, later[:1])
         assert not misses, "\n".join(misses)
@@ -327,33 +327,33 @@ def test_full_journey(world, capsys, monkeypatch):
     ]
     for sender, name, subject, headers, flags, _ in oops:
         yahoo.add("INBOX", mail("yahoo", ME_YAHOO, sender, name, subject, headers, flags))
-    code, out = tidyinbox(capsys, "run")
+    code, out = tacosort(capsys, "run")
     assert code == 0 and not check_sorted(yahoo, oops), out
-    code, out = tidyinbox(capsys, "undo")
+    code, out = tacosort(capsys, "undo")
     assert code == 0, out
     assert out.count("Put 2 message(s) back") == 1
     assert all(where(yahoo, s[2]) == ["INBOX"] for s in oops)
     for argv in (["run"], ["run", "--backlog"]):
-        assert tidyinbox(capsys, *argv)[0] == 0
+        assert tacosort(capsys, *argv)[0] == 0
         assert all(where(yahoo, s[2]) == ["INBOX"] for s in oops), argv
 
     # 9. report, status and rules list work on the real memory file.
     report_path = world.tmp / "report.html"
-    code, out = tidyinbox(capsys, "report", "--output", str(report_path))
+    code, out = tacosort(capsys, "report", "--output", str(report_path))
     assert code == 0, out
     html = report_path.read_text(encoding="utf-8")
     assert "Receipts" in html and "amazon.com" in html and "Kids School" in html
     assert "<script src" not in html
-    code, out = tidyinbox(capsys, "status")
+    code, out = tacosort(capsys, "status")
     assert code == 0 and "gmail" in out and "yahoo" in out and "not previewed" not in out, out
-    code, out = tidyinbox(capsys, "rules", "list")
+    code, out = tacosort(capsys, "rules", "list")
     assert code == 0 and "Kids School" in out, out
 
     # 10. `undo --run` with an id read from the report: the big backlog run is put back.
     runs = re.findall(r'<code>(\d{8}-\d{6}-[0-9a-f]{8})</code></td><td class="num">(\d+)</td>', html)
     assert len(runs) == 4          # backlog, new mail, the Reading move, the undone run
     big_run = max(runs, key=lambda r: int(r[1]))[0]
-    code, out = tidyinbox(capsys, "undo", "--run", big_run)
+    code, out = tacosort(capsys, "undo", "--run", big_run)
     assert code == 0 and "won't move them again" in out, out
     for b in (gmail, yahoo):
         assert where(b, "Your receipt from Apple.") == ["INBOX"]
@@ -364,54 +364,54 @@ def test_full_journey(world, capsys, monkeypatch):
 
 
 def test_background_schedule_command_line_works(world, capsys, monkeypatch):
-    """The scheduled job runs `python -m tidyinbox run --quiet --config PATH`: that exact line must work,
+    """The scheduled job runs `python -m tacosort run --quiet --config PATH`: that exact line must work,
     stay silent when all is well, and sort new mail."""
-    from tidyinbox import schedule
-    from tidyinbox.config import default_config_path
+    from tacosort import schedule
+    from tacosort.config import default_config_path
 
     other = world.tmp / "elsewhere" / "my settings.yaml"
     other.parent.mkdir()
     other.write_text(default_config_path().read_text(encoding="utf-8"), encoding="utf-8")
-    monkeypatch.setenv("TIDYINBOX_CONFIG", str(world.tmp / "not-this-one.yaml"))
+    monkeypatch.setenv("TACOSORT_CONFIG", str(world.tmp / "not-this-one.yaml"))
     args = schedule.run_arguments(other)
-    assert args[:3] == ["-m", "tidyinbox", "run"]
+    assert args[:3] == ["-m", "tacosort", "run"]
 
-    assert tidyinbox(capsys, "preview", "--config", str(other))[0] == 0
-    code, out = tidyinbox(capsys, *args[2:])
+    assert tacosort(capsys, "preview", "--config", str(other))[0] == 0
+    code, out = tacosort(capsys, *args[2:])
     assert (code, out) == (0, "")
     assert where(world.yahoo, "Your receipt from Apple.") == ["INBOX"]       # old mail: only with --backlog
     world.yahoo.add("INBOX", mail("yahoo", ME_YAHOO, "no_reply@email.apple.com", "Apple", "Your receipt from Apple (2)"))
-    code, out = tidyinbox(capsys, *args[2:])
+    code, out = tacosort(capsys, *args[2:])
     assert (code, out) == (0, "")
     assert where(world.yahoo, "Your receipt from Apple (2)") == ["Receipts"]
 
 
 def test_rules_test_uses_what_was_learned(world, capsys):
-    assert tidyinbox(capsys, "learn")[0] == 0
-    code, out = tidyinbox(capsys, "rules", "test", "--from", f"office@{SCHOOL}", "--subject", "Snow day",
+    assert tacosort(capsys, "learn")[0] == 0
+    code, out = tacosort(capsys, "rules", "test", "--from", f"office@{SCHOOL}", "--subject", "Snow day",
                          "--list-id", SCHOOL_LIST["List-Id"], "--account", "gmail")
     assert code == 0 and "Kids School" in out, out
     # A folder habit never moves mail that looks written by a person (no mailing-list or robot markers).
-    code, out = tidyinbox(capsys, "rules", "test", "--from", f"office@{SCHOOL}", "--subject", "Can you call me?",
+    code, out = tacosort(capsys, "rules", "test", "--from", f"office@{SCHOOL}", "--subject", "Can you call me?",
                          "--account", "gmail")
     assert code == 0 and "stays in the Inbox" in out, out
-    code, out = tidyinbox(capsys, "rules", "test", "--from", "jordan.park@example.org", "--subject", "Hi")
+    code, out = tacosort(capsys, "rules", "test", "--from", "jordan.park@example.org", "--subject", "Hi")
     assert code == 0 and "stays in the Inbox" in out, out
 
 
 def test_user_rule_wins_and_folder_prefix_applies_to_both_accounts(world, capsys, tmp_path):
-    from tidyinbox.config import default_config_path, load_config
-    from tidyinbox.models import Rule
+    from tacosort.config import default_config_path, load_config
+    from tacosort.models import Rule
 
     path = default_config_path()
     cfg = load_config(path)
-    cfg.folder_prefix = "TidyInbox"
+    cfg.folder_prefix = "TacoSort"
     cfg.rules = [Rule(name="github stays", from_=["*@github.com"], action="inbox")]
     save_config(cfg, path)
-    assert tidyinbox(capsys, "preview")[0] == 0
-    code, out = tidyinbox(capsys, "run", "--backlog")
+    assert tacosort(capsys, "preview")[0] == 0
+    code, out = tacosort(capsys, "run", "--backlog")
     assert code == 0, out
     for b in (world.gmail, world.yahoo):
         assert where(b, "[sam/garden] Pull request #12 merged") == ["INBOX"]
-        assert where(b, "Your receipt from Apple.") == ["TidyInbox/Receipts"]
+        assert where(b, "Your receipt from Apple.") == ["TacoSort/Receipts"]
         assert "Receipts" not in b._folders

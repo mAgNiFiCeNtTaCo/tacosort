@@ -1,4 +1,4 @@
-# TidyInbox: who did what
+# TacoSort (was TidyInbox): who did what
 
 Every session's transcript stays on disk at `~/.claude/projects/D--ClaudeProjects-Email-Organization/<id>*.jsonl`.
 `WORKFLOW.html` is the drawn picture of these runs.

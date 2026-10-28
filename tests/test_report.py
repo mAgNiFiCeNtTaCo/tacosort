@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from tidyinbox.models import AccountConfig, AppConfig, MoveRecord
-from tidyinbox.report import build_report, moves_since
+from tacosort.models import AccountConfig, AppConfig, MoveRecord
+from tacosort.report import build_report, moves_since
 
 EVIL_SUBJECT = '<script>alert("hi")</script> & <img src=x onerror=alert(1)>'
 EVIL_SENDER = '"><b>bold</b>@example.com'

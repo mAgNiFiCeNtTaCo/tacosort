@@ -1,5 +1,5 @@
 name: Idea or request
-description: Suggest a feature, a new provider, or a kind of mail TidyInbox should recognise
+description: Suggest a feature, a new provider, or a kind of mail TacoSort should recognise
 labels: [enhancement]
 body:
   - type: markdown
@@ -9,7 +9,7 @@ body:
   - type: textarea
     id: problem
     attributes:
-      label: What would you like TidyInbox to do?
+      label: What would you like TacoSort to do?
       description: Describe the problem it would solve for you, in your own words.
     validations:
       required: true

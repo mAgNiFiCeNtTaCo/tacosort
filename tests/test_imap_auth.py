@@ -12,9 +12,9 @@ import urllib.parse
 
 import pytest
 
-from tidyinbox.backend import BackendError
-from tidyinbox.imap import auth
-from tidyinbox.models import AccountConfig
+from tacosort.backend import BackendError
+from tacosort.imap import auth
+from tacosort.models import AccountConfig
 
 
 class FakeKeyring:
@@ -99,7 +99,7 @@ def g_account():
 def test_secret_roundtrip(kr):
     assert auth.get_secret("acct") is None
     auth.set_secret("acct", "app-pass")
-    assert kr.store == {("tidyinbox", "account:acct"): "app-pass"}
+    assert kr.store == {("tacosort", "account:acct"): "app-pass"}
     assert auth.get_secret("acct") == "app-pass"
     auth.delete_secret("acct")
     assert auth.get_secret("acct") is None
@@ -107,10 +107,10 @@ def test_secret_roundtrip(kr):
 
 
 def test_old_bare_entry_is_moved_once(kr):
-    kr.store[("tidyinbox", "acct")] = "old-pass"            # saved by an older TidyInbox
+    kr.store[("tacosort", "acct")] = "old-pass"            # saved by an older TacoSort
     assert auth.get_secret("acct") == "old-pass"
-    assert kr.store == {("tidyinbox", "account:acct"): "old-pass"}
-    kr.store[("tidyinbox", "acct")] = "stale"                # a new entry always wins over an old one
+    assert kr.store == {("tacosort", "account:acct"): "old-pass"}
+    kr.store[("tacosort", "acct")] = "stale"                # a new entry always wins over an old one
     assert auth.get_secret("acct") == "old-pass"
 
 
@@ -118,7 +118,7 @@ def test_ai_key_and_account_named_anthropic_never_mix(kr):
     auth.set_secret("anthropic", "MAIL-APP-PASSWORD")        # someone@anthropic.example's mailbox
     assert auth.get_ai_key() is None
     auth.set_ai_key("sk-ant-test")
-    assert kr.store[("tidyinbox", "ai:anthropic")] == "sk-ant-test"
+    assert kr.store[("tacosort", "ai:anthropic")] == "sk-ant-test"
     assert auth.get_secret("anthropic") == "MAIL-APP-PASSWORD"
     auth.delete_account_secrets("anthropic")                # removing the account keeps the AI key
     assert auth.get_ai_key() == "sk-ant-test"
@@ -128,25 +128,25 @@ def test_ai_key_and_account_named_anthropic_never_mix(kr):
 
 
 def test_old_bare_anthropic_entry_is_never_used(kr):
-    kr.store[("tidyinbox", "anthropic")] = "sk-ant-old"       # the old docs' place for the AI key
+    kr.store[("tacosort", "anthropic")] = "sk-ant-old"       # the old docs' place for the AI key
     assert auth.get_ai_key() is None
     assert auth.get_secret("anthropic") is None             # never sent to a mail server either
     auth.delete_account_secrets("anthropic")
-    assert kr.store == {("tidyinbox", "anthropic"): "sk-ant-old"}
+    assert kr.store == {("tacosort", "anthropic"): "sk-ant-old"}
 
 
 def test_delete_account_secrets_removes_everything_of_that_account(kr):
     kr.store.update({
-        ("tidyinbox", "account:gm"): "ref", ("tidyinbox", "account:gm:client-secret"): "cs",
-        ("tidyinbox", "gm"): "old", ("tidyinbox", "gm:client-secret"): "old-cs",
-        ("tidyinbox", "account:other"): "keep", ("tidyinbox", "ai:anthropic"): "keep-too",
+        ("tacosort", "account:gm"): "ref", ("tacosort", "account:gm:client-secret"): "cs",
+        ("tacosort", "gm"): "old", ("tacosort", "gm:client-secret"): "old-cs",
+        ("tacosort", "account:other"): "keep", ("tacosort", "ai:anthropic"): "keep-too",
     })
     auth.delete_account_secrets("gm")
-    assert kr.store == {("tidyinbox", "account:other"): "keep", ("tidyinbox", "ai:anthropic"): "keep-too"}
+    assert kr.store == {("tacosort", "account:other"): "keep", ("tacosort", "ai:anthropic"): "keep-too"}
 
 
 def test_account_id_with_colon_cannot_reach_other_entries(kr):
-    kr.store[("tidyinbox", "account:x:client-secret")] = "cs"
+    kr.store[("tacosort", "account:x:client-secret")] = "cs"
     with pytest.raises(auth.CredentialError, match="must not be empty or contain ':'"):
         auth.get_secret("x:client-secret")
     with pytest.raises(auth.CredentialError):
@@ -177,7 +177,7 @@ def test_microsoft_device_login(kr, monkeypatch):
     logs = []
     auth.microsoft_device_login(ms_account(), log=logs.append)
     assert "ABCD-1234" in logs[0]
-    assert kr.store[("tidyinbox", "account:hm")] == "ref-1"
+    assert kr.store[("tacosort", "account:hm")] == "ref-1"
     url, fields = web.requests[0]
     assert url == "https://login.microsoftonline.com/consumers/oauth2/v2.0/devicecode"
     assert fields["scope"] == "https://outlook.office.com/IMAP.AccessAsUser.All offline_access"
@@ -214,16 +214,16 @@ def test_missing_client_id(kr):
 
 
 def test_refresh_microsoft_rotates_refresh_token(kr, monkeypatch):
-    kr.store[("tidyinbox", "account:hm")] = "old-ref"
+    kr.store[("tacosort", "account:hm")] = "old-ref"
     web = FakeHTTP(monkeypatch, [(200, {"access_token": "acc-2", "refresh_token": "new-ref", "expires_in": 3600})])
     assert auth.get_access_token(ms_account()) == "acc-2"
-    assert kr.store[("tidyinbox", "account:hm")] == "new-ref"
+    assert kr.store[("tacosort", "account:hm")] == "new-ref"
     assert web.requests[0][1]["grant_type"] == "refresh_token"
     assert web.requests[0][1]["refresh_token"] == "old-ref"
 
 
 def test_refresh_expired_sign_in(kr, monkeypatch):
-    kr.store[("tidyinbox", "account:hm")] = "old-ref"
+    kr.store[("tacosort", "account:hm")] = "old-ref"
     FakeHTTP(monkeypatch, [(400, {"error": "invalid_grant", "error_description": "secret stuff"})])
     with pytest.raises(auth.CredentialError) as e:
         auth.get_access_token(ms_account())
@@ -241,7 +241,7 @@ def test_network_down(kr, monkeypatch):
         raise urllib.error.URLError("no route")
 
     monkeypatch.setattr(auth.urllib.request, "urlopen", boom)
-    kr.store[("tidyinbox", "account:hm")] = "r"
+    kr.store[("tacosort", "account:hm")] = "r"
     with pytest.raises(auth.CredentialError, match="internet connection"):
         auth.get_access_token(ms_account())
 
@@ -285,8 +285,8 @@ def test_google_loopback_login(kr, monkeypatch):
     assert fields["code"] == "the-code"
     challenge = base64.urlsafe_b64encode(hashlib.sha256(fields["code_verifier"].encode()).digest()).rstrip(b"=")
     assert challenge.decode() == seen["code_challenge"]
-    assert kr.store[("tidyinbox", "account:gm")] == "g-ref"
-    assert kr.store[("tidyinbox", "account:gm:client-secret")] == "g-secret"
+    assert kr.store[("tacosort", "account:gm")] == "g-ref"
+    assert kr.store[("tacosort", "account:gm:client-secret")] == "g-secret"
     seen["thread"].join(10)
     assert b"got your sign-in" in seen["page"]
 
@@ -295,7 +295,7 @@ def test_google_loopback_login(kr, monkeypatch):
     web.answers.append((200, {"access_token": "g-acc-2", "expires_in": 3600}))
     assert auth.get_access_token(g_account()) == "g-acc-2"
     assert web.requests[1][1]["client_secret"] == "g-secret"
-    assert kr.store[("tidyinbox", "account:gm")] == "g-ref"   # Google kept the same refresh token
+    assert kr.store[("tacosort", "account:gm")] == "g-ref"   # Google kept the same refresh token
 
 
 def record_servers(monkeypatch):
@@ -311,12 +311,12 @@ def record_servers(monkeypatch):
 
 
 def test_google_client_secret_saved_under_old_name_still_works(kr, monkeypatch):
-    kr.store[("tidyinbox", "gm")] = "g-ref"
-    kr.store[("tidyinbox", "gm:client-secret")] = "old-cs"
+    kr.store[("tacosort", "gm")] = "g-ref"
+    kr.store[("tacosort", "gm:client-secret")] = "old-cs"
     web = FakeHTTP(monkeypatch, [(200, {"access_token": "g-acc", "expires_in": 3600})])
     assert auth.get_access_token(g_account()) == "g-acc"
     assert web.requests[0][1]["client_secret"] == "old-cs"
-    assert kr.store == {("tidyinbox", "account:gm"): "g-ref", ("tidyinbox", "account:gm:client-secret"): "old-cs"}
+    assert kr.store == {("tacosort", "account:gm"): "g-ref", ("tacosort", "account:gm:client-secret"): "old-cs"}
 
 
 def test_google_wrong_state_is_refused_and_the_real_answer_still_counts(kr, monkeypatch):
@@ -345,7 +345,7 @@ def test_google_wrong_state_is_refused_and_the_real_answer_still_counts(kr, monk
     assert pages["forged"][0] == 400 and b"signed in" not in pages["forged"][1]
     assert pages["no-state"][0] == 400
     assert pages["real"][0] == 200
-    assert kr.store[("tidyinbox", "account:gm")] == "g-ref"
+    assert kr.store[("tacosort", "account:gm")] == "g-ref"
 
 
 def test_google_sign_in_timeout_is_kept_even_with_a_silent_connection(kr, monkeypatch):
@@ -367,4 +367,4 @@ def test_google_sign_in_timeout_is_kept_even_with_a_silent_connection(kr, monkey
         for s in sockets:
             s.close()
     assert time.monotonic() - started < 5
-    assert ("tidyinbox", "account:gm") not in kr.store
+    assert ("tacosort", "account:gm") not in kr.store

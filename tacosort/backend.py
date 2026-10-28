@@ -1,5 +1,5 @@
-"""The mailbox interface. `tidyinbox.imap.client.ImapBackend` talks to real servers;
-`tidyinbox.testing.FakeBackend` is an in-memory copy for tests. The engine only uses this.
+"""The mailbox interface. `tacosort.imap.client.ImapBackend` talks to real servers;
+`tacosort.testing.FakeBackend` is an in-memory copy for tests. The engine only uses this.
 
 Owned by the orchestrator: propose changes instead of editing (see SPEC.md).
 """
