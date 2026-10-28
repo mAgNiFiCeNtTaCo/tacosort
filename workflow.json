@@ -1,0 +1,204 @@
+{
+  "project": "Email_Organization",
+  "about": "TidyInbox: open-source tool that sorts every email account into one folder scheme and keeps it sorted",
+  "runs": [
+    {
+      "title": "TidyInbox built by a nodeterm team, reviewed, fixed, published",
+      "date": "2026-10-28",
+      "summary": "Four builders and an integrator built TidyInbox in the shared tree; a three-lens review, a five-station fix wave and a re-check cleared every blocker before it went public with green CI.",
+      "stages": [
+        {
+          "name": "Plan",
+          "kind": "lead",
+          "note": "SPEC.md, shared models, FakeBackend, station briefs",
+          "sessions": [
+            {
+              "id": "979da9f6",
+              "role": "Orchestrator",
+              "start": "2026-10-28T01:32",
+              "end": "2026-10-28T12:03",
+              "did": "Spec, contracts, briefs, merges, re-check fixes, rename, publish, CI fixes",
+              "outcome": "done",
+              "files": 29
+            }
+          ]
+        },
+        {
+          "name": "Builders",
+          "kind": "build",
+          "sessions": [
+            {
+              "id": "5fd5ed29",
+              "role": "IMAP station",
+              "start": "2026-10-28T01:43",
+              "end": "2026-10-28T02:02",
+              "did": "Providers, keychain + OAuth, ImapBackend with safe moves",
+              "outcome": "done",
+              "files": 7
+            },
+            {
+              "id": "d1d3fb18",
+              "role": "Classifier station",
+              "start": "2026-10-28T01:43",
+              "end": "2026-10-28T02:03",
+              "did": "Guards, user rules, heuristics, optional AI; 149 tests",
+              "outcome": "done",
+              "files": 11
+            },
+            {
+              "id": "ea1b0945",
+              "role": "Engine station",
+              "start": "2026-10-28T01:43",
+              "end": "2026-10-28T02:04",
+              "did": "SQLite store, learner, engine, scheduler; 68 tests",
+              "outcome": "done",
+              "files": 8
+            },
+            {
+              "id": "2193daad",
+              "role": "CLI and Docs station",
+              "start": "2026-10-28T01:43",
+              "end": "2026-10-28T02:06",
+              "did": "CLI, config, README, docs, CI, issue templates",
+              "outcome": "done",
+              "files": 21
+            }
+          ]
+        },
+        {
+          "name": "Integrator",
+          "kind": "build",
+          "sessions": [
+            {
+              "id": "67c07b7c",
+              "role": "Integrator",
+              "start": "2026-10-28T02:03",
+              "end": "2026-10-28T02:18",
+              "did": "Wired stations together; fixed a schedule command line that always failed; e2e tests",
+              "outcome": "done",
+              "files": 8
+            }
+          ]
+        },
+        {
+          "name": "Review panel",
+          "kind": "review",
+          "sessions": [
+            {
+              "id": "22b89d05",
+              "role": "Correctness reviewer",
+              "start": "2026-10-28T02:16",
+              "end": "2026-10-28T02:28",
+              "did": "2 blockers: Gmail labels learned as move-out, UIDVALIDITY Inbox sweep",
+              "outcome": "done",
+              "files": 1
+            },
+            {
+              "id": "db659062",
+              "role": "Security reviewer",
+              "start": "2026-10-28T02:16",
+              "end": "2026-10-28T02:26",
+              "did": "No blockers; 4 should-fix, 8 smaller",
+              "outcome": "done",
+              "files": 1
+            },
+            {
+              "id": "333e313f",
+              "role": "Tests reviewer",
+              "start": "2026-10-28T02:16",
+              "end": "2026-10-28T02:32",
+              "did": "Fake server too perfect to catch real-server bugs",
+              "outcome": "done",
+              "files": 1
+            }
+          ]
+        },
+        {
+          "name": "Fix wave",
+          "kind": "fix",
+          "sessions": [
+            {
+              "id": "9135fb92",
+              "role": "Fix-IMAP",
+              "start": "2026-10-28T02:34",
+              "end": "2026-10-28T03:42",
+              "did": "10 findings: safe move after drops, folder case, keychain names",
+              "outcome": "done",
+              "files": 5
+            },
+            {
+              "id": "e5860faf",
+              "role": "Fix-Classifier",
+              "start": "2026-10-28T02:34",
+              "end": "2026-10-28T02:46",
+              "did": "AI injection guard, verify-email, rule fixes",
+              "outcome": "done",
+              "files": 5
+            },
+            {
+              "id": "fae196c1",
+              "role": "Fix-Engine",
+              "start": "2026-10-28T02:34",
+              "end": "2026-10-28T03:47",
+              "did": "12 items, store schema v2",
+              "outcome": "done",
+              "files": 4
+            },
+            {
+              "id": "865aaad4",
+              "role": "Fix-Learner",
+              "start": "2026-10-28T02:34",
+              "end": "2026-10-28T02:50",
+              "did": "Gmail-label learning, per-user scheduled task",
+              "outcome": "done",
+              "files": 4
+            },
+            {
+              "id": "d3fe880e",
+              "role": "Fix-CLI",
+              "start": "2026-10-28T02:34",
+              "end": "2026-10-28T02:49",
+              "did": "Install from GitHub, reserved ids, umask, keychain cleanup",
+              "outcome": "done",
+              "files": 14
+            }
+          ]
+        },
+        {
+          "name": "Re-check",
+          "kind": "judge",
+          "sessions": [
+            {
+              "id": "d1b48d8d",
+              "role": "Re-check",
+              "start": "2026-10-28T02:53",
+              "end": "2026-10-28T03:05",
+              "did": "All blockers fixed; found N-1 (learned rule vs security codes), N-2 (MOVE + search lag)",
+              "outcome": "done",
+              "files": 1
+            }
+          ]
+        }
+      ],
+      "events": [
+        {
+          "at": "2026-10-28T03:20",
+          "until": "2026-10-28T04:12",
+          "text": "Quiet gap in the orchestrator"
+        },
+        {
+          "at": "2026-10-28T04:13",
+          "until": "2026-10-28T12:02",
+          "text": "Done; waiting for the user"
+        }
+      ],
+      "lessons": [
+        "spawn-team/verify are refused while the project is off screen: open stations one by one with open-claude --run-now",
+        "A perfect fake server hides real-server bugs: give it Gmail-label, no-UIDPLUS and partial-move modes",
+        "Check PyPI before naming a project: mailtidy was taken, forcing a late rename",
+        "Short random ids collide on fast CI machines: 4 hex chars overwrote a run record",
+        "Fix stations' full-suite failures came from neighbours mid-edit in the shared tree; the orchestrator's run after the wave is the real check"
+      ]
+    }
+  ]
+}
