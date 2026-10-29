@@ -102,6 +102,13 @@ look_alike_min: 5
 # since apply to it. Mail that was there before TacoSort's first run is still only sorted by --backlog.
 recheck_inbox: yes
 
+# ---- Security emails ----------------------------------------------------------------------------------
+# Codes, sign-in alerts, password resets and "verify your email" always stay in the Inbox while they are
+# new. After this many days they move to security_folder (0 = they stay in the Inbox for good).
+# Starred ones stay, and one you drag back to the Inbox is never moved again.
+security_keep_days: 0
+security_folder: Security
+
 # ---- Waiting time ---------------------------------------------------------------------------------------
 # New mail stays in the Inbox this many hours before it is sorted, so you see it there first.
 # 0 sorts it at once. The background run picks it up once it is old enough.

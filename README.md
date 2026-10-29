@@ -36,6 +36,8 @@ INBOX (2,341)                            INBOX (37)        <- people, replies, s
   have sold" emails, or 10 emails of any kind), TacoSort treats it as a robot even if the emails look
   plain, and files them with that company's other mail. Once a day it looks again at the mail it left
   in your Inbox, so what it learned since applies to older mail too.
+- **Old security emails can leave too.** With `security_keep_days: 3`, codes, sign-in alerts and
+  "verify your email" stay in the Inbox for 3 days, then move to a Security folder.
 - **Optional waiting time.** With `hold_hours: 24`, new mail stays in the Inbox for a day so you see
   it there first, then gets sorted.
 - **Keeps your Inbox for people.** Mail from people you've written to, replies, security codes,
@@ -228,6 +230,7 @@ hold_hours: 24            # new mail waits in the Inbox for a day before it is s
 unsure_to_folder: yes     # robot mail TacoSort isn't sure about goes to its best guess (default no)
 look_alike_min: 0         # don't treat repeated look-alike emails as robot mail (default 5)
 recheck_inbox: no         # don't look at mail left in the Inbox again each day (default yes)
+security_keep_days: 3     # security emails move to the Security folder when 3 days old (default 0: never)
 ```
 
 A fully commented example is in [examples/config.example.yaml](examples/config.example.yaml).

@@ -336,6 +336,10 @@ def config_from_dict(data: Any, warnings: list[str] | None = None) -> AppConfig:
         cfg.look_alike_min = _to_int(data["look_alike_min"], "look_alike_min")
     if "unsure_to_folder" in data:
         cfg.unsure_to_folder = _to_bool(data["unsure_to_folder"], "unsure_to_folder")
+    if "security_keep_days" in data:
+        cfg.security_keep_days = _to_int(data["security_keep_days"], "security_keep_days")
+    if "security_folder" in data:
+        cfg.security_folder = str(data["security_folder"] or "").strip()
     if "recheck_inbox" in data:
         cfg.recheck_inbox = _to_bool(data["recheck_inbox"], "recheck_inbox")
     if "data_dir" in data:
@@ -429,6 +433,8 @@ def config_to_dict(cfg: AppConfig) -> dict:
         "look_alike_min": cfg.look_alike_min,
         "unsure_to_folder": cfg.unsure_to_folder,
         "recheck_inbox": cfg.recheck_inbox,
+        "security_keep_days": cfg.security_keep_days,
+        "security_folder": cfg.security_folder,
         "ai": {
             "enabled": cfg.ai.enabled,
             "model": cfg.ai.model,
@@ -550,6 +556,12 @@ def config_problems(cfg: AppConfig) -> list[str]:
     if not 0 <= cfg.hold_hours <= 720:
         problems.append("hold_hours must be between 0 (sort at once) and 720 (30 days); 24 keeps new mail "
                         "in the Inbox for a day.")
+    if not 0 <= cfg.security_keep_days <= 365:
+        problems.append("security_keep_days must be between 0 (security emails stay in the Inbox) and 365; "
+                        "3 moves them out once they are 3 days old.")
+    if cfg.security_keep_days and (not cfg.security_folder or "/" in cfg.security_folder
+                                   or cfg.security_folder.lower() == "inbox"):
+        problems.append("security_folder must be a plain folder name such as Security.")
     if cfg.look_alike_min < 0 or cfg.look_alike_min == 1:
         problems.append("look_alike_min must be 0 (off) or at least 2; 5 is a good value.")
     if cfg.ai.max_per_run < 0:

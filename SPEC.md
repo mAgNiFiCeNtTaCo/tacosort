@@ -60,6 +60,11 @@ Daily re-check (`recheck_inbox`, default on): once a day (or after a `--backlog`
 re-classifies mail it kept in the Inbox before (newest 2000), never mail that was there before its
 first look.
 
+Security folder (`security_keep_days`, default 0 = off; `security_folder` = "Security", with
+`folder_prefix`): the security/account-confirmation guard marks its decision `security=True`; once the
+message is that many days old (arrival time) it moves there with category `security`. Found by the
+daily re-check. User rules and starred mail come first; a message dragged back is never moved again.
+
 Waiting time (`hold_hours`, default 0): mail younger than this (IMAP INTERNALDATE, else the Date
 header) is skipped and not marked seen; the watermark stays below it, so a later run sorts it.
 Applies to `run`, `run --backlog` and `preview`.

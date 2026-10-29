@@ -119,7 +119,8 @@ class Classifier:
         # a learned rule files the rest of that sender's mail away. Only your own rules beat this.
         phrase = is_security_message(msg) or is_account_confirmation(msg)
         if phrase:
-            return Decision(INBOX, 1.0, "guard", f'Security or account message ("{phrase}"): stays in the Inbox'), None
+            return Decision(INBOX, 1.0, "guard", f'Security or account message ("{phrase}"): stays in the Inbox',
+                            security=True), None
         phrase = is_platform_message(msg)
         if phrase:
             return Decision(INBOX, 1.0, "guard",
