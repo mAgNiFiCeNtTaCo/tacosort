@@ -93,6 +93,8 @@ def test_pick_name_falls_back_to_the_domain_and_is_folder_safe():
     assert pick_name(["Ruben's Big Deals", ""], "playfame.com") == "Playfame"
     assert pick_name(["mAgNiFiCeNtTaCo"], "github.com") == "GitHub"     # GitHub mail carries a person's name
     assert pick_name(["Google Play", "Google Play", "Google"], "google.com") == "Google Play"
+    assert pick_name(["Fifth Third Bank"], "53.com") == "Fifth Third"        # a domain that is a number
+    assert pick_name(["Hilton Feedback"], "hilton.com") == "Hilton"
     assert folder_safe("Booking.com") == "Booking"
     assert "/" not in folder_safe("A/B Shop") and "." not in folder_safe("Shop.Inc.")
 

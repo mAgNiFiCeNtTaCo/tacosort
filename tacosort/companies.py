@@ -27,6 +27,7 @@ _GENERIC_WORDS = {
     "team", "support", "notifications", "notification", "noreply", "no-reply", "newsletter", "news",
     "updates", "update", "alerts", "alert", "info", "hello", "mailer", "mail", "email", "billing",
     "marketing", "service", "services", "customer", "care", "official", "inc", "inc.", "llc", "ltd",
+    "feedback", "survey", "surveys", "reply", "replies", "rewards",
 }
 _TLDS = (".com", ".net", ".org", ".io", ".co", ".app", ".ai", ".dev")
 # How companies spell themselves, for senders whose display name is a person or a repo ("GitHub" mail
@@ -41,6 +42,8 @@ KNOWN_NAMES = {
     "whatsapp.com": "WhatsApp", "wordpress.com": "WordPress", "nytimes.com": "The New York Times",
     "booking.com": "Booking.com", "etsy.com": "Etsy", "twitch.tv": "Twitch", "redditmail.com": "Reddit",
     "discord.com": "Discord", "nintendo.com": "Nintendo", "xbox.com": "Xbox", "samsungusa.com": "Samsung",
+    "53.com": "Fifth Third", "att.com": "AT&T", "att-mail.com": "AT&T", "ups.com": "UPS", "fedex.com": "FedEx",
+    "usps.com": "USPS", "aliexpress.com": "AliExpress", "creditkarma.com": "Credit Karma",
 }
 MAX_NAME = 40
 # An unsure guess at least this sure may send machine-sent mail to its company's folder: that the
