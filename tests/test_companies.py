@@ -69,6 +69,10 @@ def play(n):
     ("x@github.com", "github.com"),
     ("nobody", ""),
     ("me@localhost", ""),
+    ("dsoutreach-cctexas.com@shared1.ccsend.com", "cctexas.com"),      # named in the address
+    ("news@cityofcorpuschristi.ccsend.com", "cityofcorpuschristi.ccsend.com"),
+    ("x@shared1.ccsend.com", "ccsend.com"),
+    ("orders@coolshop.myshopify.com", "coolshop.myshopify.com"),
 ])
 def test_company_key_is_the_registrable_domain(email, key):
     assert company_key(email) == key
@@ -95,6 +99,8 @@ def test_pick_name_falls_back_to_the_domain_and_is_folder_safe():
     assert pick_name(["Google Play", "Google Play", "Google"], "google.com") == "Google Play"
     assert pick_name(["Fifth Third Bank"], "53.com") == "Fifth Third"        # a domain that is a number
     assert pick_name(["Hilton Feedback"], "hilton.com") == "Hilton"
+    assert pick_name(["LSOA Teacher"], "lsoa.org") == "LSOA"
+    assert pick_name(["City of Corpus Christi"], "cityofcorpuschristi.ccsend.com") == "City of Corpus Christi"
     assert folder_safe("Booking.com") == "Booking"
     assert "/" not in folder_safe("A/B Shop") and "." not in folder_safe("Shop.Inc.")
 

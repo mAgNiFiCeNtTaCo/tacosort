@@ -50,6 +50,12 @@ HEADER_FIELDS = (
     "Return-Path", "Sender", "Content-Type", "Content-Transfer-Encoding",
 )
 HEADER_FETCH = f"BODY.PEEK[HEADER.FIELDS ({' '.join(h.upper() for h in HEADER_FIELDS)})]"
+# Yahoo (and AOL, which runs on Yahoo's servers) answers HEADER.FIELDS with only six standard headers,
+# dropping List-Unsubscribe, Reply-To and the rest, so every newsletter looked personal. There the
+# whole header is fetched and the same fields are kept.
+FULL_HEADER_FETCH = "BODY.PEEK[HEADER]"
+FULL_HEADER_HOSTS = ("yahoo.com", "aol.com", "yahoodns.net")
+_KEEP_HEADERS = frozenset(h.lower() for h in HEADER_FIELDS)
 SNIPPET_FETCH = "BODY.PEEK[TEXT]<0.8192>"   # first 8 KB of the body, enough for a ~500 char snippet
 SNIPPET_CHARS = 500
 BATCH = 200                                 # UIDs per FETCH / MOVE command
@@ -549,7 +555,8 @@ class ImapBackend:
     def _fetch_batch(self, client: IMAPClient, folder: str, uids: list[int], with_snippet: bool) -> list[Message]:
         self._select(client, folder, readonly=True)
         gmail = client.has_capability("X-GM-EXT-1")
-        items = ["UID", "FLAGS", "RFC822.SIZE", "INTERNALDATE", HEADER_FETCH]
+        full = client.has_capability("XYMHIGHESTMODSEQ") or (self.host or "").lower().endswith(FULL_HEADER_HOSTS)
+        items = ["UID", "FLAGS", "RFC822.SIZE", "INTERNALDATE", FULL_HEADER_FETCH if full else HEADER_FETCH]
         if gmail:
             items.append("X-GM-LABELS")
         if with_snippet:
@@ -596,7 +603,7 @@ class ImapBackend:
         raw: dict[str, str] = {}
         for k, v in pairs:
             key = str(k).lower()
-            if key not in raw:     # first occurrence wins
+            if key not in raw and key in _KEEP_HEADERS:     # first occurrence wins
                 raw[key] = str(v)
         headers = {k: decode_header_value(v) for k, v in raw.items()}
         senders = parse_addresses(raw.get("from")) or parse_addresses(raw.get("sender"))

@@ -27,8 +27,13 @@ _GENERIC_WORDS = {
     "team", "support", "notifications", "notification", "noreply", "no-reply", "newsletter", "news",
     "updates", "update", "alerts", "alert", "info", "hello", "mailer", "mail", "email", "billing",
     "marketing", "service", "services", "customer", "care", "official", "inc", "inc.", "llc", "ltd",
-    "feedback", "survey", "surveys", "reply", "replies", "rewards",
+    "feedback", "survey", "surveys", "reply", "replies", "rewards", "teacher", "teachers", "office",
 }
+# Services that send for many organizations from their own domain. The organization is named in the
+# address ("dsoutreach-cctexas.com@shared1.ccsend.com") or is the label in front
+# ("news@cityofcorpuschristi.ccsend.com"), so each one gets its own folder, not one "Ccsend" for all.
+SHARED_SENDERS = ("ccsend.com", "myshopify.com")
+_SHARED_HOST_LABEL = re.compile(r"(?:shared|em|mail|send|mta|bounce)\d*")
 _TLDS = (".com", ".net", ".org", ".io", ".co", ".app", ".ai", ".dev")
 # How companies spell themselves, for senders whose display name is a person or a repo ("GitHub" mail
 # arrives as "octocat <notifications@github.com>"), so the folder isn't named "Github".
@@ -61,7 +66,14 @@ def company_key(email: str) -> str:
     if len(labels) < 2:
         return ""
     keep = 3 if ".".join(labels[-2:]) in _TWO_PART_SUFFIXES and len(labels) >= 3 else 2
-    return ".".join(labels[-keep:])
+    key = ".".join(labels[-keep:])
+    if key in SHARED_SENDERS:
+        named = re.search(r"-([a-z0-9-]+(?:\.[a-z0-9-]+)+)$", email.rsplit("@", 1)[0].lower())
+        if named and company_key("x@" + named.group(1)):
+            return company_key("x@" + named.group(1))
+        if len(labels) > keep and not _SHARED_HOST_LABEL.fullmatch(labels[-keep - 1]):
+            return ".".join(labels[-keep - 1:])
+    return key
 
 
 def _alnum(text: str) -> str:

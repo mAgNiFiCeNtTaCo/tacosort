@@ -541,6 +541,32 @@ def test_gmail_tabs_become_labels_most_specific_first():
     assert all(s[:2] == ["UID", "1,2,3,4"] for s in searches)  # only this batch, never the whole folder
 
 
+@pytest.mark.parametrize("caps,host", [(("IMAP4REV1", "XYMHIGHESTMODSEQ"), "imap.example.com"),
+                                        (("IMAP4REV1",), "imap.mail.yahoo.com"), (("IMAP4REV1",), "imap.aol.com")])
+def test_yahoo_gets_the_whole_header(caps, host):
+    # Yahoo answers HEADER.FIELDS with six standard headers only; the whole header has them all.
+    head = header_block(From="Shop <deals@shop.com>", Subject="Sale", List_Unsubscribe="<https://u>",
+                        Received="from mx.example", DKIM_Signature="v=1")
+    fake = FakeIMAP(caps=caps, messages={1: {**row(b""), b"BODY[HEADER]": head}})
+    del fake.messages[1][b"BODY[HEADER.FIELDS (FROM TO CC SUBJECT)]"]
+    b = backend(fake, account(host=host))
+    b.connect()
+    [m] = b.fetch("INBOX", [1])
+    items = next(c[2] for c in fake.calls if c[0] == "fetch")
+    assert "BODY.PEEK[HEADER]" in items
+    assert m.headers["list-unsubscribe"] == "<https://u>" and m.from_.email == "deals@shop.com"
+    assert "received" not in m.headers and "dkim-signature" not in m.headers   # only the usual fields
+
+
+def test_other_servers_ask_for_the_usual_fields():
+    fake = FakeIMAP(messages={1: row(header_block(From="a@example.com"))})
+    b = backend(fake)
+    b.connect()
+    b.fetch("INBOX", [1])
+    items = next(c[2] for c in fake.calls if c[0] == "fetch")
+    assert any(i.startswith("BODY.PEEK[HEADER.FIELDS") for i in items)
+
+
 def test_gmail_tab_search_failure_still_fetches():
     fake = FakeIMAP(caps=("IMAP4REV1", "X-GM-EXT-1"), messages={1: row(header_block(From="a@example.com"))})
     plain_search = fake.search
