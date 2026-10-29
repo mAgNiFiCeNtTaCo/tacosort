@@ -31,6 +31,7 @@ Defined in `tacosort/models.py` as `DEFAULT_CATEGORIES`. `inbox` means "leave it
 | social | Social | social networks, forums, community notifications |
 | notifications | Notifications | automated app/service notices, calendar, dev tools |
 | accounts | Accounts | terms-of-service / privacy-policy updates, account changes, welcome and plan notices |
+| business | Business | tax exemption, resale certificates, seller/distributor applications, business bank accounts, payouts |
 
 Company folders (`tacosort/companies.py`, `company_folders`, `company_folder_min` = 3): mail filed by
 category (heuristic or AI, not a user rule, correction or folder rule) goes to `<category folder>/<Company>`
@@ -64,6 +65,12 @@ Security folder (`security_keep_days`, default 0 = off; `security_folder` = "Sec
 `folder_prefix`): the security/account-confirmation guard marks its decision `security=True`; once the
 message is that many days old (arrival time) it moves there with category `security`. Found by the
 daily re-check. User rules and starred mail come first; a message dragged back is never moved again.
+
+Business (`BUSINESS_PHRASES`, subject only): from a robot, category `business` (0.9). From a person
+(contact, reply, or no automation markers) it stays with `aged_to="business"` and moves after
+`business_keep_days` (default 0 = never). A security email about business ages into Business too.
+The contact guard no longer applies to mail with bulk markers: writing to a shop's service@ address
+once doesn't keep its newsletters in the Inbox.
 
 Waiting time (`hold_hours`, default 0): mail younger than this (IMAP INTERNALDATE, else the Date
 header) is skipped and not marked seen; the watermark stays below it, so a later run sorts it.

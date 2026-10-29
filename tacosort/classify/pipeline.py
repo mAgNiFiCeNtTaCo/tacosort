@@ -26,6 +26,7 @@ from .heuristics import (
     bulk_markers,
     heuristic_decision,
     is_account_confirmation,
+    is_business_message,
     is_platform_message,
     is_security_message,
     list_id_of,
@@ -120,11 +121,17 @@ class Classifier:
         phrase = is_security_message(msg) or is_account_confirmation(msg)
         if phrase:
             return Decision(INBOX, 1.0, "guard", f'Security or account message ("{phrase}"): stays in the Inbox',
-                            security=True), None
+                            aged_to=self._business(msg) or "security"), None
         phrase = is_platform_message(msg)
         if phrase:
             return Decision(INBOX, 1.0, "guard",
                             f'A person writing through a website ("{phrase}"): stays in the Inbox'), None
+        phrase = is_business_message(msg)
+        if phrase and looks_personal(msg):
+            return Decision(INBOX, 1.0, "guard", f'Business mail from a person ("{phrase}"): stays in the Inbox',
+                            aged_to="business"), None
+        if phrase:
+            return self._finish(Decision("business", 0.9, "heuristic", f'Business mail ("{phrase}")')), None
 
         guess: Decision | None = None
         learned = self._learned(msg)
@@ -166,11 +173,17 @@ class Classifier:
         for entry in self.config.vip:
             if _vip_matches(entry, sender, msg.from_.domain):
                 return Decision(INBOX, 1.0, "guard", f"On your VIP list ({entry.strip()})")
-        if self.config.keep_contacts and sender in self.contacts:
-            return Decision(INBOX, 1.0, "guard", "From someone you have written to")
+        # Writing to a shop's service@ address once doesn't make its newsletters personal mail.
+        if self.config.keep_contacts and sender in self.contacts and not bulk_markers(msg):
+            return Decision(INBOX, 1.0, "guard", "From someone you have written to", aged_to=self._business(msg))
         if self._reply_to_you(msg):
-            return Decision(INBOX, 1.0, "guard", "A reply in a conversation you are part of")
+            return Decision(INBOX, 1.0, "guard", "A reply in a conversation you are part of",
+                            aged_to=self._business(msg))
         return None
+
+    @staticmethod
+    def _business(msg: Message) -> str | None:
+        return "business" if is_business_message(msg) else None
 
     def _reply_to_you(self, msg: Message) -> bool:
         """A reply (In-Reply-To/References) with no mailing-list or bulk headers, sent to you.

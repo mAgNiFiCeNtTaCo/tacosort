@@ -208,6 +208,7 @@ How each decision is made is explained in [docs/how-it-works.md](docs/how-it-wor
 | Social | social networks, forums, community notifications |
 | Notifications | automated notices from apps and services |
 | Accounts | terms-of-service and privacy-policy updates, account changes, welcome and plan notices |
+| Business | tax exemption and resale certificates, seller and distributor applications, business bank accounts, payout set-up |
 
 Folders are created the first time they are needed. Inside each one, a company that has sent 3 or more
 emails of that kind gets its own folder (`Promotions/Crunchyroll`). The name comes from the sender
@@ -231,6 +232,8 @@ unsure_to_folder: yes     # robot mail TacoSort isn't sure about goes to its bes
 look_alike_min: 0         # don't treat repeated look-alike emails as robot mail (default 5)
 recheck_inbox: no         # don't look at mail left in the Inbox again each day (default yes)
 security_keep_days: 3     # security emails move to the Security folder when 3 days old (default 0: never)
+business_keep_days: 3     # people's business emails (a reply about your tax exemption) move to Business
+                          # when 3 days old (default 0: they stay in the Inbox)
 ```
 
 A fully commented example is in [examples/config.example.yaml](examples/config.example.yaml).

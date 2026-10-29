@@ -246,6 +246,17 @@ PLATFORM_MESSAGE_PHRASES = (
     "question about your item", "question about your listing", "asked a question", "has a question",
     "sent a question",
 )
+# Running a business: tax exemption, resale certificates, seller/distributor applications, business
+# bank accounts, payouts. From a robot it goes to Business; from a person it waits in the Inbox first.
+BUSINESS_PHRASES = (
+    "tax exemption", "tax exempt", "tax-exempt", "tax exepmtion", "exemption certificate",
+    "resale certificate", "resale license", "resale permit", "seller's permit", "sellers permit",
+    "sales tax certificate", "w-9", "1099-k", "1099 form", "dba", "business account", "business accounts",
+    "business application", "business checking", "merchant account", "seller verification",
+    "seller application", "seller account", "welcome to selling", "distribution application",
+    "distributor application", "dealer application", "wholesale account", "wholesale application",
+    "funding source", "payout method", "payout account", "payment information has been",
+)
 _SECURITY_CODE_IN_SUBJECT = re.compile(r"(?<!\d)\d{4,8}(?!\d).{0,40}\bcode\b|\bcode\b.{0,40}(?<!\d)\d{4,8}(?!\d)",
                                        re.IGNORECASE)
 
@@ -306,6 +317,7 @@ _CONFIRM_PATTERNS = [(p, _phrase_regex(p)) for p in ACCOUNT_CONFIRM_PHRASES]
 _CONFIRM_PATTERNS.append(("confirm your account",
                           re.compile(r"\b(?:confirm|verify|activate) your [\w.-]+ (?:account|email)\b")))
 _PLATFORM_PATTERNS = [(p, _phrase_regex(p)) for p in PLATFORM_MESSAGE_PHRASES]
+_BUSINESS_PATTERNS = [(p, _phrase_regex(p)) for p in BUSINESS_PHRASES]
 _ALL_DOMAINS = tuple(d for _, domains in DOMAINS.values() for d in domains)
 
 
@@ -413,6 +425,15 @@ def is_account_confirmation(msg: Message) -> str | None:
         for phrase, rx in _CONFIRM_PATTERNS:
             if rx.search(snippet):
                 return phrase
+    return None
+
+
+def is_business_message(msg: Message) -> str | None:
+    """The phrase that makes this business paperwork (tax exemption, a seller application...)."""
+    subject = msg.subject.lower()
+    for phrase, rx in _BUSINESS_PATTERNS:
+        if rx.search(subject):
+            return phrase
     return None
 
 

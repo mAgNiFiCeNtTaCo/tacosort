@@ -523,11 +523,13 @@ def _run_folder(config: AppConfig, store: Store, backend: MailBackend, account: 
                     d = Decision(g.category, g.confidence, g.source,
                                  f"Not sure (best guess {g.category.title()}, {round(g.confidence * 100)}% "
                                  "sure), but sent by a robot, so it went there (unsure_to_folder)")
-            if dest is None and d is not None and d.security and _security_aged(config, m):
-                dest = sub = config.security_folder_name()
-                d = Decision("security", d.confidence, d.source,
-                             f"{d.reason.removesuffix(': stays in the Inbox')}, older than "
-                             f"{config.security_keep_days} days: moved to {config.security_folder}")
+            aged = _aged_folder(config, m, d) if dest is None and d is not None and d.aged_to else None
+            if aged:
+                folder_name, days = aged
+                dest = sub = folder_name
+                d = Decision(d.aged_to, d.confidence, d.source,
+                             f"{d.reason.removesuffix(': stays in the Inbox')}, older than {days} days: "
+                             f"moved to {folder_name}")
             target = by_name.get(_norm(dest)) if dest else None
             if target is not None:
                 dest = target.name                 # the server's own spelling ("receipts" stays "receipts")
@@ -707,13 +709,23 @@ def _arrival(msg: Message) -> datetime | None:
     return when
 
 
-def _security_aged(config: AppConfig, msg: Message) -> bool:
-    """A security email old enough to leave the Inbox (`security_keep_days`); a code or a sign-in alert
-    matters for a day or two, after that it is only clutter."""
-    if config.security_keep_days <= 0 or not config.security_folder:
-        return False
+def _aged_folder(config: AppConfig, msg: Message, d: Decision) -> tuple[str, int] | None:
+    """(folder, days) when mail kept in the Inbox for now is old enough to go: a security email after
+    `security_keep_days` (a code or a sign-in alert matters for a day or two, then it is clutter), a
+    person's business mail after `business_keep_days`. None while it should stay."""
+    if d.aged_to == "security":
+        days = config.security_keep_days
+        folder = config.security_folder_name() if config.security_folder else None
+    elif d.aged_to == "business":
+        days, folder = config.business_keep_days, config.folder_for("business")
+    else:
+        return None
+    if days <= 0 or not folder:
+        return None
     arrived = _arrival(msg)
-    return arrived is not None and arrived <= utcnow() - timedelta(days=config.security_keep_days)
+    if arrived is None or arrived > utcnow() - timedelta(days=days):
+        return None
+    return folder, days
 
 
 def _same_message(store: Store, account_id: str, msg: Message) -> bool:

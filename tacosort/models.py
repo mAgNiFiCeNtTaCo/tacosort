@@ -24,6 +24,8 @@ DEFAULT_CATEGORIES: dict[str, tuple[str, str]] = {
     "notifications": ("Notifications", "Automated notices from apps and services"),
     "accounts": ("Accounts", ("Terms-of-service and privacy-policy updates, account changes, welcome and "
                               "plan notices (security alerts and codes stay in the Inbox)")),
+    "business": ("Business", ("Running a business: tax exemption and resale certificates, seller and "
+                              "distributor applications, business bank accounts, payout set-up")),
 }
 
 # Where a decision came from, strongest first.
@@ -97,9 +99,10 @@ class Decision:
     # For an unsure "stay in the Inbox" decision about machine-sent mail: the best guess, which may
     # still send it to its company's own folder (companies.py).
     guess: Decision | None = None
-    # A security or account message (codes, sign-in alerts, "verify your email"): it stays in the Inbox
-    # until it is `security_keep_days` old, then goes to `security_folder` when that is turned on.
-    security: bool = False
+    # For mail that stays in the Inbox for now: where it goes once it is old enough. "security" (codes,
+    # sign-in alerts, "verify your email": after `security_keep_days`, to `security_folder`) or
+    # "business" (a person's mail about tax exemption, applications...: after `business_keep_days`).
+    aged_to: str | None = None
 
     @property
     def keeps(self) -> bool:
@@ -201,6 +204,7 @@ class AppConfig:
     recheck_inbox: bool = True            # once a day, look again at mail TacoSort left in the Inbox
     security_keep_days: int = 0           # security emails leave the Inbox after this many days (0 = never)
     security_folder: str = "Security"     # ...for this folder
+    business_keep_days: int = 0           # people's business mail goes to Business after this many days (0 = never)
 
     def security_folder_name(self) -> str:
         return f"{self.folder_prefix}/{self.security_folder}" if self.folder_prefix else self.security_folder

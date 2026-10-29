@@ -109,6 +109,12 @@ recheck_inbox: yes
 security_keep_days: 0
 security_folder: Security
 
+# ---- Business mail -----------------------------------------------------------------------------------
+# Tax exemption, resale certificates, seller and distributor applications, business bank accounts and
+# payout set-up go to the Business folder when a robot sends them. When a person does (a distributor
+# replying about your tax exemption), it stays in the Inbox this many days first (0 = stays for good).
+business_keep_days: 0
+
 # ---- Waiting time ---------------------------------------------------------------------------------------
 # New mail stays in the Inbox this many hours before it is sorted, so you see it there first.
 # 0 sorts it at once. The background run picks it up once it is old enough.
