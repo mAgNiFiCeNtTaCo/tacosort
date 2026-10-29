@@ -40,6 +40,17 @@ stored in the `company_folders` table. When a company gets a folder, TacoSort's 
 that kind that are still in the category folder are moved in and their move records updated (undo
 still returns them to where they came from).
 
+Unsure mail (`unsure_to_company`, default on): a "stay in the Inbox" decision about machine-sent mail
+carries its best guess (`Decision.guess`, only when the mail has automation markers). A guess of at
+least 0.5 sends it to its company's folder once the company has `company_folder_min` unsure messages
+or already has a folder. The kind is the one most of that company's unsure mail was guessed to be,
+chosen once and stored as category `unsure` in `company_folders`, so all of a company's unsure mail
+lands together. It never goes to a plain category folder.
+
+Waiting time (`hold_hours`, default 0): mail younger than this (IMAP INTERNALDATE, else the Date
+header) is skipped and not marked seen; the watermark stays below it, so a later run sorts it.
+Applies to `run`, `run --backlog` and `preview`.
+
 Config can rename folders, add a parent (`folder_prefix: "TacoSort"` -> `TacoSort/Receipts`), disable
 categories, or add custom ones that user rules target.
 

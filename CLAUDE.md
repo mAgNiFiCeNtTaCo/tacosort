@@ -47,6 +47,7 @@ The owner isn't a programmer: explain in plain words.
   before pausing the task). `tacosort preview` and the read-only scratch scripts never move mail; a real
   `run` needs the owner's OK.
 - `tacosort setup` asks questions: run it in a canvas terminal, not via `!` (no input, and bash eats
-  backslashes in `.venv\Scripts\...`).
+  backslashes in `.venv\Scripts\...`). Typing into that terminal with `nodeterm.sh write` eats
+  backslashes too: send `.venv/Scripts/tacosort.exe setup` (forward slashes work in PowerShell).
 - Real Gmail differs from the fakes: tabs only via X-GM-RAW search. Check a change on the real mailbox
   with `tacosort preview` before telling the owner it works.

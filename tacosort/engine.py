@@ -334,6 +334,8 @@ def run_once(config: AppConfig, store: Store, backends: dict[str, MailBackend], 
         verb = "would move" if dry_run else "moved"
         _say(log, f"Done: looked at {report.scanned} messages, {verb} {report.moved}, left {report.kept} "
                   f"where they were, learned {report.learned} corrections."
+                  + (f" {report.held} new message(s) wait in the Inbox until they are {config.hold_hours} "
+                     "hours old." if report.held else "")
                   + (f" {len(report.errors)} problem(s)." if report.errors else ""))
         for err in report.errors:
             logger.warning(err)
@@ -409,6 +411,7 @@ def _run_folder(config: AppConfig, store: Store, backend: MailBackend, account: 
         last_uid = mark[1]
         candidates = [u for u in backend.search_uids(folder, min_uid=last_uid + 1) if u > last_uid]
     candidates = sorted(set(candidates), reverse=True)        # newest first
+    hold_from = utcnow() - timedelta(hours=config.hold_hours) if config.hold_hours > 0 else None
     done: set[int] = set()
     by_name = {_folder_key(f): f for f in folders.values()}
     untracked = 0
@@ -448,6 +451,10 @@ def _run_folder(config: AppConfig, store: Store, backend: MailBackend, account: 
             if seen is not None and not backlog:
                 done.add(uid)
                 continue
+            arrived = _arrival(m)
+            if hold_from is not None and arrived is not None and arrived > hold_from:
+                report.held += 1    # not done: the watermark stays below it, so a later run sorts it
+                continue
             todo.append(m)
         if not todo:
             continue
@@ -461,13 +468,19 @@ def _run_folder(config: AppConfig, store: Store, backend: MailBackend, account: 
                 break
             report.scanned += 1
             dest = None if d is None else _destination(config, d)
-            sub = companies.folder_for(m, d) if companies is not None and dest else None
+            unsure = d is not None and d.keeps and d.guess is not None
+            sub = companies.folder_for(m, d) if companies is not None and (dest or unsure) else None
             if sub:
                 dest = sub
+                if unsure:
+                    g = d.guess
+                    d = Decision(g.category, g.confidence, g.source,
+                                 f"Not sure enough for a plain folder (best guess {g.category.title()}, "
+                                 f"{round(g.confidence * 100)}% sure), so it went to the company's own folder")
             target = by_name.get(_norm(dest)) if dest else None
             if target is not None:
                 dest = target.name                 # the server's own spelling ("receipts" stays "receipts")
-            if (dest is None or d.confidence < config.min_confidence or _norm(dest) == _norm(folder)
+            if (dest is None or (d.confidence < config.min_confidence and not sub) or _norm(dest) == _norm(folder)
                     or (config.keep_flagged and m.is_flagged)
                     or (target is not None and target.flags & NEVER_TOUCH)):
                 report.kept += 1
@@ -633,6 +646,14 @@ def _tidy_companies(config: AppConfig, store: Store, backend: MailBackend, accou
                 store.mark_company_tidied(account.id, *k)
     if not dry_run:
         _save_companies(store, account.id, companies)
+
+
+def _arrival(msg: Message) -> datetime | None:
+    """When the message arrived: the server's receive time, else its Date header (made aware)."""
+    when = msg.received or msg.date
+    if when is not None and when.tzinfo is None:
+        when = when.astimezone()       # a time without a zone is the computer's local time
+    return when
 
 
 def _same_message(store: Store, account_id: str, msg: Message) -> bool:

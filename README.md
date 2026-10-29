@@ -29,9 +29,14 @@ INBOX (2,341)                            INBOX (37)        <- people, replies, s
 - **One scheme for all your accounts.** Add as many mailboxes as you like; each gets the same folders.
 - **A folder per company.** Once a company has sent you 3 emails of one kind, they get their own
   folder inside it: Promotions/Crunchyroll, Receipts/Google Play, Notifications/GitHub. Mail TacoSort
-  filed before that is moved in too, and new mail follows.
+  filed before that is moved in too, and new mail follows. Automated mail TacoSort can't place for
+  sure (is that eBay email an ad or an alert?) joins its company's folder too, once that company has
+  sent 3 of them, so a busy sender doesn't stay in your Inbox just because its mail is a mix.
+- **Optional waiting time.** With `hold_hours: 24`, new mail stays in the Inbox for a day so you see
+  it there first, then gets sorted.
 - **Keeps your Inbox for people.** Mail from people you've written to, replies, security codes,
-  password resets, sign-in alerts and starred mail always stay in the Inbox.
+  password resets, sign-in alerts, messages a buyer or seller sent you through a marketplace, and
+  starred mail always stay in the Inbox.
 - **Keeps running.** Turn on the background schedule (Windows, macOS, Linux) and new mail is sorted
   every few minutes, or run `tacosort watch` to sort mail the moment it arrives.
 - **Learns.** It copies the folders you already use, and when you move a message somewhere else (or
@@ -214,6 +219,8 @@ categories:
 folder_prefix: TacoSort   # put everything inside one parent: TacoSort/Receipts, TacoSort/Money, ...
 company_folders: no       # no folder per company
 company_folder_min: 5     # or: a company needs 5 emails of a kind first (default 3)
+unsure_to_company: no     # mail TacoSort isn't sure about stays in the Inbox
+hold_hours: 24            # new mail waits in the Inbox for a day before it is sorted (default 0)
 ```
 
 A fully commented example is in [examples/config.example.yaml](examples/config.example.yaml).

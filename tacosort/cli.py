@@ -252,7 +252,7 @@ def do_preview(ctx: Ctx, accounts: list[AccountConfig], limit: int = 50) -> int:
     cfg = ctx.cfg
     store = open_store(cfg)
     moves: list[Any] = []
-    scanned = kept = 0
+    scanned = kept = held = 0
     ok_ids: list[str] = []
     errors: list[str] = []
     try:
@@ -266,6 +266,7 @@ def do_preview(ctx: Ctx, accounts: list[AccountConfig], limit: int = 50) -> int:
             moves.extend(rep.moves)
             scanned += rep.scanned
             kept += rep.kept
+            held += rep.held
             if rep.errors:
                 errors.extend(rep.errors)
             else:
@@ -280,6 +281,8 @@ def do_preview(ctx: Ctx, accounts: list[AccountConfig], limit: int = 50) -> int:
             say(f"...and {len(moves) - limit} more (show more with --limit {len(moves)}).")
         say("")
     say(f"Preview: {len(moves)} of {scanned} messages would be moved into folders; {kept} would stay in the Inbox.")
+    if held:
+        say(f"{held} newer message(s) wait in the Inbox until they are {cfg.hold_hours} hours old, then get sorted.")
     say("Nothing was changed. Every move TacoSort makes can be undone with `tacosort undo`.")
     for e in errors:
         warn(f"Problem: {e}")

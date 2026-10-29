@@ -25,6 +25,7 @@ from .heuristics import (
     bulk_markers,
     heuristic_decision,
     is_account_confirmation,
+    is_platform_message,
     is_security_message,
     list_id_of,
     looks_personal,
@@ -96,7 +97,7 @@ class Classifier:
                 elif guesses[i] is None or ans.confidence > guesses[i].confidence:
                     guesses[i] = ans
 
-        return [r if r is not None else self._default(guesses[i]) for i, r in enumerate(results)]
+        return [r if r is not None else self._default(guesses[i], msgs[i]) for i, r in enumerate(results)]
 
     # ---- steps ---------------------------------------------------------------------------------
     def _before_ai(self, msg: Message) -> tuple[Decision | None, Decision | None]:
@@ -114,6 +115,10 @@ class Classifier:
         phrase = is_security_message(msg) or is_account_confirmation(msg)
         if phrase:
             return Decision(INBOX, 1.0, "guard", f'Security or account message ("{phrase}"): stays in the Inbox'), None
+        phrase = is_platform_message(msg)
+        if phrase:
+            return Decision(INBOX, 1.0, "guard",
+                            f'A person writing through a website ("{phrase}"): stays in the Inbox'), None
 
         guess: Decision | None = None
         learned = self._learned(msg)
@@ -185,14 +190,17 @@ class Classifier:
                             f"{d.reason} -> the {d.category} category is turned off, so it stays in the Inbox")
         return d
 
-    def _default(self, guess: Decision | None) -> Decision:
+    def _default(self, guess: Decision | None, msg: Message) -> Decision:
         if guess is None:
             return Decision(INBOX, 0.0, "default", "No rule or pattern matched, so it stays in the Inbox")
         if guess.category == INBOX and not guess.folder:
             return Decision(INBOX, guess.confidence, "default", f"Probably personal ({guess.reason})")
         where = guess.folder or guess.category.title()
+        # Only a category guess about machine-sent mail may still follow its company (companies.py).
+        keep_guess = not guess.folder and guess.category != "folder" and not looks_personal(msg)
         return Decision(
             INBOX, guess.confidence, "default",
             f"Not sure enough to move it (best guess {where}, {round(guess.confidence * 100)}% sure), "
             "so it stays in the Inbox",
+            guess=guess if keep_guess else None,
         )

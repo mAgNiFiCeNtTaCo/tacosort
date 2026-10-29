@@ -60,6 +60,7 @@ class Message:
     cc: list[Address] = field(default_factory=list)
     reply_to: Address | None = None
     date: datetime | None = None
+    received: datetime | None = None  # when the server got it (IMAP INTERNALDATE)
     headers: dict[str, str] = field(default_factory=dict)   # lower-case header name -> decoded value
     flags: frozenset[str] = frozenset()                     # e.g. {"\\Seen", "\\Flagged"}
     gmail_labels: frozenset[str] = frozenset()              # Gmail only (X-GM-LABELS)
@@ -93,6 +94,9 @@ class Decision:
     # TacoSort sorted). Rules guessed from existing folders are False: they may not move mail that
     # looks written by a person.
     explicit: bool = False
+    # For an unsure "stay in the Inbox" decision about machine-sent mail: the best guess, which may
+    # still send it to its company's own folder (companies.py).
+    guess: Decision | None = None
 
     @property
     def keeps(self) -> bool:
@@ -187,6 +191,8 @@ class AppConfig:
     max_moves_per_run: int = 500          # safety cap per account per run
     company_folders: bool = True          # a sub-folder per company ("Promotions/Crunchyroll")...
     company_folder_min: int = 3           # ...once it has sent this many messages of that kind
+    unsure_to_company: bool = True        # machine-sent mail TacoSort isn't sure about may join its company's folder
+    hold_hours: int = 0                   # new mail stays in the Inbox this long before it is sorted
     learn_sample: int = 300               # messages read per folder when learning the user's scheme
     data_dir: str = ""                    # "" = platform default
 
@@ -238,6 +244,7 @@ class RunReport:
     moves: list[MoveRecord] = field(default_factory=list)    # planned moves when dry_run
     errors: list[str] = field(default_factory=list)          # per-account problems, plain English
     skipped: bool = False                 # another run held the lock; nothing was done (not an error)
+    held: int = 0                         # new mail left in the Inbox until it is hold_hours old
 
 
 @dataclass

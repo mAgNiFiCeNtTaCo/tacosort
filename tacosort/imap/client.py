@@ -158,6 +158,13 @@ def _parse_date(value: str, internal: object) -> datetime | None:
     return internal if isinstance(internal, datetime) else None
 
 
+def _received(internal: object) -> datetime | None:
+    """INTERNALDATE as an aware time (IMAPClient gives the computer's local time without a zone)."""
+    if not isinstance(internal, datetime):
+        return None
+    return internal if internal.tzinfo else internal.astimezone()
+
+
 def _strip_html(text: str) -> str:
     text = re.sub(r"(?is)<(script|style|head)\b.*?</\1>", " ", text)
     text = re.sub(r"(?s)<!--.*?-->", " ", text)
@@ -611,6 +618,7 @@ class ImapBackend:
             cc=parse_addresses(raw.get("cc")),
             reply_to=reply_to[0] if reply_to else None,
             date=_parse_date(headers.get("date", ""), row.get(b"INTERNALDATE")),
+            received=_received(row.get(b"INTERNALDATE")),
             headers=headers,
             flags=frozenset(_text(f) for f in row.get(b"FLAGS", ())),
             gmail_labels=frozenset(_label(lb) for lb in labels),

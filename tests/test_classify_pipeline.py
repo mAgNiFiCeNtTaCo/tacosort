@@ -320,3 +320,17 @@ def test_ai_move_for_personal_mail_is_refused_even_if_returned(monkeypatch):
     d = Classifier(cfg(ai=AIConfig(enabled=True)), ai=ai).classify(
         make_message("landlord@example.com", "Rent for November"))
     assert len(ai.seen) == 1 and d.keeps
+
+
+def test_unsure_machine_mail_keeps_its_guess_but_personal_mail_does_not():
+    d = Classifier(cfg(min_confidence=0.999)).classify(receipt(headers=UNSUB))
+    assert d.keeps and d.guess is not None and d.guess.category == "receipts"
+    learned = FakeLearned(Decision("travel", 0.7, "learned", "you moved one", explicit=True))
+    d = Classifier(cfg(), learned=learned).classify(make_message("friend@example.com", "Trip photos"))
+    assert d.keeps and d.guess is None
+
+
+def test_a_person_writing_through_a_marketplace_stays():
+    m = make_message("tcgzen@tcgplayer.com", "TCGplayer.com: Message from Buyer for Order: 2EA1D8CE", headers=UNSUB)
+    d = Classifier(cfg()).classify(m)
+    assert d.keeps and d.source == "guard" and "message from buyer" in d.reason

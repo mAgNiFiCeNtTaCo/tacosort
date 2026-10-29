@@ -328,6 +328,10 @@ def config_from_dict(data: Any, warnings: list[str] | None = None) -> AppConfig:
         cfg.company_folders = _to_bool(data["company_folders"], "company_folders")
     if "company_folder_min" in data:
         cfg.company_folder_min = _to_int(data["company_folder_min"], "company_folder_min")
+    if "unsure_to_company" in data:
+        cfg.unsure_to_company = _to_bool(data["unsure_to_company"], "unsure_to_company")
+    if "hold_hours" in data:
+        cfg.hold_hours = _to_int(data["hold_hours"], "hold_hours")
     if "data_dir" in data:
         cfg.data_dir = str(data["data_dir"] or "")
     return cfg
@@ -414,6 +418,8 @@ def config_to_dict(cfg: AppConfig) -> dict:
         "max_moves_per_run": cfg.max_moves_per_run,
         "company_folders": cfg.company_folders,
         "company_folder_min": cfg.company_folder_min,
+        "unsure_to_company": cfg.unsure_to_company,
+        "hold_hours": cfg.hold_hours,
         "ai": {
             "enabled": cfg.ai.enabled,
             "model": cfg.ai.model,
@@ -532,6 +538,9 @@ def config_problems(cfg: AppConfig) -> list[str]:
     if cfg.company_folder_min < 1:
         problems.append("company_folder_min must be at least 1 (3 is a good value); use company_folders: no "
                         "to turn company folders off.")
+    if not 0 <= cfg.hold_hours <= 720:
+        problems.append("hold_hours must be between 0 (sort at once) and 720 (30 days); 24 keeps new mail "
+                        "in the Inbox for a day.")
     if cfg.ai.max_per_run < 0:
         problems.append("ai: max_per_run can't be negative.")
     ids = {a.id for a in cfg.accounts}

@@ -79,6 +79,8 @@ def test_company_key_is_the_registrable_domain(email, key):
     ("Anthropic, PBC", "anthropic.com", "Anthropic"),
     ("GitHub Notifications", "github.com", "GitHub"),
     ("Samsung US", "samsungusa.com", "Samsung US"),
+    ("Kilian (TCGplayer)", "tcgplayer.com", "TCGplayer"),            # a person at the company
+    ("Kilian (Support)", "tcgplayer.com", None),
     ("Ruben's Big Deals", "playfame.com", None),          # not clearly the company: domain name instead
     ("noreply@playfame.com", "playfame.com", None),
     ("", "playfame.com", None),
@@ -200,3 +202,70 @@ def test_gmail_nested_labels(store):
         b.add("INBOX", anime(i))
     run(cfg(), store, b)
     assert len(b.messages("Promotions/Crunchyroll")) == 3 and b.messages("INBOX") == []
+
+
+# ---- mail TacoSort isn't sure about ------------------------------------------------------------
+class Unsure(ByCompany):
+    """Knows the kind only roughly: every non-Inbox answer comes back as an unsure guess."""
+    sure = 0.6
+
+    def classify(self, msg):
+        d = super().classify(msg)
+        if d.category == INBOX:
+            return d
+        return Decision(INBOX, self.sure, "default", "Not sure enough to move it",
+                        guess=Decision(d.category, self.sure, "heuristic", "a rough guess"))
+
+
+def test_unsure_mail_joins_its_company_folder(store):
+    b = FakeBackend("a")
+    for i in range(3):
+        b.add("INBOX", anime(i))
+    for i in range(2):
+        b.add("INBOX", play(i))
+    rep = run(cfg(), store, b, classifier=Unsure)
+    assert len(b.messages("Promotions/Crunchyroll")) == 3
+    assert len(b.messages("INBOX")) == 2                         # only two from Google Play: they stay
+    assert not has(b, "Promotions") or b.messages("Promotions") == []
+    assert all("company's own folder" in m.reason for m in rep.moves)
+
+
+def test_unsure_mail_joins_a_folder_the_company_already_has(store):
+    b = FakeBackend("a")
+    for i in range(3):
+        b.add("INBOX", anime(i))
+    run(cfg(), store, b)                                         # sure: makes Promotions/Crunchyroll
+    b.add("INBOX", anime(7))
+    run(cfg(), store, b, classifier=Unsure, backlog=False)
+    assert "Anime pick 7" in b.subjects("Promotions/Crunchyroll")
+
+
+@pytest.mark.parametrize("kw,sure", [({"unsure_to_company": False}, 0.6), ({}, 0.4)])
+def test_unsure_mail_stays_when_turned_off_or_too_unsure(store, kw, sure):
+    class VeryUnsure(Unsure):
+        pass
+    VeryUnsure.sure = sure
+    b = FakeBackend("a")
+    for i in range(4):
+        b.add("INBOX", anime(i))
+    run(cfg(**kw), store, b, classifier=VeryUnsure)
+    assert len(b.messages("INBOX")) == 4
+
+
+def test_a_company_s_unsure_mail_stays_together(store):
+    class Mixed(ByCompany):
+        """Guesses differ for the same kind of mail (as real Gmail tabs do)."""
+        def classify(self, msg):
+            if company_key(msg.from_.email) != "crunchyroll.com":
+                return super().classify(msg)
+            cat = "notifications" if msg.subject.endswith(("0", "1")) else "promotions"
+            return Decision(INBOX, 0.6, "default", "Not sure", guess=Decision(cat, 0.6, "heuristic", "guess"))
+
+    b = FakeBackend("a")
+    for i in range(5):
+        b.add("INBOX", anime(i))
+    run(cfg(), store, b, classifier=Mixed)
+    assert len(b.messages("Promotions/Crunchyroll")) == 5 and not has(b, "Notifications/Crunchyroll")
+    b.add("INBOX", anime(10))                                    # a "notifications" guess, later on
+    run(cfg(), store, b, classifier=Mixed, backlog=False)
+    assert "Anime pick 10" in b.subjects("Promotions/Crunchyroll")

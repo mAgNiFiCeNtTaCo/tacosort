@@ -222,6 +222,7 @@ SECURITY_PHRASES = (
     "oauth application", "third-party application", "third-party app", "authorized application",
     "was added to your account", "has been added to your account", "new ssh key", "ssh key was added",
     "personal access token", "google account data", "access to your google account",
+    "passkey",
 )
 # "Verify your email address" / "confirm your account" mail stays in the Inbox too: the person just
 # signed up somewhere and is waiting for it, and the link usually expires.
@@ -232,8 +233,18 @@ ACCOUNT_CONFIRM_PHRASES = (
     "confirm your sign-up", "confirm your signup", "confirm your subscription",
     "activate your account", "email verification", "e-mail verification", "email confirmation",
     "confirm email address", "email address verification", "e-mail address verification",
+    "we need more information", "action required on your account",
     "e-mail-adresse bestätigen", "bestätigen sie ihre e-mail",
     "konto aktivieren", "confirmez votre adresse", "confirma tu correo", "verifica tu correo",
+)
+# A person writing through a marketplace or app ("Message from Buyer for Order ..."): someone waits
+# for an answer, so it stays in the Inbox even though a robot address delivered it.
+PLATFORM_MESSAGE_PHRASES = (
+    "message from buyer", "message from a buyer", "message from the buyer", "message from seller",
+    "message from a seller", "message from the seller", "sent you a message", "you have a new message",
+    "you've got a new message", "new message from", "replied to your message", "question from a buyer",
+    "question about your item", "question about your listing", "asked a question", "has a question",
+    "sent a question",
 )
 _SECURITY_CODE_IN_SUBJECT = re.compile(r"(?<!\d)\d{4,8}(?!\d).{0,40}\bcode\b|\bcode\b.{0,40}(?<!\d)\d{4,8}(?!\d)",
                                        re.IGNORECASE)
@@ -291,6 +302,7 @@ def _phrase_regex(phrase: str) -> re.Pattern[str]:
 _KEYWORD_PATTERNS = [(cat, w, [(p, _phrase_regex(p)) for p in phrases]) for cat, w, phrases in KEYWORDS]
 _SECURITY_PATTERNS = [(p, _phrase_regex(p)) for p in SECURITY_PHRASES]
 _CONFIRM_PATTERNS = [(p, _phrase_regex(p)) for p in ACCOUNT_CONFIRM_PHRASES]
+_PLATFORM_PATTERNS = [(p, _phrase_regex(p)) for p in PLATFORM_MESSAGE_PHRASES]
 _ALL_DOMAINS = tuple(d for _, domains in DOMAINS.values() for d in domains)
 
 
@@ -398,6 +410,15 @@ def is_account_confirmation(msg: Message) -> str | None:
         for phrase, rx in _CONFIRM_PATTERNS:
             if rx.search(snippet):
                 return phrase
+    return None
+
+
+def is_platform_message(msg: Message) -> str | None:
+    """The phrase that makes this a person's message relayed by a site ("message from buyer")."""
+    subject = msg.subject.lower()
+    for phrase, rx in _PLATFORM_PATTERNS:
+        if rx.search(subject):
+            return phrase
     return None
 
 

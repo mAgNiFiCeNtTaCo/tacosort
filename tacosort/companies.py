@@ -43,6 +43,12 @@ KNOWN_NAMES = {
     "discord.com": "Discord", "nintendo.com": "Nintendo", "xbox.com": "Xbox", "samsungusa.com": "Samsung",
 }
 MAX_NAME = 40
+# An unsure guess at least this sure may send machine-sent mail to its company's folder: that the
+# company sends a lot of it is the extra evidence the plain category folder lacks.
+GUESS_FLOOR = 0.5
+# The company_folders key for where a company's unsure mail goes: one folder per company, chosen once,
+# so two copies of the same email never end up in different folders because the guesses differed.
+UNSURE = "unsure"
 
 
 def company_key(email: str) -> str:
@@ -63,6 +69,10 @@ def clean_name(display: str, key: str) -> str | None:
     """A folder-friendly company name from a display name, or None when the name doesn't clearly belong
     to the sender's domain (a person's name, a campaign slogan...)."""
     name = display.strip().strip("\"'")
+    paren = re.match(r"^(.*?)\s*\(([^()]*)\)\s*$", name)
+    if paren:
+        # "Kilian (TCGplayer)": a person at a company. The part in brackets names the company.
+        return clean_name(paren.group(2), key) or clean_name(paren.group(1), key)
     name = re.split(r"\s+via\s+|\s*[|,]\s*|\s+-\s+|\s+–\s+", name, maxsplit=1)[0].strip()
     words = [w for w in name.split() if w.lower().strip(".") not in _GENERIC_WORDS]
     name = " ".join(words).strip(" .-_")
@@ -109,6 +119,7 @@ class CompanyFolders:
         self.assigned = dict(assigned)
         self.counts = Counter(counts)
         self.names: dict[tuple[str, str], list[str]] = {}
+        self.votes: dict[str, Counter[str]] = {}       # company -> guessed kinds of its unsure mail
         self.new: list[tuple[str, str, str]] = []
 
     @property
@@ -116,9 +127,15 @@ class CompanyFolders:
         return self.config.company_folders and self.config.company_folder_min > 0
 
     def _eligible(self, msg: Message, d: Decision | None) -> tuple[str, str] | None:
-        if not self.enabled or d is None or d.folder or d.explicit or d.category in (INBOX, "folder"):
+        if not self.enabled or d is None:
             return None
-        if not self.config.folder_for(d.category) or d.confidence < self.config.min_confidence:
+        if d.keeps:
+            if not self.config.unsure_to_company or d.guess is None or d.guess.confidence < GUESS_FLOOR:
+                return None
+            d = d.guess
+        elif d.confidence < self.config.min_confidence:
+            return None
+        if d.folder or d.explicit or d.category in (INBOX, "folder") or not self.config.folder_for(d.category):
             return None
         key = company_key(msg.from_.email)
         return (d.category, key) if key else None
@@ -128,16 +145,23 @@ class CompanyFolders:
         threshold inside this batch gets its folder for the whole batch."""
         for msg, d in items:
             k = self._eligible(msg, d)
-            if k is None or k in self.assigned:
+            if k is None:
+                continue
+            if d.keeps:
+                self.votes.setdefault(k[1], Counter())[k[0]] += 1
+            if k in self.assigned:
                 continue
             self.counts[k] += 1
             self.names.setdefault(k, []).append(msg.from_.name)
 
     def folder_for(self, msg: Message, d: Decision | None) -> str | None:
-        """The company sub-folder this message should go to, or None for the plain category folder."""
+        """The company sub-folder this message should go to, or None for the plain category folder
+        (for an unsure decision, None means it stays in the Inbox)."""
         k = self._eligible(msg, d)
         if k is None:
             return None
+        if d.keeps:
+            return self._unsure_folder(k[1])
         if k not in self.assigned:
             if self.counts[k] < self.config.company_folder_min:
                 return None
@@ -146,3 +170,24 @@ class CompanyFolders:
             self.assigned[k] = sub
             self.new.append((k[0], k[1], sub))
         return self.assigned[k]
+
+    def _unsure_folder(self, company: str) -> str | None:
+        """Where a company's unsure mail goes: the folder of the kind most of it was guessed to be,
+        once the company has `company_folder_min` unsure messages or already has a folder."""
+        u = (UNSURE, company)
+        if u in self.assigned:
+            return self.assigned[u]
+        votes = self.votes.get(company, Counter())
+        has_folder = any(co == company for _cat, co in self.assigned)
+        if not votes or (sum(votes.values()) < self.config.company_folder_min and not has_folder):
+            return None
+        # Most votes wins; on a tie, a kind the company already has a folder for, then by name.
+        cat = min(votes, key=lambda c: (-votes[c], (c, company) not in self.assigned, c))
+        k = (cat, company)
+        if k not in self.assigned:
+            names = [n for (c, co), ns in self.names.items() if co == company for n in ns]
+            self.assigned[k] = f"{self.config.folder_for(cat)}/{pick_name(names, company)}"
+            self.new.append((cat, company, self.assigned[k]))
+        self.assigned[u] = self.assigned[k]
+        self.new.append((UNSURE, company, self.assigned[k]))
+        return self.assigned[u]

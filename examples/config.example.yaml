@@ -86,6 +86,15 @@ max_moves_per_run: 500            # safety cap per account per run
 # folder (Promotions/Crunchyroll). Mail TacoSort filed earlier is moved in; your own rules are not.
 company_folders: yes
 company_folder_min: 3
+# Automated mail TacoSort isn't sure about (an eBay email that could be an ad or an alert) goes to its
+# company's folder once that company has sent company_folder_min of them. All of one company's unsure
+# mail goes to the same folder. Mail that may be from a person is never moved this way.
+unsure_to_company: yes
+
+# ---- Waiting time ---------------------------------------------------------------------------------------
+# New mail stays in the Inbox this many hours before it is sorted, so you see it there first.
+# 0 sorts it at once. The background run picks it up once it is old enough.
+hold_hours: 0
 
 # ---- Background schedule ----------------------------------------------------------------------------
 interval_minutes: 15              # used by `tacosort schedule on`
