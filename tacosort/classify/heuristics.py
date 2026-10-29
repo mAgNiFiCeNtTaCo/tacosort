@@ -302,6 +302,9 @@ def _phrase_regex(phrase: str) -> re.Pattern[str]:
 _KEYWORD_PATTERNS = [(cat, w, [(p, _phrase_regex(p)) for p in phrases]) for cat, w, phrases in KEYWORDS]
 _SECURITY_PATTERNS = [(p, _phrase_regex(p)) for p in SECURITY_PHRASES]
 _CONFIRM_PATTERNS = [(p, _phrase_regex(p)) for p in ACCOUNT_CONFIRM_PHRASES]
+# "Confirm your TCGplayer account", "Verify your Carrd account": the same with a brand in the middle.
+_CONFIRM_PATTERNS.append(("confirm your account",
+                          re.compile(r"\b(?:confirm|verify|activate) your [\w.-]+ (?:account|email)\b")))
 _PLATFORM_PATTERNS = [(p, _phrase_regex(p)) for p in PLATFORM_MESSAGE_PHRASES]
 _ALL_DOMAINS = tuple(d for _, domains in DOMAINS.values() for d in domains)
 
@@ -420,6 +423,19 @@ def is_platform_message(msg: Message) -> str | None:
         if rx.search(subject):
             return phrase
     return None
+
+
+LOOK_ALIKE_WORDS = 5
+
+
+def subject_template(subject: str) -> str:
+    """The first words of a subject, numbers blanked, so look-alike emails share it
+    ("Your TCGplayer.com items of D.D. Crow have sold" -> "your tcgplayer com items of").
+    "" when the subject is too short to tell anything."""
+    s = re.sub(r"^\s*((re|fw|fwd|aw|sv)\s*:\s*)+", "", subject.lower())
+    # "$2,750.99" and "19.95" are one number each, so price-drop emails still look alike.
+    words = ["#" if w[0].isdigit() else w for w in re.findall(r"\d[\d,.]*\d|\d|[^\W\d_]+", s)]
+    return " ".join(words[:LOOK_ALIKE_WORDS]) if len(words) >= 2 else ""
 
 
 def is_calendar_invite(msg: Message) -> bool:

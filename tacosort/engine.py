@@ -14,6 +14,7 @@ stops after `max_moves_per_run` moves per account. Only one run works at a time 
 from __future__ import annotations
 
 import contextlib
+import inspect
 import logging
 import logging.handlers
 import os
@@ -27,7 +28,8 @@ from pathlib import Path
 
 from . import learner
 from .backend import BackendError, MailBackend
-from .companies import CompanyFolders, company_key, pick_name
+from .classify.heuristics import subject_template
+from .companies import GUESS_FLOOR, CompanyFolders, company_key, pick_name
 from .models import (
     INBOX,
     AccountConfig,
@@ -46,6 +48,8 @@ logger = logging.getLogger("tacosort")
 Log = Callable[[str], None]
 
 BATCH = 200                    # messages fetched and classified at a time
+RECHECK_INBOX_EVERY = timedelta(days=1)   # how often mail left in the Inbox is looked at again
+RECHECK_MAX = 2000             # newest messages looked at in such a re-check
 CONTACTS_EVERY = timedelta(days=1)   # how often the people you write to are re-read from Sent
 IDLE_SECONDS = 25 * 60         # servers drop IDLE after ~29 minutes
 MIN_CYCLE_SECONDS = 30         # never loop faster than this when nothing happened
@@ -229,10 +233,29 @@ def _make_ai(config: AppConfig, log: Log):
         return None
 
 
-def _classify(clf, msgs: list[Message]) -> list[Decision]:
+def _classify(clf, msgs: list[Message], repeated: set[str] | None = None) -> list[Decision]:
     if hasattr(clf, "classify_many"):
+        if repeated and "repeated" in inspect.signature(clf.classify_many).parameters:
+            return list(clf.classify_many(msgs, repeated=repeated))
         return list(clf.classify_many(msgs))
     return [clf.classify(m) for m in msgs]
+
+
+def _look_alikes(config: AppConfig, store: Store, account_id: str, msgs: list[Message]) -> set[str]:
+    """Message-IDs of emails whose address has sent `look_alike_min` or more with the same subject
+    template, or twice that many emails of any kind (a person you never wrote back to doesn't send you
+    10 emails; a shop's sales@ address does). Every message read is remembered (also by a preview: it
+    is memory, not mail)."""
+    if config.look_alike_min <= 0:
+        return set()
+    rows = [(m.message_id, m.from_.email.lower(), subject_template(m.subject))
+            for m in msgs if m.message_id and m.from_.email]
+    rows = [r for r in rows if r[2]]
+    store.note_look_alikes(account_id, rows)
+    counts = store.look_alike_counts(account_id, {(s, t) for _, s, t in rows})
+    per_sender = store.look_alike_sender_counts(account_id, {s for _, s, _ in rows})
+    return {mid for mid, s, t in rows
+            if counts.get((s, t), 0) >= config.look_alike_min or per_sender.get(s, 0) >= 2 * config.look_alike_min}
 
 
 def _norm(name: str) -> str:
@@ -355,6 +378,10 @@ def _run_account(config: AppConfig, store: Store, backend: MailBackend, account:
     dest_cache: dict[str, str] = {}
     moves_left = [config.max_moves_per_run]
     companies = _company_planner(config, store, account.id)
+    recheck_key = f"recheck:{account.id}"
+    last = store.get_meta(recheck_key)
+    recheck = (not backlog and config.recheck_inbox
+               and (last is None or utcnow() - datetime.fromisoformat(last) >= RECHECK_INBOX_EVERY))
     for folder in account.watch_folders:
         info = _find_folder(folders, folder)
         if info is None:
@@ -365,9 +392,12 @@ def _run_account(config: AppConfig, store: Store, backend: MailBackend, account:
                                  "TacoSort never sorts it, so it was skipped.")
             continue
         _run_folder(config, store, backend, account, info.name, folders, clf, report, dest_cache, moves_left,
-                    dry_run=dry_run, backlog=backlog, log=log, config_name=folder, companies=companies)
+                    dry_run=dry_run, backlog=backlog, log=log, config_name=folder, companies=companies,
+                    recheck=recheck)
         if moves_left[0] <= 0:
             break
+    if (recheck or backlog) and not dry_run:      # a backlog run looked at everything too
+        store.set_meta(recheck_key, utcnow().isoformat())
     if moves_left[0] > 0:
         _tidy_companies(config, store, backend, account, folders, companies, report, dest_cache, moves_left,
                         dry_run=dry_run, log=log)
@@ -384,7 +414,10 @@ def _destination(config: AppConfig, decision: Decision) -> str | None:
 def _run_folder(config: AppConfig, store: Store, backend: MailBackend, account: AccountConfig, folder: str,
                 folders: dict[str, FolderInfo], clf, report: RunReport, dest_cache: dict[str, str],
                 moves_left: list[int], *, dry_run: bool, backlog: bool, log: Log,
-                config_name: str = "", companies: CompanyFolders | None = None) -> None:
+                config_name: str = "", companies: CompanyFolders | None = None, recheck: bool = False) -> None:
+    """Sort one folder. `backlog` looks at everything there; `recheck` looks again at the mail TacoSort
+    left there before (what it learned since may place it now) plus new mail, never at mail that was
+    there before TacoSort's first look."""
     state = backend.folder_state(folder)
     mark = store.get_watermark(account.id, folder)
     legacy = False
@@ -407,6 +440,8 @@ def _run_folder(config: AppConfig, store: Store, backend: MailBackend, account: 
         return
     if backlog:
         candidates = backend.search_uids(folder)
+    elif recheck:
+        candidates = sorted(backend.search_uids(folder), reverse=True)[:RECHECK_MAX]
     else:
         last_uid = mark[1]
         candidates = [u for u in backend.search_uids(folder, min_uid=last_uid + 1) if u > last_uid]
@@ -448,7 +483,10 @@ def _run_folder(config: AppConfig, store: Store, backend: MailBackend, account: 
                     done.add(uid)
                     continue
                 seen = None                # a different message reusing the Message-ID: sort it as new mail
-            if seen is not None and not backlog:
+            if recheck and seen is None and uid <= mark[1]:
+                done.add(uid)              # there before TacoSort's first look: only --backlog sorts it
+                continue
+            if seen is not None and not backlog and not (recheck and seen.decision == INBOX):
                 done.add(uid)
                 continue
             arrived = _arrival(m)
@@ -458,7 +496,7 @@ def _run_folder(config: AppConfig, store: Store, backend: MailBackend, account: 
             todo.append(m)
         if not todo:
             continue
-        decisions = _classify(clf, todo)
+        decisions = _classify(clf, todo, _look_alikes(config, store, account.id, todo))
         if companies is not None:
             companies.note((m, d) for m, d in zip(todo, decisions)
                            if not (config.keep_flagged and m.is_flagged))
@@ -477,6 +515,14 @@ def _run_folder(config: AppConfig, store: Store, backend: MailBackend, account: 
                     d = Decision(g.category, g.confidence, g.source,
                                  f"Not sure enough for a plain folder (best guess {g.category.title()}, "
                                  f"{round(g.confidence * 100)}% sure), so it went to the company's own folder")
+            elif unsure and config.unsure_to_folder and d.guess.confidence >= GUESS_FLOOR:
+                g = d.guess
+                sub = _destination(config, g)        # no company folder (yet): the plain folder of the guess
+                if sub:
+                    dest = sub
+                    d = Decision(g.category, g.confidence, g.source,
+                                 f"Not sure (best guess {g.category.title()}, {round(g.confidence * 100)}% "
+                                 "sure), but sent by a robot, so it went there (unsure_to_folder)")
             target = by_name.get(_norm(dest)) if dest else None
             if target is not None:
                 dest = target.name                 # the server's own spelling ("receipts" stays "receipts")

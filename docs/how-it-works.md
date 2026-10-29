@@ -12,12 +12,14 @@ Every run (from the schedule, `tacosort run` or `tacosort watch`) does this for 
    The very first run starts counting from that moment: mail already in your Inbox is sorted only
    with `tacosort run --backlog`, or when you answer yes to "Sort now?" in `tacosort setup`.
    With `hold_hours` set, mail younger than that is left alone for now and looked at again later.
+   Once a day it also looks again at the mail it left in the Inbox before (`recheck_inbox`).
 4. **Decide** where each message belongs (see *How a decision is made*).
 5. **Move** the messages that belong in a folder, creating the folder the first time it's needed.
    A company with 3 or more emails of one kind goes into its own folder inside it
    (`Promotions/Crunchyroll`); when a company first gets one, the mail TacoSort filed for it earlier
    is moved in too. Automated mail it isn't sure about goes to its company's folder as well, once
    that company has sent 3 such emails (all of one company's unsure mail to the same folder).
+   An address that keeps sending look-alike emails counts as a robot even when the emails look plain.
    It moves at most `max_moves_per_run` (500) per account per run, as a safety cap.
 6. **Write down** every move in its memory, so `undo`, `status` and `report` can show and reverse it.
 

@@ -32,6 +32,10 @@ INBOX (2,341)                            INBOX (37)        <- people, replies, s
   filed before that is moved in too, and new mail follows. Automated mail TacoSort can't place for
   sure (is that eBay email an ad or an alert?) joins its company's folder too, once that company has
   sent 3 of them, so a busy sender doesn't stay in your Inbox just because its mail is a mix.
+- **Learns from repetition.** When one address keeps sending the same kind of email (5 "your items
+  have sold" emails, or 10 emails of any kind), TacoSort treats it as a robot even if the emails look
+  plain, and files them with that company's other mail. Once a day it looks again at the mail it left
+  in your Inbox, so what it learned since applies to older mail too.
 - **Optional waiting time.** With `hold_hours: 24`, new mail stays in the Inbox for a day so you see
   it there first, then gets sorted.
 - **Keeps your Inbox for people.** Mail from people you've written to, replies, security codes,
@@ -221,6 +225,9 @@ company_folders: no       # no folder per company
 company_folder_min: 5     # or: a company needs 5 emails of a kind first (default 3)
 unsure_to_company: no     # mail TacoSort isn't sure about stays in the Inbox
 hold_hours: 24            # new mail waits in the Inbox for a day before it is sorted (default 0)
+unsure_to_folder: yes     # robot mail TacoSort isn't sure about goes to its best guess (default no)
+look_alike_min: 0         # don't treat repeated look-alike emails as robot mail (default 5)
+recheck_inbox: no         # don't look at mail left in the Inbox again each day (default yes)
 ```
 
 A fully commented example is in [examples/config.example.yaml](examples/config.example.yaml).

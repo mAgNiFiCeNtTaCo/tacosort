@@ -47,6 +47,19 @@ or already has a folder. The kind is the one most of that company's unsure mail 
 chosen once and stored as category `unsure` in `company_folders`, so all of a company's unsure mail
 lands together. It never goes to a plain category folder.
 
+Look-alikes (`look_alike_min`, default 5; table `look_alikes`): every message read is remembered by
+sender and subject template (first 5 words, numbers blanked). An address with `look_alike_min` messages
+of one template, or twice that many in all, counts as a robot: its unsure mail gets a guess (else
+Notifications at 0.5) even without automation markers, so it can follow its company. Guards (contacts,
+replies, security, platform messages) come first and are never affected.
+
+Robot one-offs (`unsure_to_folder`, default off): an unsure guess of at least 0.5 about machine-sent
+mail whose company has no folder goes to the guess's plain category folder.
+
+Daily re-check (`recheck_inbox`, default on): once a day (or after a `--backlog` run) a plain run also
+re-classifies mail it kept in the Inbox before (newest 2000), never mail that was there before its
+first look.
+
 Waiting time (`hold_hours`, default 0): mail younger than this (IMAP INTERNALDATE, else the Date
 header) is skipped and not marked seen; the watermark stays below it, so a later run sorts it.
 Applies to `run`, `run --backlog` and `preview`.

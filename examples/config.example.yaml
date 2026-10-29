@@ -90,6 +90,17 @@ company_folder_min: 3
 # company's folder once that company has sent company_folder_min of them. All of one company's unsure
 # mail goes to the same folder. Mail that may be from a person is never moved this way.
 unsure_to_company: yes
+# Robot mail TacoSort isn't sure about and whose company has no folder yet: yes = file it under the best
+# guess anyway (fewer emails in the Inbox, a few more in the wrong folder), no = leave it in the Inbox.
+unsure_to_folder: no
+
+# ---- Learning from repetition ------------------------------------------------------------------------
+# One address sending this many look-alike emails (same first words, numbers aside), or twice as many
+# of any kind, is a robot even when its emails carry no robot markers. 0 turns this off.
+look_alike_min: 5
+# Once a day, look again at the mail TacoSort left in the Inbox, so new folders and what it learned
+# since apply to it. Mail that was there before TacoSort's first run is still only sorted by --backlog.
+recheck_inbox: yes
 
 # ---- Waiting time ---------------------------------------------------------------------------------------
 # New mail stays in the Inbox this many hours before it is sorted, so you see it there first.

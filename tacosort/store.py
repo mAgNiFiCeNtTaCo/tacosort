@@ -24,7 +24,7 @@ from pathlib import Path
 from .models import INBOX, Decision, MoveRecord, RunReport
 
 # Bump when MIGRATIONS gets a new entry. Each entry upgrades the file from the previous version.
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 MIGRATIONS: dict[int, list[str]] = {
     1: [
@@ -111,6 +111,19 @@ MIGRATIONS: dict[int, list[str]] = {
             tidied INTEGER NOT NULL DEFAULT 0,
             PRIMARY KEY (account, category, company)
         )""",
+    ],
+    4: [
+        # Each message TacoSort has read, by sender and subject template, to spot look-alike emails
+        # ("Your TCGplayer.com items of ... have sold" over and over: a robot, whatever its headers say).
+        """CREATE TABLE look_alikes (
+            account TEXT NOT NULL,
+            message_id TEXT NOT NULL,
+            sender TEXT NOT NULL,
+            template TEXT NOT NULL,
+            added TEXT NOT NULL,
+            PRIMARY KEY (account, message_id)
+        )""",
+        "CREATE INDEX look_alikes_by_template ON look_alikes (account, sender, template)",
     ],
 }
 
@@ -521,6 +534,29 @@ class Store:
         with self._tx() as c:
             c.execute("INSERT OR IGNORE INTO company_folders (account, category, company, folder, created) "
                       "VALUES (?, ?, ?, ?, ?)", (account, category, company, folder, _ts(utcnow())))
+
+    def note_look_alikes(self, account: str, rows: list[tuple[str, str, str]]) -> None:
+        """Remember (message_id, sender, subject template) of messages read; repeats are ignored."""
+        if not rows:
+            return
+        now = _ts(utcnow())
+        with self._tx() as c:
+            c.executemany("INSERT OR IGNORE INTO look_alikes (account, message_id, sender, template, added) "
+                          "VALUES (?, ?, ?, ?, ?)", [(account, mid, s, t, now) for mid, s, t in rows])
+
+    def look_alike_counts(self, account: str, keys: set[tuple[str, str]]) -> dict[tuple[str, str], int]:
+        """How many messages TacoSort has read for each (sender, subject template)."""
+        out: dict[tuple[str, str], int] = {}
+        for sender, template in keys:
+            out[(sender, template)] = int(self._scalar(
+                "SELECT COUNT(*) FROM look_alikes WHERE account = ? AND sender = ? AND template = ?",
+                (account, sender, template)) or 0)
+        return out
+
+    def look_alike_sender_counts(self, account: str, senders: set[str]) -> dict[str, int]:
+        """How many messages TacoSort has read from each address, whatever their subject."""
+        return {s: int(self._scalar("SELECT COUNT(*) FROM look_alikes WHERE account = ? AND sender = ?",
+                                    (account, s)) or 0) for s in senders}
 
     def mark_company_tidied(self, account: str, category: str, company: str) -> None:
         with self._tx() as c:

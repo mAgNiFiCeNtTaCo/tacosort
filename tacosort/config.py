@@ -332,6 +332,12 @@ def config_from_dict(data: Any, warnings: list[str] | None = None) -> AppConfig:
         cfg.unsure_to_company = _to_bool(data["unsure_to_company"], "unsure_to_company")
     if "hold_hours" in data:
         cfg.hold_hours = _to_int(data["hold_hours"], "hold_hours")
+    if "look_alike_min" in data:
+        cfg.look_alike_min = _to_int(data["look_alike_min"], "look_alike_min")
+    if "unsure_to_folder" in data:
+        cfg.unsure_to_folder = _to_bool(data["unsure_to_folder"], "unsure_to_folder")
+    if "recheck_inbox" in data:
+        cfg.recheck_inbox = _to_bool(data["recheck_inbox"], "recheck_inbox")
     if "data_dir" in data:
         cfg.data_dir = str(data["data_dir"] or "")
     return cfg
@@ -420,6 +426,9 @@ def config_to_dict(cfg: AppConfig) -> dict:
         "company_folder_min": cfg.company_folder_min,
         "unsure_to_company": cfg.unsure_to_company,
         "hold_hours": cfg.hold_hours,
+        "look_alike_min": cfg.look_alike_min,
+        "unsure_to_folder": cfg.unsure_to_folder,
+        "recheck_inbox": cfg.recheck_inbox,
         "ai": {
             "enabled": cfg.ai.enabled,
             "model": cfg.ai.model,
@@ -541,6 +550,8 @@ def config_problems(cfg: AppConfig) -> list[str]:
     if not 0 <= cfg.hold_hours <= 720:
         problems.append("hold_hours must be between 0 (sort at once) and 720 (30 days); 24 keeps new mail "
                         "in the Inbox for a day.")
+    if cfg.look_alike_min < 0 or cfg.look_alike_min == 1:
+        problems.append("look_alike_min must be 0 (off) or at least 2; 5 is a good value.")
     if cfg.ai.max_per_run < 0:
         problems.append("ai: max_per_run can't be negative.")
     ids = {a.id for a in cfg.accounts}

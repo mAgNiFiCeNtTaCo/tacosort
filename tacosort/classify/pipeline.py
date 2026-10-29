@@ -17,9 +17,10 @@ another email of the same batch.
 from __future__ import annotations
 
 import logging
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from typing import TYPE_CHECKING
 
+from ..companies import GUESS_FLOOR
 from ..models import INBOX, AppConfig, Decision, LearnedRules, Message
 from .heuristics import (
     bulk_markers,
@@ -67,8 +68,10 @@ class Classifier:
     def classify(self, msg: Message) -> Decision:
         return self.classify_many([msg])[0]
 
-    def classify_many(self, msgs: Sequence[Message]) -> list[Decision]:
-        """Classify several messages; unsure ones go to the AI together in one batch."""
+    def classify_many(self, msgs: Sequence[Message], repeated: Collection[str] = ()) -> list[Decision]:
+        """Classify several messages; unsure ones go to the AI together in one batch. `repeated` holds
+        the Message-IDs of look-alike emails (the engine counts them): sent by a robot, so an unsure one
+        may still follow its company into its folder."""
         results: list[Decision | None] = []
         guesses: list[Decision | None] = []
         unsure: list[int] = []
@@ -97,7 +100,9 @@ class Classifier:
                 elif guesses[i] is None or ans.confidence > guesses[i].confidence:
                     guesses[i] = ans
 
-        return [r if r is not None else self._default(guesses[i], msgs[i]) for i, r in enumerate(results)]
+        return [r if r is not None else self._default(guesses[i], msgs[i], bool(msgs[i].message_id)
+                                                      and msgs[i].message_id in repeated)
+                for i, r in enumerate(results)]
 
     # ---- steps ---------------------------------------------------------------------------------
     def _before_ai(self, msg: Message) -> tuple[Decision | None, Decision | None]:
@@ -138,6 +143,20 @@ class Classifier:
             if guess is None or h.confidence > guess.confidence:
                 guess = h
         return None, guess
+
+    def _look_alike(self, guess: Decision | None) -> Decision:
+        """One address keeps sending the same kind of email: a robot, even without robot headers. It
+        stays in the Inbox unless its company has a folder for it (companies.py); the kind is the best
+        guess, else Notifications."""
+        usable = guess is not None and not guess.folder and guess.category not in (INBOX, "folder")
+        cat = guess.category if usable else "notifications"
+        sure = max(guess.confidence if usable else 0.0, GUESS_FLOOR)
+        note = "this address keeps sending look-alike emails"
+        return Decision(INBOX, sure, "default",
+                        f"Not sure enough to move it (best guess {cat.title()}, {round(sure * 100)}% sure; "
+                        f"{note}), so it stays in the Inbox",
+                        guess=Decision(cat, sure, guess.source if usable else "heuristic",
+                                       f"{guess.reason}; {note}" if usable else note))
 
     def _guard(self, msg: Message) -> Decision | None:
         sender = msg.from_.email.lower()
@@ -190,7 +209,9 @@ class Classifier:
                             f"{d.reason} -> the {d.category} category is turned off, so it stays in the Inbox")
         return d
 
-    def _default(self, guess: Decision | None, msg: Message) -> Decision:
+    def _default(self, guess: Decision | None, msg: Message, repeated: bool = False) -> Decision:
+        if repeated:
+            return self._look_alike(guess)
         if guess is None:
             return Decision(INBOX, 0.0, "default", "No rule or pattern matched, so it stays in the Inbox")
         if guess.category == INBOX and not guess.folder:

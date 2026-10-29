@@ -193,6 +193,9 @@ class AppConfig:
     company_folder_min: int = 3           # ...once it has sent this many messages of that kind
     unsure_to_company: bool = True        # machine-sent mail TacoSort isn't sure about may join its company's folder
     hold_hours: int = 0                   # new mail stays in the Inbox this long before it is sorted
+    look_alike_min: int = 5               # this many look-alike emails from one address = a robot (0 = off)
+    unsure_to_folder: bool = False        # machine-sent mail TacoSort isn't sure about goes to its best guess
+    recheck_inbox: bool = True            # once a day, look again at mail TacoSort left in the Inbox
     learn_sample: int = 300               # messages read per folder when learning the user's scheme
     data_dir: str = ""                    # "" = platform default
 
