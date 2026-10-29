@@ -3,19 +3,61 @@
 TacoSort (called TidyInbox until 2026-10-28) is an open-source (MIT) Python tool that sorts every email account a person has (any IMAP
 server, Outlook through OAuth2) into one shared folder scheme and keeps it sorted in the background.
 
-## Where it stands (2026-10-28)
+## Where it stands (2026-10-29)
 - Public at https://github.com/mAgNiFiCeNtTaCo/tacosort; people install it with
   `pipx install git+https://github.com/mAgNiFiCeNtTaCo/tacosort` (it is not on PyPI).
 - Start: `tacosort setup` → `tacosort preview` → `tacosort run --backlog --yes` (old mail) →
   `tacosort schedule on` (keeps new mail sorted).
-- Tests: `.venv\Scripts\python -m pytest -q`: 593 passed, 2 skipped (POSIX-only), ruff clean.
+- Tests: `.venv\Scripts\python -m pytest -q`: 634 passed, 2 skipped (POSIX-only), ruff clean.
   GitHub CI green on Windows, macOS and Linux (run 40741390253; the Mac jobs got no runner 3 times on
   2026-10-28, a GitHub-side shortage: a re-run the same day passed).
-- In real use on the owner's Gmail since 2026-10-28 (app password, background schedule every 15 min):
-  Inbox 59 -> 14 (security alerts, codes and a few unsure ones stay).
+- In real use on two of the owner's Gmail accounts since 2026-10-28 (app passwords, background schedule
+  every 15 min): personal Inbox 59 -> 1, SRGaming (card-selling business) 299 -> 18, plus mail younger
+  than 24 hours. What stays: people, replies, buyer messages, security mail under 3 days, a few one-offs.
+- The owner's settings (not the defaults): `hold_hours: 24`, `unsure_to_folder: yes`,
+  `security_keep_days: 3`, `business_keep_days: 3`.
 - Untested for real: Outlook/Google OAuth, AI sorting against the live API, the Windows at-logon trigger.
 
 ## Log
+### 2026-10-29: Second account, learning from repetition, 24-hour wait, Security and Business folders
+- **Second account** SRGaming (Gmail, card-selling business) added through `tacosort setup` in the canvas
+  terminal. Gmail said "app passwords not available" until 2-Step Verification was on. Typing the setup
+  command with `nodeterm.sh write` failed at first: it eats backslashes (use `.venv/Scripts/...`).
+- **Mac CI** was a GitHub runner shortage, not Actions minutes: a re-run passed (`a4a8281`).
+- **Unsure company mail** (`f52cd77`): SRGaming kept 299 in the Inbox, ~250 of them Whatnot/eBay/TCGplayer
+  mail scored 51-72% (needs 75%). Now machine-sent unsure mail joins its company's folder once the
+  company has 3 such emails or already has a folder (`unsure_to_company`, default on). One folder per
+  company, chosen by majority guess and stored (`company_folders` category `unsure`): identical Whatnot
+  emails had split between Promotions and Notifications because Gmail's tab differed.
+- **`hold_hours`** (owner: 24): new mail stays in the Inbox until it is that old (IMAP INTERNALDATE, new
+  `Message.received`); held mail is not marked seen and the watermark waits, so a later run sorts it.
+- **Kept in the Inbox:** a person writing through a marketplace ("Message from Buyer"), passkey
+  notices, "we need more information", "confirm/verify your <brand> account".
+- Folder names: "Kilian (TCGplayer)" -> "TCGplayer" (the part in brackets names the company).
+- **Learning from repetition** (`8042af7`, the owner asked why 40 TCGplayer emails never got a folder):
+  they came from `sales@tcgplayer.com` with no robot headers, so they counted as maybe-personal and were
+  never moved on a guess. New table `look_alikes` (schema 4): an address with 5 emails of one subject
+  template (first 5 words, numbers and prices blanked) or 10 emails in all counts as a robot
+  (`look_alike_min`). `recheck_inbox` (default on): once a day a plain run re-classifies mail it left in
+  the Inbox (never mail from before its first look). `unsure_to_folder` (default off, owner on): robot
+  one-offs go to their best guess. The background run's first re-check (00:19) moved 46 by itself.
+- **Security folder** (`641405e`, owner: after 3 days): `security_keep_days` / `security_folder`.
+  Moved 25. Found by the daily re-check; starred and dragged-back mail stays.
+- **Business folder** (`4cbe94d`, owner's ask): new category `business` (tax exemption, resale
+  certificates, seller/distributor applications, business bank accounts, payouts). From a robot it is
+  filed; from a person it waits `business_keep_days` (owner 3, default 0 = stays). `Decision.aged_to`
+  ("security"/"business") replaces `.security`. The contact guard now skips mail with bulk markers:
+  writing to `service@dacardworld.com` once had pinned all its promos and order mail to the Inbox.
+  A one-off script moved 4 already-filed business emails out of Security/Accounts (move records
+  rewritten, so undo still works).
+- Real runs (owner said yes each time): 183, then 23, 25 and 19 moved; 10 emails in Business.
+- Docs (README, SPEC, how-it-works, config example) cover every new setting; `/slop-check` diff clean
+  (`AI_SlopAgent/reports/2026-10-28-Email_Organization.md`). CI green on all four pushes.
+- Resources 2026-10-29 00:49: TacoSort 0 processes between runs, 89 MB disk; whole PC CPU 16% of 32
+  threads, RAM 24.8 of 64 GB, GPU 40%.
+- **Open:** running the tests writes a few lines into the owner's real `tacosort.log` (harmless, fix
+  next). A company's unsure mail that trickles in one at a time waits for the daily re-check.
+
 ### 2026-10-28: First real mailbox, Gmail tabs, company folders, Accounts folder
 - **First real run** on the owner's Gmail (`tacosort setup` in a canvas terminal; the `!` prompt can't
   answer setup's questions). Setup moved 17 messages and turned the schedule on.

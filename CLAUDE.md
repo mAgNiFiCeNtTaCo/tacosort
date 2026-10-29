@@ -16,7 +16,8 @@ The owner isn't a programmer: explain in plain words.
 - `tacosort/imap/`: providers, keychain + OAuth, `ImapBackend`.
 - `tacosort/classify/`: guards, user rules, heuristics, AI (`pipeline.py` holds the decision order).
 - `tacosort/store.py`, `learner.py`, `engine.py`, `schedule.py`: state, learning, runs, background task.
-- `tacosort/companies.py`: company sub-folders (`Promotions/Crunchyroll`), naming and the threshold.
+- `tacosort/companies.py`: company sub-folders (`Promotions/Crunchyroll`), naming, the threshold, and
+  where a company's unsure mail goes (`unsure` rows in `company_folders`).
 - `tacosort/cli.py`, `config.py`, `report.py`: the command line.
 - `tests/`, `.github/workflows/ci.yml`, `examples/config.example.yaml`.
 - `_team/` (gitignored): station briefs and review reports.
@@ -51,3 +52,10 @@ The owner isn't a programmer: explain in plain words.
   backslashes too: send `.venv/Scripts/tacosort.exe setup` (forward slashes work in PowerShell).
 - Real Gmail differs from the fakes: tabs only via X-GM-RAW search. Check a change on the real mailbox
   with `tacosort preview` before telling the owner it works.
+- The owner runs two accounts (personal + SRGaming, a card-selling business) with non-default settings
+  (`hold_hours: 24`, `unsure_to_folder`, `security_keep_days: 3`, `business_keep_days: 3`). Defaults for
+  other users stay conservative: new behaviour that moves more mail ships off by default.
+- `recheck_inbox` runs on the first plain run of each day: a code change that widens what moves acts on
+  the owner's whole Inbox at the next scheduled run, without a `--backlog`. Preview first.
+- A security, platform ("Message from Buyer") or contact guard always beats the look-alike and unsure
+  paths; keep it that way when adding categories.

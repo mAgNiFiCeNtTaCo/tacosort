@@ -232,6 +232,39 @@
         "Real Gmail hides its tabs from X-GM-LABELS: only an X-GM-RAW category search finds them",
         "A live scheduled task on an editable install runs whatever code is on disk: keep it working between edits"
       ]
+    },
+    {
+      "title": "Second account, learning from repetition, Security and Business folders",
+      "date": "2026-10-29",
+      "summary": "The same session added the owner's business Gmail, then taught TacoSort to file unsure and look-alike company mail, wait 24 hours, re-check the Inbox daily and move old security and business mail to their own folders.",
+      "stages": [
+        {
+          "name": "Session",
+          "kind": "solo",
+          "sessions": [
+            {
+              "id": "979da9f6",
+              "role": "Orchestrator (continued)",
+              "start": "2026-10-28T20:10",
+              "end": "2026-10-29T00:50",
+              "did": "Mac CI re-run, SRGaming setup, unsure-to-company + hold_hours, look-alikes + daily re-check, Security and Business folders; 250 emails moved",
+              "outcome": "done",
+              "files": 20
+            }
+          ]
+        }
+      ],
+      "events": [
+        {
+          "at": "2026-10-29T00:19",
+          "until": "2026-10-29T00:20",
+          "text": "Scheduled run did the first daily re-check with new code (46 moved)"
+        }
+      ],
+      "lessons": [
+        "Robot-header checks miss shops that mail from plain sales@ addresses: repetition is the better robot signal",
+        "nodeterm write eats backslashes like bash: send Windows paths with forward slashes"
+      ]
     }
   ]
 }
