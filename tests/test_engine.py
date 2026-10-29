@@ -180,6 +180,14 @@ def test_start_from_now_sorts_only_mail_that_arrives_later(store, mfb):
     assert sort_all(cfg(), store, {"a": mfb}).moved == 3
 
 
+def test_start_from_now_knows_yahoos_inbox_spelling(store, mfb):
+    # Yahoo names it "Inbox": with that start point stored, nothing is "started" again on every run.
+    store.set_watermark("a", "Inbox", 1, 5)
+    lines = []
+    assert engine.start_from_now(cfg(), store, {"a": mfb}, log=lines.append) == []
+    assert not any("from now on" in line for line in lines)
+
+
 def test_start_from_now_then_server_renumbers_inbox_moves_nothing(store, mfb):
     start(cfg(), store, {"a": mfb})
     mfb.reset_uidvalidity("INBOX")

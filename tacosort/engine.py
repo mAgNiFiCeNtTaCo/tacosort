@@ -276,7 +276,7 @@ def _folder_key(info: FolderInfo) -> str:
 def _has_watermark(store: Store, account_id: str, folder: str) -> bool:
     """True when the folder (as written in the settings) already has a start point. Without the server
     list only INBOX's spelling is known for sure; run_once also finds other names stored as typed."""
-    names = {folder, "INBOX"} if folder.upper() == "INBOX" else {folder}
+    names = {folder, "INBOX", "Inbox", "inbox"} if folder.upper() == "INBOX" else {folder}   # Yahoo: "Inbox"
     return any(store.get_watermark(account_id, n) is not None for n in names)
 
 
@@ -764,6 +764,7 @@ def start_from_now(config: AppConfig, store: Store, backends: dict[str, MailBack
             try:
                 backend.connect()
                 folders = {f.name: f for f in backend.list_folders()}
+                set_any = False
                 for folder in missing:
                     info = _find_folder(folders, folder)
                     if info is None or info.flags & NEVER_TOUCH:
@@ -773,7 +774,9 @@ def start_from_now(config: AppConfig, store: Store, backends: dict[str, MailBack
                     state = backend.folder_state(info.name)
                     top = max(_top_uid(backend, info.name), state.uidnext - 1, 0)
                     store.set_watermark(account.id, info.name, state.uidvalidity, top)
-                started.append(account.id)
+                    set_any = True
+                if set_any:
+                    started.append(account.id)
             except Exception as e:  # noqa: BLE001 - run_once reports the account's problem properly
                 logger.warning("start_from_now %s: %s", account.id, e)
             finally:
