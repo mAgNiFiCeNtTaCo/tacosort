@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import contextlib
 import re
+import time
 from collections import Counter, defaultdict
 from collections.abc import Callable
 from datetime import datetime, timedelta
@@ -54,6 +55,9 @@ DOMAIN_MIN_MESSAGES = 5       # a domain rule needs clearly more evidence...
 DOMAIN_MIN_SENDERS = 2        # ...from at least this many different addresses
 CORRECTION_DAYS = 30          # how far back corrections are checked
 MAX_LOOKUPS = 200             # folder searches per account per run when checking corrections
+# ...and at most this long: a search takes ~0.2 s on Gmail but ~1 s on Yahoo, where 200 of them made
+# every background run take 4-5 minutes after a big backlog run left thousands of moves to check.
+MAX_CHECK_SECONDS = 30.0
 # A Message-ID as the standard writes it. Some senders write one without <...@...>; Yahoo then can't find
 # the message by it at all, so such a move is only looked for where it came from (see detect_corrections).
 _WELL_FORMED_ID = re.compile(r"<[^<>\s]+@[^<>\s]+>")
@@ -372,9 +376,11 @@ def _still_there(backend: MailBackend, folder: str, message_id: str) -> bool:
 
 def detect_corrections(store: Store, backend: MailBackend, account: str | AccountConfig, *,
                        config: AppConfig | None = None, now: datetime | None = None,
-                       max_lookups: int = MAX_LOOKUPS, log: Log = _quiet) -> int:
+                       max_lookups: int = MAX_LOOKUPS, max_seconds: float = MAX_CHECK_SECONDS,
+                       log: Log = _quiet) -> int:
     """Find the user's hand corrections of recent moves and learn from them. Returns how many were
-    found. `backend` must be connected. Work is bounded by `max_lookups` folder searches."""
+    found. `backend` must be connected. Work is bounded by `max_lookups` folder searches and by
+    `max_seconds`; what isn't looked at stays due for the next run."""
     account_id = account.id if isinstance(account, AccountConfig) else account
     now = now or utcnow()
     moves = store.moves_to_check(account_id, now - timedelta(days=CORRECTION_DAYS), limit=max_lookups)
@@ -399,8 +405,13 @@ def detect_corrections(store: Store, backend: MailBackend, account: str | Accoun
 
     lookups = 0
     found_count = 0
+    deadline = time.monotonic() + max_seconds
+
+    def spent() -> bool:
+        return lookups >= max_lookups or time.monotonic() >= deadline
+
     for mv in moves:
-        if lookups >= max_lookups:
+        if spent():
             break
         if mv.to_folder in existing:
             lookups += 1
@@ -423,10 +434,10 @@ def detect_corrections(store: Store, backend: MailBackend, account: str | Accoun
             if hit:
                 where = folder
                 break
-            if lookups >= max_lookups:
+            if spent():
                 break
         if where is None:
-            if lookups < max_lookups:
+            if not spent():
                 store.mark_move_checked(mv.id, "gone")     # deleted, or filed somewhere we don't watch
             else:
                 store.mark_move_checked(mv.id, "")         # the budget ran out mid-search: the others first

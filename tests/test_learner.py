@@ -403,6 +403,20 @@ def test_detect_corrections_is_bounded(store):
     assert len(checked) == 10
 
 
+def test_detect_corrections_stops_when_its_time_is_up(store):
+    # A Yahoo search takes about a second: the check must not make every background run minutes long.
+    b = FakeBackend("a")
+    for i in range(5):
+        _moved(store, b, f"m{i}")
+    b.connect()
+    calls = []
+    orig = b.find_message_id
+    b.find_message_id = lambda f, mid: calls.append(f) or orig(f, mid)
+    assert learner.detect_corrections(store, b, "a", config=cfg(), max_seconds=0) == 0
+    assert calls == []
+    assert len(store.moves_to_check("a", utcnow() - timedelta(days=1))) == 5     # still due next run
+
+
 def test_malformed_message_id_is_only_looked_for_where_it_came_from(store):
     # Yahoo can't find a message by an ID written without <...@...>: searching every folder for it used
     # up the whole budget on that one message, run after run.
