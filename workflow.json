@@ -265,6 +265,44 @@
         "Robot-header checks miss shops that mail from plain sales@ addresses: repetition is the better robot signal",
         "nodeterm write eats backslashes like bash: send Windows paths with forward slashes"
       ]
+    },
+    {
+      "title": "Yahoo account, Old mail folder, two Yahoo quirks fixed",
+      "date": "2026-10-29",
+      "summary": "The same session added the owner's Yahoo account and sorted ~10,600 emails, fixed Yahoo's header and inbox-name quirks and a slow correction check, and added an Old mail folder that took the Yahoo Inbox to 174.",
+      "stages": [
+        {
+          "name": "Session",
+          "kind": "solo",
+          "sessions": [
+            {
+              "id": "979da9f6",
+              "role": "Orchestrator (continued)",
+              "start": "2026-10-29T00:55",
+              "end": "2026-10-29T19:35",
+              "did": "Yahoo setup + backlog (9,168 moves), full-header fetch, shared senders, test isolation, Inbox spelling fix, correction-check speed fix, Old mail (1,265 moves)",
+              "outcome": "done",
+              "files": 18
+            }
+          ]
+        }
+      ],
+      "events": [
+        {
+          "at": "2026-10-29T13:57",
+          "until": "2026-10-29T13:58",
+          "text": "Yahoo backlog finished: Inbox ~10,600 -> 1,450"
+        },
+        {
+          "at": "2026-10-29T19:05",
+          "until": "2026-10-29T19:27",
+          "text": "Old mail runs: 1,265 moved, Inbox 1,450 -> 174"
+        }
+      ],
+      "lessons": [
+        "Yahoo IMAP returns only six headers for HEADER.FIELDS and can't search malformed Message-IDs: probe a new provider with a read-only script first",
+        "A bounded work queue that retries its stuck items first never gets past them: put an unfinished item at the back"
+      ]
     }
   ]
 }

@@ -52,10 +52,14 @@ The owner isn't a programmer: explain in plain words.
   backslashes too: send `.venv/Scripts/tacosort.exe setup` (forward slashes work in PowerShell).
 - Real Gmail differs from the fakes: tabs only via X-GM-RAW search. Check a change on the real mailbox
   with `tacosort preview` before telling the owner it works.
-- The owner runs two accounts (personal + SRGaming, a card-selling business) with non-default settings
-  (`hold_hours: 24`, `unsure_to_folder`, `security_keep_days: 3`, `business_keep_days: 3`). Defaults for
+- The owner runs three accounts (personal Gmail, SRGaming Gmail for a card-selling business, Yahoo
+  "Main") with non-default settings (`hold_hours: 24`, `unsure_to_folder`, `security_keep_days: 3`,
+  `business_keep_days: 3`, `old_mail_days: 180`). Defaults for
   other users stay conservative: new behaviour that moves more mail ships off by default.
 - `recheck_inbox` runs on the first plain run of each day: a code change that widens what moves acts on
   the owner's whole Inbox at the next scheduled run, without a `--backlog`. Preview first.
 - A security, platform ("Message from Buyer") or contact guard always beats the look-alike and unsure
   paths; keep it that way when adding categories.
+- Yahoo differs: `HEADER.FIELDS` returns six headers only (the whole header is fetched there), the inbox
+  is called "Inbox", searches take ~1 s each, and a Message-ID without `<...@...>` can't be found by
+  search at all. Check Yahoo with a read-only scratch script before trusting a Gmail result.

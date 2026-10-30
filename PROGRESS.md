@@ -8,17 +8,49 @@ server, Outlook through OAuth2) into one shared folder scheme and keeps it sorte
   `pipx install git+https://github.com/mAgNiFiCeNtTaCo/tacosort` (it is not on PyPI).
 - Start: `tacosort setup` → `tacosort preview` → `tacosort run --backlog --yes` (old mail) →
   `tacosort schedule on` (keeps new mail sorted).
-- Tests: `.venv\Scripts\python -m pytest -q`: 634 passed, 2 skipped (POSIX-only), ruff clean.
+- Tests: `.venv\Scripts\python -m pytest -q`: 653 passed, 2 skipped (POSIX-only), ruff clean.
   GitHub CI green on Windows, macOS and Linux (run 40741390253; the Mac jobs got no runner 3 times on
   2026-10-28, a GitHub-side shortage: a re-run the same day passed).
-- In real use on two of the owner's Gmail accounts since 2026-10-28 (app passwords, background schedule
-  every 15 min): personal Inbox 59 -> 1, SRGaming (card-selling business) 299 -> 18, plus mail younger
-  than 24 hours. What stays: people, replies, buyer messages, security mail under 3 days, a few one-offs.
+- In real use on three of the owner's accounts (app passwords, background schedule every 15 min):
+  personal Gmail Inbox 59 -> 1, SRGaming Gmail (card-selling business) 299 -> 18, Yahoo "Main"
+  ~10,600 -> 174 (since 2026-10-29), plus mail younger than 24 hours. What stays: recent mail from
+  people, replies, buyer messages, security mail under 3 days, unread or starred mail, and 84 Yahoo
+  emails with no Message-ID (never moved).
 - The owner's settings (not the defaults): `hold_hours: 24`, `unsure_to_folder: yes`,
-  `security_keep_days: 3`, `business_keep_days: 3`.
+  `security_keep_days: 3`, `business_keep_days: 3`, `old_mail_days: 180`, rule `*@lsoa.org` ->
+  `School` (Yahoo only).
 - Untested for real: Outlook/Google OAuth, AI sorting against the live API, the Windows at-logon trigger.
 
 ## Log
+### 2026-10-29: Yahoo account, Old mail folder, two Yahoo quirks fixed
+- **Yahoo "Main" added** (app password). Backlog sorted in 500-move runs (the owner said yes): about
+  10,600 -> 1,450, 9,168 moves, School folder for `*@lsoa.org` (owner's choice: all of it).
+- **Yahoo answers `HEADER.FIELDS` with six headers only** (From, To, Subject, Date, Message-ID,
+  Content-Type), so every newsletter looked personal. On Yahoo/AOL (`XYMHIGHESTMODSEQ` or the host) the
+  whole header is fetched and the usual fields kept (`2edc34d`).
+- Shared senders (`ccsend.com`, `myshopify.com`): the company is the one named in the address or the
+  label in front. Names: generic words (Feedback, Teacher, Office...) dropped; 53.com -> Fifth Third, AT&T,
+  UPS, FedEx, USPS, AliExpress, Credit Karma (`b8b9bef`). Existing folders keep their names.
+- **Tests no longer touch the owner's real settings, memory or log** (`tests/conftest.py`, `90330e3`).
+- **Yahoo spells it "Inbox":** `start_from_now` looked only for "INBOX", so every Yahoo run logged in an
+  extra time and logged "from now on TacoSort sorts new mail" (49 times). Fixed (`107cb66`).
+- **Runs took 4-5 minutes with nothing to do.** Cause: 59 Yahoo emails have a Message-ID without
+  `<...@...>`; Yahoo can't find a message by such an ID (search and `HEADER.FIELDS (MESSAGE-ID)` both come
+  back empty, the full header has it). The correction check then searched every folder (~1 s per search
+  on Yahoo, 0.2 s on Gmail), used up its 200-search budget on 1-3 emails, and began with the same ones
+  next run. Now such a move is only looked for where it came from, and a move whose search runs out of
+  budget waits behind the others (`e60547d`).
+- **Old mail** (`eb2f3fe`, owner: "do all"): `old_mail_days` (default 0 = off) / `old_mail_folder`
+  ("Old mail"). Read mail that would stay in the Inbox moves there once that old; never starred or unread
+  mail, VIPs, or mail a user rule or learned rule keeps there; a dragged-back message stays. Preview: 0 on
+  both Gmail accounts, 500+ on Yahoo. Real run: 1,265 moved, Yahoo Inbox 1,450 -> 174.
+- Docs (README, SPEC, how-it-works, config example) cover `old_mail_days`; `/slop-check` diff clean
+  (`AI_SlopAgent/reports/2026-10-29-Email_Organization.md`). CI green on every push checked.
+- Resources 2026-10-29 19:29: TacoSort 0 processes between runs, 89 MB disk; whole PC CPU 11% of 32
+  threads, RAM 28.3 of 64 GB, GPU 30%.
+- **Open:** confirm the next scheduled Yahoo run is fast. A Yahoo move whose new UID TacoSort recorded
+  holds a different message there (COPYUID order), so `new_uid` isn't trusted for anything yet.
+
 ### 2026-10-29: Second account, learning from repetition, 24-hour wait, Security and Business folders
 - **Second account** SRGaming (Gmail, card-selling business) added through `tacosort setup` in the canvas
   terminal. Gmail said "app passwords not available" until 2-Step Verification was on. Typing the setup
