@@ -17,6 +17,9 @@ classifiers = [
     "Operating System :: OS Independent",
     "Topic :: Communications :: Email",
     "Environment :: Console",
+    "Environment :: X11 Applications",
+    "Environment :: Win32 (MS Windows)",
+    "Environment :: MacOS X",
 ]
 dependencies = [
     "IMAPClient>=3.0",
@@ -31,8 +34,14 @@ dev = ["pytest>=8", "ruff>=0.5"]
 [project.scripts]
 tacosort = "tacosort.cli:main"
 
+[project.gui-scripts]
+tacosort-app = "tacosort.app:main"
+
 [tool.setuptools.packages.find]
 include = ["tacosort*"]
+
+[tool.setuptools.package-data]
+tacosort = ["assets/*.png", "assets/*.ico"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -57,6 +57,19 @@ def test_windows_command_without_isolation_flag(monkeypatch):
     assert tr[tr.index("/TR") + 1] == f'"{PYW}" -m tacosort run --quiet --config "{CONF}"'
 
 
+def test_the_app_schedules_itself(monkeypatch):
+    # The downloadable app has no Python to start: the job runs the app with the command.
+    monkeypatch.undo()
+    app = r"C:\Users\Some One\AppData\Local\Programs\TacoSort\TacoSort.exe"
+    monkeypatch.setattr(schedule.sys, "frozen", True, raising=False)
+    monkeypatch.setattr(schedule.sys, "executable", app)
+    assert schedule.windowless_python() == app
+    assert schedule.python_options() == []
+    tr = schedule.build_windows_command(app, CONF, 15)
+    assert tr[tr.index("/TR") + 1] == f'"{app}" run --quiet --config "{CONF}"'
+    assert schedule._command(app, CONF) == [app, "run", "--quiet", "--config", CONF]
+
+
 def test_windows_command_too_long_is_explained():
     with pytest.raises(schedule.ScheduleError, match="too long"):
         schedule.build_windows_command(PYW, "C:\\" + "x" * 300 + "\\config.yaml", 15)

@@ -593,6 +593,16 @@ def cmd_setup(args: argparse.Namespace, ctx: Ctx) -> int:
     return EXIT_OK
 
 
+def cmd_app(args: argparse.Namespace, ctx: Ctx) -> int:
+    """Open the TacoSort window (tick boxes instead of commands)."""
+    try:
+        from .app import main as app_main
+    except ImportError as e:
+        raise UserError("The window needs Tkinter, which this Python doesn't have. On Linux install it "
+                        "with your package manager (for example `sudo apt install python3-tk`).") from e
+    return app_main(["--config", str(ctx.path)])
+
+
 def cmd_accounts(args: argparse.Namespace, ctx: Ctx) -> int:
     action = args.accounts_action
     if action == "add":
@@ -974,6 +984,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     s = sub.add_parser("setup", help="step-by-step set-up: add accounts, preview, turn on the schedule")
     s.set_defaults(func=cmd_setup)
+
+    s = sub.add_parser("app", help="open the TacoSort window: accounts, tick-box options, preview and sort")
+    s.set_defaults(func=cmd_app)
 
     s = sub.add_parser("accounts", help="list, add, remove or test your email accounts")
     acc = s.add_subparsers(dest="accounts_action", metavar="ACTION", required=True)

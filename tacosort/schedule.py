@@ -9,6 +9,9 @@
 The scheduled job starts in TacoSort's own data folder and, on Python 3.11 or newer, with `-P`, so a
 stray file such as `yaml.py` lying in the home folder can never be loaded into TacoSort.
 
+The downloadable app (one file built with PyInstaller, `sys.frozen`) has no Python to start: there the
+job runs the app itself, `TacoSort.exe run --quiet --config ...`.
+
 The `build_*` functions only build commands and file contents (easy to test); `install`, `uninstall`
 and `status` run them.
 """
@@ -57,13 +60,23 @@ def _platform() -> str:
 
 
 def _run(cmd: list[str], input: str | None = None) -> subprocess.CompletedProcess:
-    """Run one command without a shell. Tests replace this."""
-    return subprocess.run(cmd, input=input, capture_output=True, text=True, check=False)
+    """Run one command without a shell. Tests replace this. On Windows no console window flashes up
+    (the app has none of its own, so schtasks would get a new one)."""
+    flags = getattr(subprocess, "CREATE_NO_WINDOW", 0) if sys.platform.startswith("win") else 0
+    return subprocess.run(cmd, input=input, capture_output=True, text=True, check=False, creationflags=flags)
+
+
+def frozen() -> bool:
+    """True inside the downloadable app (PyInstaller), where sys.executable is the app itself."""
+    return bool(getattr(sys, "frozen", False))
 
 
 def windowless_python(executable: str | None = None) -> str:
-    """pythonw.exe next to the running Python (no console window pops up), else python itself."""
+    """pythonw.exe next to the running Python (no console window pops up), else python itself. The
+    app is built without a console window, so there it is the app."""
     exe = Path(executable or sys.executable)
+    if executable is None and frozen():
+        return str(exe)
     candidate = exe.with_name("pythonw.exe") if exe.suffix.lower() == ".exe" else exe.with_name("pythonw")
     return str(candidate) if candidate.exists() else str(exe)
 
@@ -71,13 +84,17 @@ def windowless_python(executable: str | None = None) -> str:
 def python_options(version_info: tuple[int, ...] | None = None) -> list[str]:
     """Options for the scheduled Python: `-P` (Python 3.11+) keeps the current folder out of the
     import path, so only the installed TacoSort and its libraries are ever loaded."""
+    if version_info is None and frozen():
+        return []
     version = tuple(version_info or sys.version_info)[:2]
     return ["-P"] if version >= (3, 11) else []
 
 
 def run_arguments(config_path: Path | str) -> list[str]:
-    """The TacoSort part of the scheduled command line (after Python and its options)."""
-    return ["-m", "tacosort", "run", "--quiet", "--config", str(config_path)]
+    """The TacoSort part of the scheduled command line (after Python and its options; the app takes
+    the command directly)."""
+    start = [] if frozen() else ["-m", "tacosort"]
+    return [*start, "run", "--quiet", "--config", str(config_path)]
 
 
 def _command(python: str, config_path: Path | str) -> list[str]:
@@ -118,8 +135,9 @@ def build_windows_command(pythonw: str, config_path: Path | str, interval_minute
                           task_name: str = TASK_NAME) -> list[str]:
     """Plain `schtasks /Create` for an every-N-minutes task (the fallback when the XML is refused)."""
     n = _check_interval(interval_minutes)
-    opts = "".join(f"{o} " for o in python_options())
-    tr = f'"{pythonw}" {opts}-m tacosort run --quiet --config "{config_path}"'
+    args = " ".join(f'"{a}"' if a == str(config_path) else a
+                    for a in [*python_options(), *run_arguments(config_path)])
+    tr = f'"{pythonw}" {args}'
     if len(tr) > SCHTASKS_TR_LIMIT:
         raise ScheduleError("The path to Python or to the config file is too long for Windows Task "
                             "Scheduler. Move the config file to a shorter path and try again.")
