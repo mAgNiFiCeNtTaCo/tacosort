@@ -16,6 +16,7 @@ import contextlib
 import dataclasses
 import os
 import queue
+import re
 import sys
 import threading
 import tkinter as tk
@@ -211,9 +212,18 @@ class Jobs:
         return True
 
 
+_SETUP_HINT = re.compile(r"\b([Rr])un ['`]tacosort (?:setup|accounts add)['`](?: again)?")
+
+
+def for_app(text: str) -> str:
+    """Messages written for the command ("run 'tacosort setup'") pointed at the window instead."""
+    return _SETUP_HINT.sub(lambda m: ("U" if m.group(1) == "R" else "u") + "se Add account... on the Accounts "
+                           "tab (with the same email address)", text)
+
+
 def plain_error(e: BaseException) -> str:
     if isinstance(e, (BackendError, ConfigError, cli.UserError)):
-        return str(e)
+        return for_app(str(e))
     if isinstance(e, ImportError):
         return f"Part of TacoSort is missing ({e.name or e}). {cli.REINSTALL_HINT}"
     return f"Something went wrong: {type(e).__name__}: {e}"
@@ -321,7 +331,7 @@ class App:
 
     def _append_log(self, line: str) -> None:
         self.log_box.configure(state="normal")
-        self.log_box.insert("end", line.rstrip() + "\n")
+        self.log_box.insert("end", for_app(line).rstrip() + "\n")
         self.log_box.see("end")
         self.log_box.configure(state="disabled")
 
@@ -388,7 +398,7 @@ class App:
 
         def done(result: Any, error: BaseException | None) -> None:
             problem, folders = result if error is None else (plain_error(error), 0)
-            self.acct_note.set(f"{acct.email}: {problem}" if problem
+            self.acct_note.set(f"{acct.email}: {for_app(problem)}" if problem
                                else f"Connected! {acct.email} has {folders} folders.")
 
         self.jobs.start(lambda: try_login(acct), done)
@@ -508,14 +518,15 @@ class App:
         if problems:
             self.opt_note.set("Not saved: " + " ".join(problems))
             return
-        interval_changed = new.interval_minutes != self.cfg.interval_minutes
         save_config(new, self.path)
         self.cfg = new
         want_on = self.sched_var.get()
         was_on = schedule_is_on()[0]
-        if want_on == was_on and not (want_on and interval_changed):
+        if not want_on and not was_on:
             self.opt_note.set("Saved. The next sort uses these settings.")
             return
+        # Ticked: set the task up again every time, so it uses this interval and this copy of the app
+        # (after the app file was moved, opening it and saving once fixes the schedule).
         if want_on and not enabled_accounts(new):
             self.opt_note.set("Saved. Add an account before turning on background sorting.")
             self.sched_var.set(False)
@@ -842,7 +853,7 @@ class AddAccount:
         def done(result: Any, error: BaseException | None) -> None:
             problem, folders = result if error is None else (plain_error(error), 0)
             if problem:
-                self.note.set(f"That didn't work: {problem}")
+                self.note.set(f"That didn't work: {for_app(problem)}")
                 return
             self.password.set("")
             if is_new:
@@ -884,7 +895,7 @@ class AddAccount:
         def done(result: Any, error: BaseException | None) -> None:
             problem, folders = result if error is None else (plain_error(error), 0)
             if problem:
-                self.note.set(f"The Microsoft sign-in didn't finish: {problem}")
+                self.note.set(f"The Microsoft sign-in didn't finish: {for_app(problem)}")
                 return
             self.app.cfg.accounts.append(acct)
             save_config(self.app.cfg, self.app.path)

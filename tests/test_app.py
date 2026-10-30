@@ -146,6 +146,35 @@ def test_window_shows_the_settings_and_saves_them(window, tmp_path):
     assert w.opt_note.get().startswith("Saved")
 
 
+def test_ticking_background_sorting_sets_up_the_schedule(window, tmp_path, monkeypatch):
+    import time
+
+    app, root = window
+    path = tmp_path / "config.yaml"
+    save_config(cfg(), path)
+    calls = []
+
+    class Sched:
+        @staticmethod
+        def install(minutes, config_path):
+            calls.append((minutes, config_path))
+            return "TacoSort will now run every 30 minutes."
+
+    monkeypatch.setattr(app.cli, "_schedule", lambda: Sched)
+    w = app.App(root, path)
+    w.sched_var.set(True)
+    w.interval_var.set("30")
+    w.save_options()
+    deadline = time.monotonic() + 10
+    while w.jobs.busy and time.monotonic() < deadline:
+        root.update()
+        time.sleep(0.02)
+    root.update()
+    assert calls == [(30, path.resolve())]
+    assert load_config(path).interval_minutes == 30
+    assert "every 30 minutes" in w.opt_note.get()
+
+
 def test_window_refuses_a_bad_number(window, tmp_path):
     app, root = window
     path = tmp_path / "config.yaml"
@@ -208,6 +237,16 @@ def test_try_login_reports_plainly(monkeypatch):
     assert app.try_login(acct, "x") == ("Wrong password.", 0)
     monkeypatch.setattr(app.cli, "make_backend", lambda a, secret_getter=None: Fine())
     assert app.try_login(acct) == (None, 3)
+
+
+def test_command_hints_point_at_the_window():
+    from tacosort.app import for_app
+
+    assert for_app("No password is saved for account 'a'. Run 'tacosort setup' to enter it.") == (
+        "No password is saved for account 'a'. Use Add account... on the Accounts tab (with the same email "
+        "address) to enter it.")
+    assert "Accounts tab" in for_app("then run `tacosort setup` again.")
+    assert for_app("Nothing to change here.") == "Nothing to change here."
 
 
 def test_assets_are_shipped():
