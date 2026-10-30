@@ -303,6 +303,39 @@
         "Yahoo IMAP returns only six headers for HEADER.FIELDS and can't search malformed Message-IDs: probe a new provider with a read-only script first",
         "A bounded work queue that retries its stuck items first never gets past them: put an unfinished item at the back"
       ]
+    },
+    {
+      "title": "The TacoSort app and release 0.1.0",
+      "date": "2026-10-29",
+      "summary": "The same session built a Tkinter window with tick-box options, a one-file PyInstaller app for Windows, macOS and Linux with a GitHub build, and published release 0.1.0 at the owner's word.",
+      "stages": [
+        {
+          "name": "Session",
+          "kind": "solo",
+          "sessions": [
+            {
+              "id": "979da9f6",
+              "role": "Orchestrator (continued)",
+              "start": "2026-10-29T20:00",
+              "end": "2026-10-29T21:05",
+              "did": "app.py, options.py, launch.py, packaging + build workflow, schedule from the app, README; release v0.1.0",
+              "outcome": "done",
+              "files": 16
+            }
+          ]
+        }
+      ],
+      "events": [
+        {
+          "at": "2026-10-29T20:58",
+          "until": "2026-10-29T21:04",
+          "text": "Tag v0.1.0: release built and published"
+        }
+      ],
+      "lessons": [
+        "A windowed PyInstaller app has no stdout: give it somewhere to write before any print",
+        "A frozen app's scheduled task must run the app itself, not python -m"
+      ]
     }
   ]
 }

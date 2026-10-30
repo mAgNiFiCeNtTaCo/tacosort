@@ -19,12 +19,18 @@ The owner isn't a programmer: explain in plain words.
 - `tacosort/companies.py`: company sub-folders (`Promotions/Crunchyroll`), naming, the threshold, and
   where a company's unsure mail goes (`unsure` rows in `company_folders`).
 - `tacosort/cli.py`, `config.py`, `report.py`: the command line.
+- `tacosort/app.py` (the window), `options.py` (what each tick box means), `launch.py` (the built app's
+  entry: window, CLI or `--smoke-test`), `assets/` (icon, drawn by `packaging/make_icon.py`).
+- `packaging/build.py` + `.github/workflows/build.yml`: the one-file app; a `v*` tag publishes a release.
 - `tests/`, `.github/workflows/ci.yml`, `examples/config.example.yaml`.
 - `_team/` (gitignored): station briefs and review reports.
 
 ## Commands
 - Tests: `.venv\Scripts\python -m pytest -q`; lint: `.venv\Scripts\ruff check .`
-- Run: `.venv\Scripts\tacosort setup`, `preview`, `run --backlog --yes`, `run`, `schedule on`.
+- Run: `.venv\Scripts\tacosort setup`, `preview`, `run --backlog --yes`, `run`, `schedule on`;
+  `.venv\Scripts\tacosort app` opens the window.
+- Build the app here: `.venv\Scripts\python packaging\build.py` (-> `dist\TacoSort-<ver>-windows.exe`).
+  Release: bump `tacosort/__init__.py`, push, then tag `vX.Y.Z` and push the tag (public: owner's OK).
 - CI: `gh run list` / `gh run watch` after a push.
 
 ## Rules
@@ -36,6 +42,8 @@ The owner isn't a programmer: explain in plain words.
   never commit it.
 - Public repo: push freely, but nothing personal in committed files.
 - Not on PyPI: docs install with `pipx install git+https://github.com/mAgNiFiCeNtTaCo/tacosort`.
+- The window only touches widgets on its own thread: mail work goes through `Jobs.start`, log lines
+  through `Jobs.later`. The built app has no console (`sys.stdout` is None until launch.py fixes it).
 
 ## Gotchas
 - Gmail folders are labels: Inbox mail with a label must never be learned as "move out".

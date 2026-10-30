@@ -4,11 +4,13 @@ TacoSort (called TidyInbox until 2026-10-28) is an open-source (MIT) Python tool
 server, Outlook through OAuth2) into one shared folder scheme and keeps it sorted in the background.
 
 ## Where it stands (2026-10-29)
-- Public at https://github.com/mAgNiFiCeNtTaCo/tacosort; people install it with
-  `pipx install git+https://github.com/mAgNiFiCeNtTaCo/tacosort` (it is not on PyPI).
+- Public at https://github.com/mAgNiFiCeNtTaCo/tacosort. **Release 0.1.0** (2026-10-29,
+  https://github.com/mAgNiFiCeNtTaCo/tacosort/releases/tag/v0.1.0): a one-file app for Windows
+  (15 MB), macOS Apple silicon (zip) and Linux. With Python: `pipx install
+  git+https://github.com/mAgNiFiCeNtTaCo/tacosort` (it is not on PyPI); `tacosort app` opens the window.
 - Start: `tacosort setup` → `tacosort preview` → `tacosort run --backlog --yes` (old mail) →
   `tacosort schedule on` (keeps new mail sorted).
-- Tests: `.venv\Scripts\python -m pytest -q`: 654 passed, 2 skipped (POSIX-only), ruff clean.
+- Tests: `.venv\Scripts\python -m pytest -q`: 676 passed, 2 skipped (POSIX-only), ruff clean.
   GitHub CI green on Windows, macOS and Linux (run 40741390253; the Mac jobs got no runner 3 times on
   2026-10-28, a GitHub-side shortage: a re-run the same day passed).
 - In real use on three of the owner's accounts (app passwords, background schedule every 15 min):
@@ -22,6 +24,30 @@ server, Outlook through OAuth2) into one shared folder scheme and keeps it sorte
 - Untested for real: Outlook/Google OAuth, AI sorting against the live API, the Windows at-logon trigger.
 
 ## Log
+### 2026-10-29: The TacoSort app and release 0.1.0
+- Owner's ask: "make the install easier and make it an app if needed with tickable options".
+- **`tacosort/app.py`** (Tkinter, no new dependency): tabs Accounts (add with the provider's app-password
+  steps and link, test, on/off, remove; Outlook via the Microsoft device sign-in), Options (tick boxes,
+  folders to use, background sorting + interval), Sort (learn, preview, sort now in rounds of 500 until
+  done, undo, every move as a page). Work runs on a helper thread; the window refuses to close mid-run;
+  a broken settings file is never saved over. Command hints ("run 'tacosort setup'") are reworded for
+  the window.
+- **`tacosort/options.py`**: what each tick box means; `read`/`apply` keep everything the window doesn't
+  show (accounts, rules, VIPs, renamed folders). **`tacosort/launch.py`**: the app's entry: no arguments
+  opens the window, a command runs the CLI, `--smoke-test` checks a build.
+- **Schedule from the app:** in a frozen build the task runs `TacoSort.exe run --quiet --config ...`;
+  `schtasks` gets `CREATE_NO_WINDOW` (no console flash). Saving with background sorting ticked always
+  re-creates the task, so a moved app file is fixed by one save.
+- **Packaging:** `packaging/build.py` (PyInstaller one file, `--collect-submodules tacosort` +
+  keyring backends, self-check of the result), `packaging/make_icon.py` (icon drawn in plain Python:
+  a letter in a taco), `.github/workflows/build.yml` (Windows, macOS, ubuntu-22.04; on a `v*` tag it
+  publishes a release). Mac build has the default icon (a PNG needs Pillow to become .icns).
+- `tacosort app` / `tacosort-app` open the window from a pip install. README: download first, then
+  Python; screenshot `docs/images/app-options.png` (demo accounts only). `/slop-check` clean.
+- Owner chose "Publish 0.1.0 now": tag `v0.1.0`, release run 40988972224 green; CI green.
+- **Open:** the app is unsigned (SmartScreen / Gatekeeper warnings, explained in the README); no Intel
+  Mac build; AI sorting has no switch in the window; the owner's own schedule still runs the venv.
+
 ### 2026-10-29: Yahoo account, Old mail folder, two Yahoo quirks fixed
 - **Yahoo "Main" added** (app password). Backlog sorted in 500-move runs (the owner said yes): about
   10,600 -> 1,450, 9,168 moves, School folder for `*@lsoa.org` (owner's choice: all of it).
