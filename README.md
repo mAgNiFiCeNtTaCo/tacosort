@@ -38,6 +38,9 @@ INBOX (2,341)                            INBOX (37)        <- people, replies, s
   in your Inbox, so what it learned since applies to older mail too.
 - **Old security emails can leave too.** With `security_keep_days: 3`, codes, sign-in alerts and
   "verify your email" stay in the Inbox for 3 days, then move to a Security folder.
+- **Old mail can leave too.** With `old_mail_days: 180`, read mail that stays in the Inbox (people,
+  replies, emails TacoSort couldn't place) moves to an "Old mail" folder once it is six months old.
+  Starred and unread mail, your VIPs and mail your own rules keep in the Inbox stay.
 - **Optional waiting time.** With `hold_hours: 24`, new mail stays in the Inbox for a day so you see
   it there first, then gets sorted.
 - **Keeps your Inbox for people.** Mail from people you've written to, replies, security codes,
@@ -234,6 +237,7 @@ recheck_inbox: no         # don't look at mail left in the Inbox again each day 
 security_keep_days: 3     # security emails move to the Security folder when 3 days old (default 0: never)
 business_keep_days: 3     # people's business emails (a reply about your tax exemption) move to Business
                           # when 3 days old (default 0: they stay in the Inbox)
+old_mail_days: 180        # read mail left in the Inbox moves to "Old mail" when 180 days old (default 0: never)
 ```
 
 A fully commented example is in [examples/config.example.yaml](examples/config.example.yaml).

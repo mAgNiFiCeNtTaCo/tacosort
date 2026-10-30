@@ -69,6 +69,11 @@ daily re-check. User rules and starred mail come first; a message dragged back i
 Business (`BUSINESS_PHRASES`, subject only): from a robot, category `business` (0.9). From a person
 (contact, reply, or no automation markers) it stays with `aged_to="business"` and moves after
 `business_keep_days` (default 0 = never). A security email about business ages into Business too.
+
+Old mail (`old_mail_days`, default 0 = off; `old_mail_folder` = "Old mail", with `folder_prefix`): a
+message that would stay in the Inbox after every other step, is read (`\\Seen`), not starred, not from a
+VIP, and not kept by a user rule or a learned rule, moves there once it is that many days old (arrival
+time), with category `old`. Found by a `--backlog` run and the daily re-check.
 The contact guard no longer applies to mail with bulk markers: writing to a shop's service@ address
 once doesn't keep its newsletters in the Inbox.
 

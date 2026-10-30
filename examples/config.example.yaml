@@ -115,6 +115,13 @@ security_folder: Security
 # replying about your tax exemption), it stays in the Inbox this many days first (0 = stays for good).
 business_keep_days: 0
 
+# ---- Old mail ----------------------------------------------------------------------------------------
+# Read mail that stays in the Inbox (from people, replies, emails TacoSort couldn't place) moves to
+# old_mail_folder once it is this many days old (0 = it stays in the Inbox for good). Starred and unread
+# mail, your VIPs and mail your own rules keep in the Inbox stay; one you drag back is never moved again.
+old_mail_days: 0
+old_mail_folder: Old mail
+
 # ---- Waiting time ---------------------------------------------------------------------------------------
 # New mail stays in the Inbox this many hours before it is sorted, so you see it there first.
 # 0 sorts it at once. The background run picks it up once it is old enough.

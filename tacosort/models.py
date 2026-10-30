@@ -205,9 +205,14 @@ class AppConfig:
     security_keep_days: int = 0           # security emails leave the Inbox after this many days (0 = never)
     security_folder: str = "Security"     # ...for this folder
     business_keep_days: int = 0           # people's business mail goes to Business after this many days (0 = never)
+    old_mail_days: int = 0                # read mail left in the Inbox moves to old_mail_folder at this age (0 = never)
+    old_mail_folder: str = "Old mail"
 
     def security_folder_name(self) -> str:
         return f"{self.folder_prefix}/{self.security_folder}" if self.folder_prefix else self.security_folder
+
+    def old_mail_folder_name(self) -> str:
+        return f"{self.folder_prefix}/{self.old_mail_folder}" if self.folder_prefix else self.old_mail_folder
     learn_sample: int = 300               # messages read per folder when learning the user's scheme
     data_dir: str = ""                    # "" = platform default
 

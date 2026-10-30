@@ -14,6 +14,7 @@ Every run (from the schedule, `tacosort run` or `tacosort watch`) does this for 
    With `hold_hours` set, mail younger than that is left alone for now and looked at again later.
    Once a day it also looks again at the mail it left in the Inbox before (`recheck_inbox`).
    With `security_keep_days` set, security emails older than that go to the Security folder then.
+   With `old_mail_days` set, read mail left in the Inbox that is older than that goes to Old mail.
 4. **Decide** where each message belongs (see *How a decision is made*).
 5. **Move** the messages that belong in a folder, creating the folder the first time it's needed.
    A company with 3 or more emails of one kind goes into its own folder inside it

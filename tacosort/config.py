@@ -342,6 +342,10 @@ def config_from_dict(data: Any, warnings: list[str] | None = None) -> AppConfig:
         cfg.business_keep_days = _to_int(data["business_keep_days"], "business_keep_days")
     if "security_folder" in data:
         cfg.security_folder = str(data["security_folder"] or "").strip()
+    if "old_mail_days" in data:
+        cfg.old_mail_days = _to_int(data["old_mail_days"], "old_mail_days")
+    if "old_mail_folder" in data:
+        cfg.old_mail_folder = str(data["old_mail_folder"] or "").strip()
     if "recheck_inbox" in data:
         cfg.recheck_inbox = _to_bool(data["recheck_inbox"], "recheck_inbox")
     if "data_dir" in data:
@@ -438,6 +442,8 @@ def config_to_dict(cfg: AppConfig) -> dict:
         "security_keep_days": cfg.security_keep_days,
         "security_folder": cfg.security_folder,
         "business_keep_days": cfg.business_keep_days,
+        "old_mail_days": cfg.old_mail_days,
+        "old_mail_folder": cfg.old_mail_folder,
         "ai": {
             "enabled": cfg.ai.enabled,
             "model": cfg.ai.model,
@@ -568,6 +574,12 @@ def config_problems(cfg: AppConfig) -> list[str]:
     if not 0 <= cfg.business_keep_days <= 365:
         problems.append("business_keep_days must be between 0 (people's business mail stays in the Inbox) "
                         "and 365.")
+    if not 0 <= cfg.old_mail_days <= 3650:
+        problems.append("old_mail_days must be between 0 (mail stays in the Inbox) and 3650; 180 moves read "
+                        "mail out once it is about six months old.")
+    if cfg.old_mail_days and (not cfg.old_mail_folder or "/" in cfg.old_mail_folder
+                              or cfg.old_mail_folder.lower() == "inbox"):
+        problems.append("old_mail_folder must be a plain folder name such as Old mail.")
     if cfg.look_alike_min < 0 or cfg.look_alike_min == 1:
         problems.append("look_alike_min must be 0 (off) or at least 2; 5 is a good value.")
     if cfg.ai.max_per_run < 0:

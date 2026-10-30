@@ -29,6 +29,7 @@ from pathlib import Path
 from . import learner
 from .backend import BackendError, MailBackend
 from .classify.heuristics import subject_template
+from .classify.pipeline import _vip_matches
 from .companies import GUESS_FLOOR, CompanyFolders, company_key, pick_name
 from .models import (
     INBOX,
@@ -530,6 +531,13 @@ def _run_folder(config: AppConfig, store: Store, backend: MailBackend, account: 
                 d = Decision(d.aged_to, d.confidence, d.source,
                              f"{d.reason.removesuffix(': stays in the Inbox')}, older than {days} days: "
                              f"moved to {folder_name}")
+            old = _old_folder(config, m, d) if dest is None and d is not None else None
+            if old:
+                folder_name, days = old
+                dest = sub = folder_name
+                d = Decision("old", d.confidence, d.source,
+                             f"{d.reason.removesuffix(', so it stays in the Inbox').removesuffix(': stays in the Inbox')}"
+                             f"; read and older than {days} days: moved to {folder_name}")
             target = by_name.get(_norm(dest)) if dest else None
             if target is not None:
                 dest = target.name                 # the server's own spelling ("receipts" stays "receipts")
@@ -726,6 +734,23 @@ def _aged_folder(config: AppConfig, msg: Message, d: Decision) -> tuple[str, int
     if arrived is None or arrived > utcnow() - timedelta(days=days):
         return None
     return folder, days
+
+
+def _old_folder(config: AppConfig, msg: Message, d: Decision) -> tuple[str, int] | None:
+    """(folder, days) for read mail that stays in the Inbox but is older than `old_mail_days`, so the
+    Inbox holds what is current. Never starred or unread mail, a VIP's, or mail kept there by your own
+    rule or by your correction (a message you drag back is never moved again either)."""
+    days = config.old_mail_days
+    if days <= 0 or not config.old_mail_folder or not d.keeps or d.source in ("user-rule", "learned"):
+        return None
+    if msg.is_flagged or "\\Seen" not in msg.flags:
+        return None
+    if any(_vip_matches(v, msg.from_.email.lower(), msg.from_.domain) for v in config.vip):
+        return None
+    arrived = _arrival(msg)
+    if arrived is None or arrived > utcnow() - timedelta(days=days):
+        return None
+    return config.old_mail_folder_name(), days
 
 
 def _same_message(store: Store, account_id: str, msg: Message) -> bool:
