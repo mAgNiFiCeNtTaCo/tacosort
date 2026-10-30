@@ -74,6 +74,40 @@ INBOX (2,341)                            INBOX (37)        <- people, replies, s
 
 ## Install
 
+### The easy way: download the app
+
+No Python and no typing commands. Download one file from the
+[Releases page](https://github.com/mAgNiFiCeNtTaCo/tacosort/releases/latest):
+
+| Your computer | File | Then |
+|---|---|---|
+| Windows 10 or 11 | `TacoSort-<version>-windows.exe` | Double-click it. |
+| Mac with Apple silicon (M1 or newer) | `TacoSort-<version>-macos.zip` | Unzip it and drag TacoSort into Applications. |
+| Linux | `TacoSort-<version>-linux` | `chmod +x` it, then open it. |
+
+Keep the file where it is after the first start (Documents or Applications is fine): background
+sorting runs it from there. If you move it later, open it and click **Save settings** once.
+
+The app isn't signed (a signing certificate costs money every year), so the first start shows a
+warning:
+
+- **Windows** says *"Windows protected your PC"*: click **More info**, then **Run anyway**.
+- **macOS** says it *"can't be opened"*: right-click (or Control-click) TacoSort in Applications and
+  choose **Open**, then **Open** again. Or: System Settings > Privacy & Security > **Open Anyway**.
+
+The window has three tabs, in the order you need them:
+
+1. **Accounts**: add each email account. It shows where to make an app password for your provider,
+   and checks the login works before it saves anything.
+2. **Options**: tick boxes for every setting, the folders to use, and background sorting.
+3. **Sort**: **Preview** shows where each email in your Inbox would go and moves nothing. **Sort my
+   Inbox now** moves them, **Undo last sort** puts them back, and **Show every move** opens a page
+   listing every move and why it was made.
+
+![The Options tab: tick boxes for every setting](docs/images/app-options.png)
+
+### With Python (for the command line)
+
 TacoSort is installed straight from this GitHub page. It is **not** published on PyPI, so don't
 `pip install` it by name: a package with a similar name there would be someone else's program.
 
@@ -106,6 +140,7 @@ pipx install "tacosort[ai] @ git+https://github.com/mAgNiFiCeNtTaCo/tacosort"
 (Already installed without it? `pipx inject tacosort anthropic` adds it.)
 
 **4. Check it works:** `tacosort --version`. To update later: `pipx upgrade tacosort`.
+`tacosort app` (or `tacosort-app`) opens the same window as the download.
 
 **From the source code** (for trying the newest changes or helping out):
 
@@ -118,6 +153,12 @@ pip install -e ".[dev]"
 ```
 
 ## Quick start (about 5 minutes)
+
+**With the app:** add your accounts on the Accounts tab, look over the tick boxes on the Options tab,
+then click Preview on the Sort tab. If the preview looks right, click Sort my Inbox now, and tick
+background sorting on the Options tab.
+
+**On the command line:**
 
 ```
 tacosort setup
@@ -333,6 +374,12 @@ It is stored by your operating system's keychain, not by TacoSort. You use an ap
 you can cancel at your provider at any time.
 
 ## Uninstall
+
+**The app:** untick background sorting on the Options tab and click Save settings, remove each
+account on the Accounts tab (this also deletes its password from the keychain), then delete the
+TacoSort file. Optionally cancel the app passwords at your provider.
+
+**The command line:**
 
 1. `tacosort schedule off` (stops the background job).
 2. `tacosort accounts remove ID` for each account (this also deletes its password from the keychain).
