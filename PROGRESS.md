@@ -48,8 +48,10 @@ server, Outlook through OAuth2) into one shared folder scheme and keeps it sorte
   (`AI_SlopAgent/reports/2026-10-29-Email_Organization.md`). CI green on every push checked.
 - Resources 2026-10-29 19:29: TacoSort 0 processes between runs, 89 MB disk; whole PC CPU 11% of 32
   threads, RAM 28.3 of 64 GB, GPU 30%.
-- **Open:** confirm the next scheduled Yahoo run is fast. A Yahoo move whose new UID TacoSort recorded
-  holds a different message there (COPYUID order), so `new_uid` isn't trusted for anything yet.
+- **Open:** confirm the next scheduled Yahoo run is fast. Undo can't find the 59 Yahoo emails with a
+  malformed Message-ID (it says so and leaves them; the recorded new UID pointed at a different message
+  in one check, and undo only uses it after a sender + subject match). A fallback that searches by
+  sender and compares the full header would close that.
 
 ### 2026-10-29: Second account, learning from repetition, 24-hour wait, Security and Business folders
 - **Second account** SRGaming (Gmail, card-selling business) added through `tacosort setup` in the canvas
