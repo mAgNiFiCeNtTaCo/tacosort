@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 import contextlib
+import re
 from collections import Counter, defaultdict
 from collections.abc import Callable
 from datetime import datetime, timedelta
@@ -53,6 +54,9 @@ DOMAIN_MIN_MESSAGES = 5       # a domain rule needs clearly more evidence...
 DOMAIN_MIN_SENDERS = 2        # ...from at least this many different addresses
 CORRECTION_DAYS = 30          # how far back corrections are checked
 MAX_LOOKUPS = 200             # folder searches per account per run when checking corrections
+# A Message-ID as the standard writes it. Some senders write one without <...@...>; Yahoo then can't find
+# the message by it at all, so such a move is only looked for where it came from (see detect_corrections).
+_WELL_FORMED_ID = re.compile(r"<[^<>\s]+@[^<>\s]+>")
 BATCH = 200
 
 Log = Callable[[str], None]
@@ -404,7 +408,11 @@ def detect_corrections(store: Store, backend: MailBackend, account: str | Accoun
                 store.mark_move_checked(mv.id, "")
                 continue
         where = None
-        for folder in dict.fromkeys([mv.from_folder, inbox_name, *managed]):
+        # Not where we put it. Searching every folder for an ID the server may ignore would use up the
+        # whole budget on one message every run, so a malformed one is only looked for where it came from
+        # (a run also notices a message put back in the Inbox by itself).
+        sweep = [*managed] if _WELL_FORMED_ID.fullmatch(mv.message_id) else []
+        for folder in dict.fromkeys([mv.from_folder, inbox_name, *sweep]):
             if folder == mv.to_folder or folder not in existing:
                 continue
             lookups += 1
@@ -420,6 +428,8 @@ def detect_corrections(store: Store, backend: MailBackend, account: str | Accoun
         if where is None:
             if lookups < max_lookups:
                 store.mark_move_checked(mv.id, "gone")     # deleted, or filed somewhere we don't watch
+            else:
+                store.mark_move_checked(mv.id, "")         # the budget ran out mid-search: the others first
             continue
         if where in (mv.from_folder, inbox_name):
             # Put back: this sender belongs in the Inbox, and this message must never move again.

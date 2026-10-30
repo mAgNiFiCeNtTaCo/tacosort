@@ -403,6 +403,38 @@ def test_detect_corrections_is_bounded(store):
     assert len(checked) == 10
 
 
+def test_malformed_message_id_is_only_looked_for_where_it_came_from(store):
+    # Yahoo can't find a message by an ID written without <...@...>: searching every folder for it used
+    # up the whole budget on that one message, run after run.
+    b = FakeBackend("a")
+    b.connect()
+    for name in ("Finance", "Travel", "Kids", "Clubs"):
+        b.ensure_folder(name)
+    b.add("Receipts", make_message("orders@shop.example.com", "odd", message_id="1a2b3c-4d5e"))
+    store.record_moves([MoveRecord("r", "a", "1a2b3c-4d5e", "orders@shop.example.com", "odd", "INBOX",
+                                   "Receipts", "receipts", "heuristic", "", utcnow())])
+    b.connect()
+    calls = []
+    b.find_message_id = lambda f, mid: calls.append(f) or []      # the server can't find it anywhere
+    learner.detect_corrections(store, b, "a", config=cfg())
+    assert calls == ["Receipts", "INBOX"]
+    assert [m.check_state for m in store.recent_moves()] == ["gone"]
+
+
+def test_budget_running_out_mid_search_puts_the_message_last(store):
+    b = FakeBackend("a")
+    b.connect()
+    for name in ("Finance", "Travel", "Kids", "Clubs"):
+        b.ensure_folder(name)
+    lost = _moved(store, b, "lost")
+    b.connect()
+    b.find_message_id = lambda f, mid: []
+    learner.detect_corrections(store, b, "a", config=cfg(), max_lookups=3)
+    [mv] = store.recent_moves()
+    assert mv.message_id == lost and mv.check_state == ""
+    assert store.moves_to_check("a", utcnow() - timedelta(days=1)) == []   # not due again right away
+
+
 def _sort_like_the_engine(store, b, subject, sender="orders@shop.example.com"):
     """Put a message in the Inbox and move it to Receipts the way a run does, logging the move."""
     mid = f"<{subject}@example.com>"
