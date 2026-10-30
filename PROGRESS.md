@@ -8,7 +8,7 @@ server, Outlook through OAuth2) into one shared folder scheme and keeps it sorte
   `pipx install git+https://github.com/mAgNiFiCeNtTaCo/tacosort` (it is not on PyPI).
 - Start: `tacosort setup` → `tacosort preview` → `tacosort run --backlog --yes` (old mail) →
   `tacosort schedule on` (keeps new mail sorted).
-- Tests: `.venv\Scripts\python -m pytest -q`: 653 passed, 2 skipped (POSIX-only), ruff clean.
+- Tests: `.venv\Scripts\python -m pytest -q`: 654 passed, 2 skipped (POSIX-only), ruff clean.
   GitHub CI green on Windows, macOS and Linux (run 40741390253; the Mac jobs got no runner 3 times on
   2026-10-28, a GitHub-side shortage: a re-run the same day passed).
 - In real use on three of the owner's accounts (app passwords, background schedule every 15 min):
@@ -39,7 +39,10 @@ server, Outlook through OAuth2) into one shared folder scheme and keeps it sorte
   back empty, the full header has it). The correction check then searched every folder (~1 s per search
   on Yahoo, 0.2 s on Gmail), used up its 200-search budget on 1-3 emails, and began with the same ones
   next run. Now such a move is only looked for where it came from, and a move whose search runs out of
-  budget waits behind the others (`e60547d`).
+  budget waits behind the others (`e60547d`). That alone didn't help (19:39 run: still 4.5 min): the
+  backlog left 9,640 Yahoo moves due for a check (hourly in their first day), so every run spent all 200
+  searches. The check now also stops after 30 seconds per account (`MAX_CHECK_SECONDS`, `aa95056`);
+  the 19:54 scheduled run took 69 s.
 - **Old mail** (`eb2f3fe`, owner: "do all"): `old_mail_days` (default 0 = off) / `old_mail_folder`
   ("Old mail"). Read mail that would stay in the Inbox moves there once that old; never starred or unread
   mail, VIPs, or mail a user rule or learned rule keeps there; a dragged-back message stays. Preview: 0 on
@@ -48,7 +51,7 @@ server, Outlook through OAuth2) into one shared folder scheme and keeps it sorte
   (`AI_SlopAgent/reports/2026-10-29-Email_Organization.md`). CI green on every push checked.
 - Resources 2026-10-29 19:29: TacoSort 0 processes between runs, 89 MB disk; whole PC CPU 11% of 32
   threads, RAM 28.3 of 64 GB, GPU 30%.
-- **Open:** confirm the next scheduled Yahoo run is fast. Undo can't find the 59 Yahoo emails with a
+- **Open:** undo can't find the 59 Yahoo emails with a
   malformed Message-ID (it says so and leaves them; the recorded new UID pointed at a different message
   in one check, and undo only uses it after a sender + subject match). A fallback that searches by
   sender and compares the full header would close that.
