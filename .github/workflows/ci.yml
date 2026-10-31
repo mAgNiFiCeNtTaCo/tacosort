@@ -12,6 +12,7 @@ jobs:
   test:
     name: ${{ matrix.os }} / Python ${{ matrix.python }}
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -31,4 +32,5 @@ jobs:
       - name: Lint
         run: python -m ruff check .
       - name: Tests
-        run: python -m pytest -q
+        # A test stuck for 2 minutes prints where every thread is.
+        run: python -m pytest -q -o faulthandler_timeout=120

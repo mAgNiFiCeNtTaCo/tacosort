@@ -147,6 +147,8 @@ def test_window_shows_the_settings_and_saves_them(window, tmp_path):
 
 
 def test_ticking_background_sorting_sets_up_the_schedule(window, tmp_path, monkeypatch):
+    import contextlib
+    import queue
     import time
 
     app, root = window
@@ -165,11 +167,11 @@ def test_ticking_background_sorting_sets_up_the_schedule(window, tmp_path, monke
     w.sched_var.set(True)
     w.interval_var.set("30")
     w.save_options()
+    # Run the job's hand-back ourselves: root.update() can block on a Mac with no screen (CI hung there).
     deadline = time.monotonic() + 10
     while w.jobs.busy and time.monotonic() < deadline:
-        root.update()
-        time.sleep(0.02)
-    root.update()
+        with contextlib.suppress(queue.Empty):
+            w.jobs._q.get(timeout=0.05)()
     assert calls == [(30, path.resolve())]
     assert load_config(path).interval_minutes == 30
     assert "every 30 minutes" in w.opt_note.get()
