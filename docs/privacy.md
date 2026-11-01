@@ -6,9 +6,11 @@ TacoSort runs on your own computer. There is no TacoSort server, account, analyt
 
 - **Your mail server**, over an encrypted connection (IMAP with SSL/TLS or STARTTLS), to read
   headers and move messages.
-- **Microsoft or Google sign-in pages**, only if you use OAuth sign-in (Outlook.com / Hotmail), to get
-  and renew your sign-in.
+- **Microsoft's sign-in page**, only for Outlook.com / Hotmail accounts, to get and renew your sign-in.
 - **Anthropic's API**, only if you turn the optional AI on (below).
+- **Tailscale**, only if you turn on the phone page: `tailscale serve` passes requests from your own
+  Tailscale devices to the page on this computer. The page itself listens on 127.0.0.1 only and is
+  never put on the internet (no Funnel).
 
 Nothing else.
 

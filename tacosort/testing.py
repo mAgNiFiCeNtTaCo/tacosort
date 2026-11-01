@@ -10,8 +10,6 @@ messier servers, so the engine can be tested against them:
   source flagged \\Deleted (search_uids / find_message_id skip it), and the new UID is not reported.
 - `move_filter=callable(uid) -> bool`: only UIDs it approves are moved; the rest are left in place and
   missing from the result (a partial move).
-
-Owned by the orchestrator: propose changes instead of editing (see SPEC.md).
 """
 
 from __future__ import annotations

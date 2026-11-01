@@ -43,8 +43,7 @@ PROVIDERS: dict[str, Provider] = {
                 "3. Copy the 16-letter password Google shows and paste it into TacoSort (spaces don't "
                 "matter).\n"
                 "IMAP is always on for personal Gmail. On a work or school Google account your "
-                "administrator may have turned IMAP or App Passwords off; ask them, or use the "
-                "oauth2-google sign-in instead."
+                "administrator may have turned IMAP or App Passwords off; ask them."
             ),
             domains=("gmail.com", "googlemail.com"),
         ),

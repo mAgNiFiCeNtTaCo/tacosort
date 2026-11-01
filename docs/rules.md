@@ -1,7 +1,6 @@
 # Your own rules
 
-TacoSort guesses well on its own, but you know your mail best. Rules let you say exactly where some
-mail goes. They are checked **before** TacoSort's own guesses (only the safety checks come first: see
+Rules let you say exactly where some mail goes. They are checked **before** TacoSort's own guesses (only the safety checks come first: see
 [how-it-works.md](how-it-works.md)).
 
 Rules live in the settings file. Open it with `tacosort config edit`. When you save and close the
@@ -65,7 +64,7 @@ Address patterns (`from`, `to`):
 
 | Action | Meaning |
 |---|---|
-| `receipts`, `finance`, `travel`, `newsletters`, `promotions`, `social`, `notifications` | that category's folder (renamed / with `folder_prefix` if you set those) |
+| `receipts`, `finance`, `travel`, `newsletters`, `promotions`, `social`, `notifications`, `accounts`, `business` | that category's folder (renamed / with `folder_prefix` if you set those) |
 | your own category, e.g. `kids` | the folder you gave it under `categories:` |
 | `inbox` | leave it in the Inbox, whatever TacoSort would have guessed |
 | `folder:<name>` | exactly that folder, e.g. `folder:Clients/Acme` (`/` makes a sub-folder; `folder_prefix` is not added) |

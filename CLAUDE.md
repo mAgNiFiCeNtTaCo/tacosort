@@ -66,7 +66,7 @@ The owner isn't a programmer: explain in plain words.
   backslashes too: send `.venv/Scripts/tacosort.exe setup` (forward slashes work in PowerShell).
 - Real Gmail differs from the fakes: tabs only via X-GM-RAW search. Check a change on the real mailbox
   with `tacosort preview` before telling the owner it works.
-- The owner runs three accounts (personal Gmail, SRGaming Gmail for a card-selling business, Yahoo
+- The owner runs three accounts (personal Gmail, a second Gmail for a small business, Yahoo
   "Main") with non-default settings (`hold_hours: 24`, `unsure_to_folder`, `security_keep_days: 3`,
   `business_keep_days: 3`, `old_mail_days: 180`). Defaults for
   other users stay conservative: new behaviour that moves more mail ships off by default.

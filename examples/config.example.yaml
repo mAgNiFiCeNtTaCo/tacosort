@@ -138,7 +138,7 @@ interval_minutes: 15              # used by `tacosort schedule on`
 
 # ---- Optional AI help (off unless you turn it on) ---------------------------------------------------
 # Only mail TacoSort is unsure about is asked about, and only From, Subject and (if send_snippet is yes)
-# a few lines of text are sent to Anthropic. Needs TacoSort installed with the AI helper (see the README)
+# up to 300 characters of the text are sent to Anthropic. Needs TacoSort installed with the AI helper (see the README)
 # and your own API key: save it with `tacosort config ai-key` so the background schedule can use it too.
 ai:
   enabled: no

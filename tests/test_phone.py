@@ -5,6 +5,7 @@ from __future__ import annotations
 import http.client
 import json
 import os
+import sys
 import threading
 import time
 import uuid
@@ -193,16 +194,92 @@ def test_turn_on_and_off(monkeypatch, tmp_path):
     assert did == [("autostart", False), ("serve", 8747, False)]
 
 
-def test_stop_kills_only_the_pid_the_page_reported(monkeypatch):
-    answers = [{"app": "tacosort", "pid": 4242}, None]
-    monkeypatch.setattr(phone, "ping", lambda port, timeout=1.5: answers.pop(0) if answers else None)
-    killed = []
-    monkeypatch.setattr(phone.os, "kill", lambda pid, sig: killed.append(pid))
-    assert phone.stop_running(8747) and killed == [4242]
+def test_stop_asks_the_page_and_never_kills(tmp_path, monkeypatch):
+    path = tmp_path / "config.yaml"
+    save_config(cfg(), path)
+    httpd = phone.make_server(path, 0)
+    t = threading.Thread(target=httpd.serve_forever, daemon=True)
+    t.start()
+    monkeypatch.setattr(phone.os, "kill", lambda pid, sig: pytest.fail("stop must not kill a process"))
+    try:
+        assert phone.stop_running(httpd.server_address[1])
+        t.join(5)
+        assert not t.is_alive()
+    finally:
+        httpd.server_close()
 
 
-def test_ping_ignores_other_programs(tmp_path):
+def test_only_this_computer_may_stop_it(server, monkeypatch):
+    status, _, _ = ask(server, "POST", "/api/stop", host="pc.tail1.ts.net:8747", body={},
+                       headers={"Tailscale-User-Login": ME, "Origin": "https://pc.tail1.ts.net:8747"})
+    assert status == 404
+    assert ask(server, url="/api/ping")[0] == 200                      # still running
+
+
+def test_ping_ignores_other_programs(server, monkeypatch):
     assert phone.ping(1, timeout=0.2) is None              # nothing listens on port 1
+    assert phone.ping(server.port)["app"] == "tacosort"
+    monkeypatch.setattr(phone.peer, "kind_of_listener", lambda port: "other")
+    assert phone.ping(server.port) is None                 # another account's program holds the port
+
+
+def test_a_used_port_is_not_shared(server):
+    with pytest.raises(phone.PhoneError, match="already in use"):
+        phone.make_server(server.path, server.port)
+
+
+# ---- who is on the other end of 127.0.0.1 ------------------------------------------------------------
+@pytest.mark.parametrize("kind,host,headers,expected", [
+    ("other", None, {}, 403),                                                   # another Windows account
+    ("other", "pc.tail1.ts.net:8747", {"Tailscale-User-Login": ME}, 403),      # ... pretending to be Tailscale
+    ("tailscale", "pc.tail1.ts.net:8747", {"Tailscale-User-Login": ME}, 200),
+    ("tailscale", None, {}, 403),                                               # Tailscale, but no login
+    ("me", None, {}, 200),
+    ("unknown", None, {}, 200),                                                 # macOS: as before
+])
+def test_the_program_on_the_other_end_counts(server, monkeypatch, kind, host, headers, expected):
+    monkeypatch.setattr(phone.peer, "kind_of_client", lambda client, srv: kind)
+    assert ask(server, host=host, headers=headers)[0] == expected
+    assert ask(server, url="/api/options", host=host, headers=headers)[0] == expected
+
+
+def test_this_test_is_seen_as_me(server):
+    import socket
+
+    with socket.create_connection(("127.0.0.1", server.port)) as s:
+        kind = phone.peer.kind_of_client(s.getsockname()[1], server.port)
+    expected = "me" if os.name == "nt" or sys.platform.startswith("linux") else "unknown"
+    assert kind == expected
+    assert phone.peer.kind_of_listener(server.port) == expected
+
+
+def test_tailscale_is_never_taken_from_the_start_folder(tmp_path, monkeypatch):
+    here, other = tmp_path / "downloads", tmp_path / "bin"
+    here.mkdir()
+    other.mkdir()
+    for planted in ("tailscale.cmd", "tailscale.bat", "tailscale.exe", "tailscale"):
+        (here / planted).write_text("echo planted\n")
+    monkeypatch.chdir(here)
+    monkeypatch.setattr(phone, "tailscale_install_paths", lambda: [tmp_path / "missing" / "tailscale.exe"])
+    monkeypatch.setenv("PATH", os.pathsep.join([".", str(here)]))
+    assert phone.tailscale_exe() is None
+    real = other / ("tailscale.exe" if os.name == "nt" else "tailscale")
+    real.write_text("")
+    real.chmod(0o755)
+    monkeypatch.setenv("PATH", os.pathsep.join([".", str(here), str(other)]))
+    assert phone.tailscale_exe() == str(real)
+    monkeypatch.setattr(phone, "tailscale_install_paths", lambda: [real])
+    assert phone.tailscale_exe() == str(real)
+
+
+def test_windows_tools_by_full_path(monkeypatch):
+    from tacosort import schedule
+
+    monkeypatch.setenv("SystemRoot", r"C:\Windows")
+    assert schedule.system32("schtasks") == os.path.join(r"C:\Windows", "System32", "schtasks.exe")
+    assert schedule.system32("notepad.exe").endswith("notepad.exe")
+    if os.name == "nt":
+        assert schedule.system32(r"C:\x\y.exe") == r"C:\x\y.exe"
 
 
 @pytest.mark.skipif(os.name != "nt", reason="the Run key is Windows only")

@@ -47,7 +47,11 @@ never touch a real mailbox or your keychain. Please keep it that way: no network
 | `tacosort/imap/` | talking to mail servers, providers, passwords (keychain) and OAuth |
 | `tacosort/classify/` | deciding where a message goes (safety checks, rules, learned, built-in checks, AI) |
 | `tacosort/store.py`, `learner.py`, `engine.py`, `schedule.py` | memory, learning, runs, undo, background job |
+| `tacosort/companies.py` | company sub-folders (Promotions/Crunchyroll) and their names |
 | `tacosort/cli.py`, `config.py`, `report.py` | the `tacosort` command, the settings file, the HTML report |
+| `tacosort/app.py`, `options.py`, `actions.py`, `launch.py` | the window, its tick boxes, the mail work it shares with the phone page, the built app's start |
+| `tacosort/phone.py`, `peer.py`, `web/` | the phone page over Tailscale, and who may connect to it |
+| `packaging/` | building the one-file app (`build.py`), its icon and its pinned build packages |
 
 [docs/how-it-works.md](docs/how-it-works.md) explains the decision order and learning.
 

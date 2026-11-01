@@ -62,8 +62,20 @@ def _platform() -> str:
 def _run(cmd: list[str], input: str | None = None) -> subprocess.CompletedProcess:
     """Run one command without a shell. Tests replace this. On Windows no console window flashes up
     (the app has none of its own, so schtasks would get a new one)."""
-    flags = getattr(subprocess, "CREATE_NO_WINDOW", 0) if sys.platform.startswith("win") else 0
+    flags = 0
+    if sys.platform.startswith("win"):
+        flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+        cmd = [system32(cmd[0]), *cmd[1:]]
     return subprocess.run(cmd, input=input, capture_output=True, text=True, check=False, creationflags=flags)
+
+
+def system32(program: str) -> str:
+    """The full path of a Windows tool such as schtasks, so a file of that name in the folder TacoSort
+    was started from (often Downloads) is never run instead."""
+    if os.path.isabs(program):
+        return program
+    name = program if program.lower().endswith(".exe") else program + ".exe"
+    return os.path.join(os.environ.get("SystemRoot", r"C:\Windows"), "System32", name)
 
 
 def frozen() -> bool:

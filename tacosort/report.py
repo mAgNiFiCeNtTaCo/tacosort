@@ -18,23 +18,12 @@ from .models import AppConfig, MoveRecord
 RECENT_LIMIT = 200
 
 
-# ---- reading the store (the Engine owns it; we only read, and survive missing helpers) --------------
+# ---- reading the store (read only; `store` is None before the first run) -----------------------------
 
-def _call(store: Any, names: tuple[str, ...], *args: Any, **kwargs: Any) -> Any:
-    """Call the first method of `store` that exists (None when there is no store or no such method).
-
-    An older or simpler store may not take our keyword arguments; then it is called without them.
-    """
-    for name in names:
-        fn = getattr(store, name, None)
-        if callable(fn):
-            try:
-                return fn(*args, **kwargs)
-            except TypeError:
-                if not kwargs:
-                    raise
-                return fn(*args)
-    return None
+def _call(store: Any, name: str, *args: Any, **kwargs: Any) -> Any:
+    """store.<name>(...), or None when there is no store yet (or a test's small fake store lacks it)."""
+    fn = getattr(store, name, None)
+    return fn(*args, **kwargs) if callable(fn) else None
 
 
 def _field(item: Any, name: str, default: Any = "") -> Any:
@@ -45,37 +34,34 @@ def _field(item: Any, name: str, default: Any = "") -> Any:
 
 def recent_moves(store: Any, limit: int = RECENT_LIMIT) -> list[Any]:
     """Newest-first moves (MoveRecord-like objects or dicts)."""
-    rows = _call(store, ("recent_moves", "list_moves", "moves"), limit=limit)
+    rows = _call(store, "recent_moves", limit=limit)
     return list(rows or [])[:limit]
 
 
 def last_run(store: Any) -> Any:
-    return _call(store, ("last_run", "latest_run"))
+    return _call(store, "last_run")
 
 
 def runs_with_moves(store: Any, limit: int = 30) -> list[Any]:
     """Recent real runs that moved something (newest first): their ids are what `undo --run` takes."""
-    rows = _call(store, ("runs",), 200, dry_run=False) or []
+    rows = _call(store, "runs", 200, dry_run=False) or []
     return [r for r in rows if _field(r, "moved", 0) and not _field(r, "dry_run", False)][:limit]
 
 
 def learned_rules(store: Any) -> list[Any]:
-    rows = _call(store, ("learned_rules", "list_learned"))
-    if rows is None:
-        rows = _call(getattr(store, "learned", None), ("all", "rules", "list"))
-    return list(rows or [])
+    return list(_call(store, "learned_rules") or [])
 
 
 def corrections(store: Any, limit: int = 100) -> list[Any]:
-    return list(_call(store, ("corrections", "list_corrections", "recent_corrections"), limit=limit) or [])
+    return list(_call(store, "corrections", limit=limit) or [])
 
 
 def contacts(store: Any) -> set[str]:
-    return set(_call(store, ("contacts", "list_contacts", "get_contacts")) or [])
+    return set(_call(store, "contacts") or [])
 
 
 def moves_since(store: Any, since: datetime) -> int | None:
-    n = _call(store, ("moves_since", "count_moves_since"), since)
+    n = _call(store, "moves_since", since)
     if isinstance(n, int):
         return n
     moves = recent_moves(store, limit=10_000)
@@ -98,7 +84,7 @@ def _comparable(at: datetime, ref: datetime) -> datetime:
 
 def move_counts(store: Any) -> Counter:
     """(account, folder) -> number of moves that are still in place."""
-    raw = _call(store, ("move_counts", "folder_counts"))
+    raw = _call(store, "move_counts")
     counts: Counter = Counter()
     if isinstance(raw, dict):
         for key, n in raw.items():

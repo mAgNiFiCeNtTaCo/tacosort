@@ -1,6 +1,5 @@
-"""Shared data types. Every part of TacoSort speaks in these, so keep them stable.
-
-Owned by the orchestrator: propose changes instead of editing (see SPEC.md).
+"""Shared data types. Every part of TacoSort uses these, so a change here touches the engine, the
+classifier, the store and the tests.
 """
 
 from __future__ import annotations

@@ -20,8 +20,7 @@ import http.client
 import json
 import os
 import re
-import shutil
-import signal
+import socket
 import subprocess
 import sys
 import threading
@@ -33,7 +32,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlsplit
 
-from . import __version__, actions, cli, options
+from . import __version__, actions, cli, options, peer
 from .backend import BackendError
 from .config import ConfigError, config_problems, load_config, save_config
 from .models import AppConfig
@@ -264,6 +263,8 @@ class Handler(BaseHTTPRequestHandler):
     server_version = "TacoSort"
     sys_version = ""
     protocol_version = "HTTP/1.1"
+    timeout = 15                               # a connection that sends nothing is dropped
+    _peer: str | None = None
 
     def log_message(self, format: str, *args: Any) -> None:
         pass                                   # no request log: paths and logins stay off the disk
@@ -273,13 +274,23 @@ class Handler(BaseHTTPRequestHandler):
         hosts = self.headers.get_all("Host") or []
         return hosts[0].strip().lower() if len(hosts) == 1 else None
 
+    def peer(self) -> str:
+        """Who owns the other end of this connection (peer.py): 'tailscale', 'me', 'other' or 'unknown'."""
+        if self._peer is None:
+            self._peer = peer.kind_of_client(self.client_address[1], self.server.server_address[1])
+        return self._peer
+
     def who(self) -> str | None:
         """'local' for this computer's own browser, the Tailscale login of an allowed person, else None.
 
         tailscale serve connects from 127.0.0.1 and sets Tailscale-User-Login itself (it drops one sent by
-        the phone), so the header is trusted only on connections from this computer. Any other Host name
-        is refused: that stops a web page that points its own name at 127.0.0.1 (DNS rebinding)."""
+        the phone). 127.0.0.1 is shared by every account on the computer, so the program on the other end
+        must be Tailscale or one of your own (peer.py). Any other Host name is refused: that stops a web
+        page that points its own name at 127.0.0.1 (DNS rebinding)."""
         if self.client_address[0] not in ("127.0.0.1", "::1"):
+            return None
+        kind = self.peer()
+        if kind == "other":
             return None
         host = self._host()
         if not host:
@@ -291,7 +302,8 @@ class Handler(BaseHTTPRequestHandler):
         if login:
             allowed = self.server.phone.cfg().phone_logins  # type: ignore[attr-defined]
             return login if login in allowed else None
-        if name in LOCAL_NAMES and not any(self.headers.get(h) for h in PROXY_HEADERS):
+        if (name in LOCAL_NAMES and kind in ("me", "unknown")
+                and not any(self.headers.get(h) for h in PROXY_HEADERS)):
             return "local"
         return None
 
@@ -398,17 +410,32 @@ class Handler(BaseHTTPRequestHandler):
             self._json(200, phone.set_schedule(bool(body.get("on"))))
         elif path == "/api/options":
             self._json(200, phone.save_options(body))
+        elif path == "/api/stop" and self.who() == "local":
+            self._json(200, {"ok": True})
+            threading.Thread(target=self.server.shutdown, daemon=True).start()
         else:
             raise ApiError(404, "Not found.")
 
 
-def make_server(config_path: Path, port: int) -> ThreadingHTTPServer:
+class Server(ThreadingHTTPServer):
+    daemon_threads = True
+    request_queue_size = 64
+    # Windows lets a second program bind a port opened with SO_REUSEADDR and share its connections;
+    # SO_EXCLUSIVEADDRUSE keeps the port to this one.
+    allow_reuse_address = os.name != "nt"
+
+    def server_bind(self) -> None:
+        if os.name == "nt":
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        super().server_bind()
+
+
+def make_server(config_path: Path, port: int) -> Server:
     try:
-        httpd = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+        httpd = Server(("127.0.0.1", port), Handler)
     except OSError as e:
         raise PhoneError(f"Port {port} is already in use, so the phone page can't start. Is it already on? "
                          "Otherwise pick another port with phone_port in the settings file.") from e
-    httpd.daemon_threads = True
     httpd.phone = Phone(config_path)  # type: ignore[attr-defined]
     return httpd
 
@@ -426,7 +453,9 @@ def serve(config_path: Path, port: int | None = None) -> None:
 
 # ---- control: running, start, stop, start with Windows, Tailscale -----------------------------------
 def ping(port: int, timeout: float = 1.5) -> dict | None:
-    """The running phone page's answer on this port, or None."""
+    """The running phone page's answer on this port, or None (also when another account's program holds it)."""
+    if peer.kind_of_listener(port) == "other":
+        return None
     try:
         conn = http.client.HTTPConnection("127.0.0.1", port, timeout=timeout)
         conn.request("GET", "/api/ping", headers={"Host": f"127.0.0.1:{port}"})
@@ -465,12 +494,17 @@ def start_background(config_path: Path, port: int, wait: float = 10.0) -> bool:
 
 
 def stop_running(port: int, wait: float = 5.0) -> bool:
-    """Stop the phone page that answers on this port. True when nothing answers any more."""
-    info = ping(port)
-    if not info:
+    """Ask the phone page on this port to stop. True when nothing answers any more.
+
+    It is asked, never killed by a process number: whatever answers on the port could name any one."""
+    if not ping(port):
         return True
-    with contextlib.suppress(OSError, TypeError, ValueError):
-        os.kill(int(info["pid"]), signal.SIGTERM)  # the pid the server itself reported
+    with contextlib.suppress(OSError, http.client.HTTPException):
+        conn = http.client.HTTPConnection("127.0.0.1", port, timeout=3)
+        conn.request("POST", "/api/stop", body=b"{}", headers={
+            "Host": f"127.0.0.1:{port}", "X-TacoSort": "1", "Content-Type": "application/json"})
+        conn.getresponse().read()
+        conn.close()
     deadline = time.monotonic() + wait
     while time.monotonic() < deadline:
         if not ping(port, timeout=0.5):
@@ -510,14 +544,28 @@ def set_autostart(config_path: Path | None, on: bool) -> None:
                 winreg.DeleteValue(key, RUN_VALUE)
 
 
+def tailscale_install_paths() -> list[Path]:
+    return [Path(os.environ.get("ProgramFiles", r"C:\Program Files")) / "Tailscale" / "tailscale.exe",
+            Path("/Applications/Tailscale.app/Contents/MacOS/Tailscale"),
+            Path("/usr/bin/tailscale"), Path("/usr/local/bin/tailscale")]
+
+
 def tailscale_exe() -> str | None:
-    found = shutil.which("tailscale")
-    if found:
-        return found
-    for candidate in (r"C:\Program Files\Tailscale\tailscale.exe",
-                      "/Applications/Tailscale.app/Contents/MacOS/Tailscale"):
-        if Path(candidate).exists():
-            return candidate
+    """Where Tailscale's command is: its install folder first, then PATH.
+
+    Never the folder TacoSort was started from (often Downloads), where a planted tailscale.cmd would
+    otherwise be found first on Windows."""
+    for candidate in tailscale_install_paths():
+        if candidate.is_file():
+            return str(candidate)
+    here = Path.cwd().resolve()
+    name = "tailscale.exe" if os.name == "nt" else "tailscale"
+    for folder in os.environ.get("PATH", "").split(os.pathsep):
+        if not folder or not Path(folder).is_absolute() or Path(folder).resolve() == here:
+            continue
+        candidate = Path(folder) / name
+        if candidate.is_file() and os.access(candidate, os.X_OK):
+            return str(candidate)
     return None
 
 

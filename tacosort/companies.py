@@ -86,7 +86,7 @@ def clean_name(display: str, key: str) -> str | None:
     name = display.strip().strip("\"'")
     paren = re.match(r"^(.*?)\s*\(([^()]*)\)\s*$", name)
     if paren:
-        # "Kilian (TCGplayer)": a person at a company. The part in brackets names the company.
+        # "Sam (TCGplayer)": a person at a company. The part in brackets names the company.
         return clean_name(paren.group(2), key) or clean_name(paren.group(1), key)
     name = re.split(r"\s+via\s+|\s*[|,]\s*|\s+-\s+|\s+–\s+", name, maxsplit=1)[0].strip()
     words = [w for w in name.split() if w.lower().strip(".") not in _GENERIC_WORDS]

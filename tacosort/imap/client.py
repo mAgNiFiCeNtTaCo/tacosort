@@ -305,13 +305,13 @@ class ImapBackend:
         try:
             client = self._client_factory(self.host, port=self.port, ssl=self.ssl,
                                           ssl_context=ctx, timeout=self._timeout)
-        except Exception as exc:  # noqa: BLE001 (never crash on odd server data)
+        except Exception as exc:  # noqa: BLE001 (any failure here becomes one plain BackendError)
             raise BackendError(self._connect_hint(exc)) from None
         try:
             if not self.ssl:
                 try:
                     client.starttls(ctx)
-                except Exception as exc:  # noqa: BLE001 (never crash on odd server data)
+                except Exception as exc:  # noqa: BLE001 (any failure here becomes one plain BackendError)
                     raise BackendError(
                         f"The server {self.host} did not offer a secure (STARTTLS) connection, so "
                         f"TacoSort did not send your password. ({self._scrub(exc)})"
@@ -323,7 +323,7 @@ class ImapBackend:
                     client.login(user, secret)
             except _DROPPED as exc:   # the line dropped: not a password problem
                 raise BackendError(self._connect_hint(exc)) from None
-            except Exception as exc:  # noqa: BLE001 (never crash on odd server data)
+            except Exception as exc:  # noqa: BLE001 (any failure here becomes one plain BackendError)
                 raise BackendError(self._login_hint(exc)) from None
         except BackendError:
             self._quiet_logout(client)
@@ -376,10 +376,10 @@ class ImapBackend:
     def _quiet_logout(client: IMAPClient) -> None:
         try:
             client.logout()
-        except Exception:  # noqa: BLE001 (never crash on odd server data)
+        except Exception:  # noqa: BLE001 (the connection may already be gone)
             try:
                 client.shutdown()
-            except Exception:  # noqa: BLE001, S110 (never crash on odd server data)
+            except Exception:  # noqa: BLE001, S110 (the connection may already be gone)
                 pass
 
     def close(self) -> None:
@@ -440,13 +440,13 @@ class ImapBackend:
             try:
                 rows = client.list_folders("", "")      # LIST "" "" returns the delimiter
                 delim = _text(rows[0][1]) if rows else ""
-            except Exception:  # noqa: BLE001, S110 (never crash on odd server data)
+            except Exception:  # noqa: BLE001, S110 (a server that won't say gets the default)
                 pass
             if not delim:
                 try:
                     rows = client.list_folders("", "INBOX")
                     delim = _text(rows[0][1]) if rows else ""
-                except Exception:  # noqa: BLE001, S110 (never crash on odd server data)
+                except Exception:  # noqa: BLE001, S110 (a server that won't say gets the default)
                     pass
             self._delimiter = delim or "/"
         if self._prefix is None:
@@ -456,7 +456,7 @@ class ImapBackend:
                     personal = client.namespace().personal
                     if personal:
                         prefix = _text(personal[0][0])
-                except Exception:  # noqa: BLE001, S110 (never crash on odd server data)
+                except Exception:  # noqa: BLE001, S110 (a server that won't say gets the default)
                     pass
             self._prefix = prefix
         return self._delimiter, self._prefix
@@ -898,7 +898,7 @@ def _take_copyuid(client: IMAPClient) -> bytes:
     """Pop the COPYUID response code imaplib stored from the last COPY/MOVE (b'' when none)."""
     try:
         stored = client._imap.untagged_responses.pop("COPYUID", None)  # imaplib keeps response codes here
-    except Exception:  # noqa: BLE001 (never crash on odd server data)
+    except Exception:  # noqa: BLE001 (imaplib's internals may change)
         return b""
     if not stored:
         return b""

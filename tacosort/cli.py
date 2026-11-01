@@ -915,7 +915,9 @@ def _editor_command(path: Path) -> list[str]:
     if editor:
         return shlex.split(editor, posix=os.name != "nt") + [str(path)]
     if sys.platform.startswith("win"):
-        return ["notepad.exe", str(path)]
+        from .schedule import system32
+
+        return [system32("notepad.exe"), str(path)]
     if sys.platform == "darwin":
         return ["open", "-W", "-t", str(path)]
     return ["xdg-open", str(path)]

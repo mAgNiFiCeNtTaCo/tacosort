@@ -17,12 +17,12 @@ server, Outlook through OAuth2) into one shared folder scheme and keeps it sorte
 - Tests: `.venv\Scripts\python -m pytest -q`: 696 passed, 2 skipped (POSIX-only), ruff clean.
   GitHub CI green on Windows, macOS and Linux (2026-10-31, commit caef3f8). CI jobs stop after 20 minutes.
 - In real use on three of the owner's accounts (app passwords, background schedule every 15 min):
-  personal Gmail Inbox 59 -> 1, SRGaming Gmail (card-selling business) 299 -> 18, Yahoo "Main"
+  personal Gmail Inbox 59 -> 1, business Gmail 299 -> 18, Yahoo "Main"
   ~10,600 -> 174 (since 2026-10-29), plus mail younger than 24 hours. What stays: recent mail from
   people, replies, buyer messages, security mail under 3 days, unread or starred mail, and 84 Yahoo
   emails with no Message-ID (never moved).
 - The owner's settings (not the defaults): `hold_hours: 24`, `unsure_to_folder: yes`,
-  `security_keep_days: 3`, `business_keep_days: 3`, `old_mail_days: 180`, rule `*@lsoa.org` ->
+  `security_keep_days: 3`, `business_keep_days: 3`, `old_mail_days: 180`, a rule for the school's domain ->
   `School` (Yahoo only).
 - Untested for real: Outlook/Google OAuth, AI sorting against the live API, the Windows at-logon trigger.
 
@@ -89,7 +89,7 @@ server, Outlook through OAuth2) into one shared folder scheme and keeps it sorte
 
 ### 2026-10-29: Yahoo account, Old mail folder, two Yahoo quirks fixed
 - **Yahoo "Main" added** (app password). Backlog sorted in 500-move runs (the owner said yes): about
-  10,600 -> 1,450, 9,168 moves, School folder for `*@lsoa.org` (owner's choice: all of it).
+  10,600 -> 1,450, 9,168 moves, School folder for the school's domain (owner's choice: all of it).
 - **Yahoo answers `HEADER.FIELDS` with six headers only** (From, To, Subject, Date, Message-ID,
   Content-Type), so every newsletter looked personal. On Yahoo/AOL (`XYMHIGHESTMODSEQ` or the host) the
   whole header is fetched and the usual fields kept (`2edc34d`).
@@ -122,11 +122,11 @@ server, Outlook through OAuth2) into one shared folder scheme and keeps it sorte
   sender and compares the full header would close that.
 
 ### 2026-10-29: Second account, learning from repetition, 24-hour wait, Security and Business folders
-- **Second account** SRGaming (Gmail, card-selling business) added through `tacosort setup` in the canvas
+- **Second account** (Gmail, a small business) added through `tacosort setup` in the canvas
   terminal. Gmail said "app passwords not available" until 2-Step Verification was on. Typing the setup
   command with `nodeterm.sh write` failed at first: it eats backslashes (use `.venv/Scripts/...`).
 - **Mac CI** was a GitHub runner shortage, not Actions minutes: a re-run passed (`a4a8281`).
-- **Unsure company mail** (`f52cd77`): SRGaming kept 299 in the Inbox, ~250 of them Whatnot/eBay/TCGplayer
+- **Unsure company mail** (`f52cd77`): The business account kept 299 in the Inbox, ~250 of them Whatnot/eBay/TCGplayer
   mail scored 51-72% (needs 75%). Now machine-sent unsure mail joins its company's folder once the
   company has 3 such emails or already has a folder (`unsure_to_company`, default on). One folder per
   company, chosen by majority guess and stored (`company_folders` category `unsure`): identical Whatnot
@@ -135,7 +135,7 @@ server, Outlook through OAuth2) into one shared folder scheme and keeps it sorte
   `Message.received`); held mail is not marked seen and the watermark waits, so a later run sorts it.
 - **Kept in the Inbox:** a person writing through a marketplace ("Message from Buyer"), passkey
   notices, "we need more information", "confirm/verify your <brand> account".
-- Folder names: "Kilian (TCGplayer)" -> "TCGplayer" (the part in brackets names the company).
+- Folder names: "Sam (TCGplayer)" -> "TCGplayer" (the part in brackets names the company).
 - **Learning from repetition** (`8042af7`, the owner asked why 40 TCGplayer emails never got a folder):
   they came from `sales@tcgplayer.com` with no robot headers, so they counted as maybe-personal and were
   never moved on a guess. New table `look_alikes` (schema 4): an address with 5 emails of one subject

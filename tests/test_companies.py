@@ -83,8 +83,8 @@ def test_company_key_is_the_registrable_domain(email, key):
     ("Anthropic, PBC", "anthropic.com", "Anthropic"),
     ("GitHub Notifications", "github.com", "GitHub"),
     ("Samsung US", "samsungusa.com", "Samsung US"),
-    ("Kilian (TCGplayer)", "tcgplayer.com", "TCGplayer"),            # a person at the company
-    ("Kilian (Support)", "tcgplayer.com", None),
+    ("Sam (TCGplayer)", "tcgplayer.com", "TCGplayer"),               # a person at the company
+    ("Sam (Support)", "tcgplayer.com", None),
     ("Ruben's Big Deals", "playfame.com", None),          # not clearly the company: domain name instead
     ("noreply@playfame.com", "playfame.com", None),
     ("", "playfame.com", None),
@@ -99,7 +99,7 @@ def test_pick_name_falls_back_to_the_domain_and_is_folder_safe():
     assert pick_name(["Google Play", "Google Play", "Google"], "google.com") == "Google Play"
     assert pick_name(["Fifth Third Bank"], "53.com") == "Fifth Third"        # a domain that is a number
     assert pick_name(["Hilton Feedback"], "hilton.com") == "Hilton"
-    assert pick_name(["LSOA Teacher"], "lsoa.org") == "LSOA"
+    assert pick_name(["ACME Teacher"], "acme.org") == "ACME"
     assert pick_name(["City of Corpus Christi"], "cityofcorpuschristi.ccsend.com") == "City of Corpus Christi"
     assert folder_safe("Booking.com") == "Booking"
     assert "/" not in folder_safe("A/B Shop") and "." not in folder_safe("Shop.Inc.")

@@ -32,13 +32,9 @@ INBOX (2,341)                            INBOX (37)        <- people, replies, s
   filed before that is moved in too, and new mail follows. Automated mail TacoSort can't place for
   sure (is that eBay email an ad or an alert?) joins its company's folder too, once that company has
   sent 3 of them, so a busy sender doesn't stay in your Inbox just because its mail is a mix.
-- **Learns from repetition.** When one address keeps sending the same kind of email (5 "your items
-  have sold" emails, or 10 emails of any kind), TacoSort treats it as a robot even if the emails look
-  plain, and files them with that company's other mail. Once a day it looks again at the mail it left
-  in your Inbox, so what it learned since applies to older mail too.
-- **Old security emails can leave too.** With `security_keep_days: 3`, codes, sign-in alerts and
+- **Security emails can move out after a few days.** With `security_keep_days: 3`, codes, sign-in alerts and
   "verify your email" stay in the Inbox for 3 days, then move to a Security folder.
-- **Old mail can leave too.** With `old_mail_days: 180`, read mail that stays in the Inbox (people,
+- **Old read mail can move out.** With `old_mail_days: 180`, read mail that stays in the Inbox (people,
   replies, emails TacoSort couldn't place) moves to an "Old mail" folder once it is six months old.
   Starred and unread mail, your VIPs and mail your own rules keep in the Inbox stay.
 - **Optional waiting time.** With `hold_hours: 24`, new mail stays in the Inbox for a day so you see
@@ -47,9 +43,12 @@ INBOX (2,341)                            INBOX (37)        <- people, replies, s
   password resets, sign-in alerts, messages a buyer or seller sent you through a marketplace, and
   starred mail always stay in the Inbox.
 - **Keeps running.** Turn on the background schedule (Windows, macOS, Linux) and new mail is sorted
-  every few minutes, or run `tacosort watch` to sort mail the moment it arrives.
+  every 15 minutes (you can change it), or run `tacosort watch` to sort mail the moment it arrives.
 - **Learns.** It copies the folders you already use, and when you move a message somewhere else (or
-  back to the Inbox), it learns from that and never fights you.
+  back to the Inbox), it learns from that and never fights you. When one address keeps sending the same
+  kind of email (5 "your items have sold" emails, or 10 emails of any kind), TacoSort treats it as a
+  robot even if the emails look plain, and files them with that company's other mail. Once a day it
+  looks again at the mail it left in your Inbox, so what it learned since applies to older mail too.
 - **Your rules first.** Simple rules in a settings file ("anything from my kid's school goes to
   Kids School") win over its own guesses.
 - **Optional AI.** For mail it can't decide on, it can ask Claude, using your own API key. This is off
@@ -61,11 +60,13 @@ INBOX (2,341)                            INBOX (37)        <- people, replies, s
 - **It never marks mail as read.** Messages are read with "peek", so unread mail stays unread.
 - **It never touches** Sent, Drafts, Trash, Junk/Spam or Gmail's All Mail, and **never moves starred or
   flagged** mail.
-- **You see a preview first.** It won't move anything in an account until you've seen
-  `tacosort preview`. A preview changes nothing.
+- **You can see a preview first.** **Preview** in the app (or `tacosort preview`) lists every move it
+  would make and changes nothing. Background sorting only moves mail in accounts you've previewed.
 - **Every move can be undone.** `tacosort undo` puts the last run's mail back, and it remembers not to
   move those messages again.
-- **When unsure, it does nothing.** Mail it isn't confident about stays in the Inbox.
+- **When unsure, it leaves people's mail alone.** Mail that may be from a person stays in the Inbox.
+  Automated mail it can't place stays too, until its company has sent 3 of them; then it joins that
+  company's folder (`unsure_to_company: no` keeps it in the Inbox).
 - **Your password stays in your computer's keychain** (Windows Credential Manager, macOS Keychain,
   Linux Secret Service), never in a file or a log. TacoSort uses *app passwords*, which you can cancel
   at any time without changing your real password.
@@ -95,6 +96,11 @@ warning:
 - **Windows** says *"Windows protected your PC"*: click **More info**, then **Run anyway**.
 - **macOS** says it *"can't be opened"*: right-click (or Control-click) TacoSort in Applications and
   choose **Open**, then **Open** again. Or: System Settings > Privacy & Security > **Open Anyway**.
+
+To check that a download is the one GitHub built (optional; releases from 0.2.0 on): compare its
+SHA-256 with the `SHA256SUMS.txt` file on the release page (Windows: `certutil -hashfile <file> SHA256`,
+macOS / Linux: `shasum -a 256 <file>`), or, with the GitHub command line, run
+`gh attestation verify <file> -R mAgNiFiCeNtTaCo/tacosort`.
 
 The window has three tabs, in the order you need them:
 
@@ -346,7 +352,8 @@ While it is on, it starts by itself when you sign in to Windows. **Turn off** (o
 stops it and stops it starting. The computer has to be on for the phone page to work.
 
 **Who can use it:** only the Tailscale login that turned it on. Other people in your tailnet (a friend
-you invited, for example) get "Not allowed". To let another login in, add it under `phone_logins` in
+you invited, for example) get "Not allowed", and so do programs running under another Windows account
+on the same computer. To let another login in, add it under `phone_logins` in
 the settings file. The page runs on `127.0.0.1` (this computer only) and `tailscale serve` passes your
 devices' requests to it over HTTPS; it never uses Tailscale Funnel. If Tailscale says HTTPS isn't on,
 turn on HTTPS certificates in the Tailscale admin console (DNS page) and try again.
@@ -418,7 +425,7 @@ Your folders and mail stay exactly as they are. Nothing is deleted.
 
 ## Contributing
 
-Bug reports, new provider details, better sorting rules and translations are very welcome. See
+Bug reports, new provider details, better sorting rules and subject words in other languages are very welcome. See
 [CONTRIBUTING.md](CONTRIBUTING.md). Security problems: see [SECURITY.md](SECURITY.md).
 
 ## License

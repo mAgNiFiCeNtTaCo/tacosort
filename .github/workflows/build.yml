@@ -16,6 +16,10 @@ jobs:
   build:
     name: ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+      id-token: write        # for the build record below (who built which file, from which commit)
+      attestations: write
     strategy:
       fail-fast: false
       matrix:
@@ -28,12 +32,19 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
+      # Exact versions with hashes (packaging/requirements-build.txt): a package changed on PyPI stops
+      # the build instead of going into the app.
       - name: Install
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install . "pyinstaller>=6.10,<7"
+          python -m pip install --require-hashes -r packaging/requirements-build.txt
+          python -m pip install --no-deps --no-build-isolation .
       - name: Build and check
         run: python packaging/build.py
+      # A signed record that this file was built here from this commit:
+      # gh attestation verify <file> -R mAgNiFiCeNtTaCo/tacosort
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8  # v4.2.2
+        with:
+          subject-path: dist/TacoSort-*
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
         with:
           name: TacoSort-${{ matrix.os }}
@@ -57,5 +68,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           ls -la dist
-          gh release create "$GITHUB_REF_NAME" dist/TacoSort-* --repo "$GITHUB_REPOSITORY" \
+          (cd dist && sha256sum TacoSort-* > SHA256SUMS.txt && cat SHA256SUMS.txt)
+          gh release create "$GITHUB_REF_NAME" dist/TacoSort-* dist/SHA256SUMS.txt --repo "$GITHUB_REPOSITORY" \
             --title "TacoSort $GITHUB_REF_NAME" --generate-notes

@@ -1,7 +1,6 @@
 """The mailbox interface. `tacosort.imap.client.ImapBackend` talks to real servers;
-`tacosort.testing.FakeBackend` is an in-memory copy for tests. The engine only uses this.
-
-Owned by the orchestrator: propose changes instead of editing (see SPEC.md).
+`tacosort.testing.FakeBackend` is an in-memory copy for tests. The engine only uses this, so change it
+together with ImapBackend and FakeBackend.
 """
 
 from __future__ import annotations

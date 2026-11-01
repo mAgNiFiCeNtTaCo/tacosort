@@ -54,7 +54,8 @@ The checks run in this order, and the **first confident answer wins**:
 5. **AI (optional, off by default)**, only for the messages the checks above were unsure about. It
    only picks a folder, and mail that looks written by a person is never moved on its word alone. See
    [privacy.md](privacy.md).
-6. **Otherwise: stays in the Inbox.** When unsure, TacoSort does nothing.
+6. **Otherwise: stays in the Inbox**, unless it is automated mail from a company that has sent 3 such
+   emails (then it joins that company's folder; `unsure_to_company: no` turns that off).
 
 Every decision has a confidence. Below `min_confidence` (0.75), the message stays in the Inbox.
 `tacosort rules test` shows the decision, the reason and the confidence for any message.
@@ -100,7 +101,8 @@ no message text). Deleting the memory folder makes TacoSort start fresh; your ma
 
 - `tacosort schedule on` creates a per-user background job that runs `tacosort run --quiet` every
   `interval_minutes` (15), and at log-in:
-  - **Windows:** a Task Scheduler task named *TacoSort* (uses `pythonw`, so no window pops up);
+  - **Windows:** a Task Scheduler task named *TacoSort-<your user name>* (it runs `pythonw`, or the
+    app itself, so no window pops up);
   - **macOS:** a LaunchAgent in `~/Library/LaunchAgents`;
   - **Linux:** a systemd user timer, or a cron line when systemd isn't available.
 - `tacosort watch` stays open instead and uses IMAP IDLE, so mail is sorted within seconds of

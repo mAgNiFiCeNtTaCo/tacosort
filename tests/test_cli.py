@@ -116,7 +116,7 @@ class FakeStore:
 
 @pytest.fixture
 def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    """A temporary settings file + data folder, and fakes for every other station's module."""
+    """A temporary settings file + data folder, and fakes for the engine, the schedule and the keychain."""
     cfg_path = tmp_path / "cfg" / "config.yaml"
     data = tmp_path / "data"
     monkeypatch.setenv("TACOSORT_CONFIG", str(cfg_path))

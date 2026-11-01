@@ -1,6 +1,7 @@
 # Security policy
 
-TacoSort has access to people's mailboxes, so we take security problems seriously.
+TacoSort can read and move the mail in people's mailboxes. If you find a way to misuse that, please
+report it privately (below).
 
 ## Reporting a problem
 
@@ -21,7 +22,9 @@ For example:
   see *What the AI can and can't be tricked into* below);
 - TacoSort deleting mail, marking mail as read, or touching Sent / Drafts / Trash / Junk / All Mail;
 - insecure connections (e.g. not checking the server's certificate);
-- the background job running something other than TacoSort, or with more rights than needed.
+- the background job running something other than TacoSort, or with more rights than needed;
+- the phone page answering a Tailscale login that isn't in `phone_logins`, another account's program
+  on the same computer, or anything outside your tailnet.
 
 ## Supported versions
 
@@ -38,6 +41,11 @@ Security fixes go into the latest version on this repository. Please update with
   just copied when a server can't move mail directly.
 - The HTML report has no scripts, loads nothing from the internet, and escapes all email text.
 - On Linux and macOS, TacoSort's settings and memory files can be opened only by your own user account.
+- The phone page listens on 127.0.0.1 only, answers only the logins in `phone_logins` (and only when
+  the connection comes from Tailscale itself or a program of yours), and accepts a change only with its
+  own header, JSON and a same-origin request.
+- Release downloads come with `SHA256SUMS.txt` and a GitHub build record (`gh attestation verify`), and
+  the release build installs exact package versions checked by hash.
 - The optional AI is off by default and receives only From, Subject and a short snippet; see
   [docs/privacy.md](docs/privacy.md).
 

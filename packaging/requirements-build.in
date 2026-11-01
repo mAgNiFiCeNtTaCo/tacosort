@@ -1,0 +1,5 @@
+# The app's own dependencies (pyproject.toml) plus PyInstaller. requirements-build.txt is made from this.
+IMAPClient>=3.0
+keyring>=24
+PyYAML>=6.0
+pyinstaller>=6.10,<7
