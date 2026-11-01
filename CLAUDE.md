@@ -57,10 +57,13 @@ The owner isn't a programmer: explain in plain words.
 - Windows-only tests miss things: CI caught a run-id collision (Linux) and a temp-path match (macOS).
 - nodeterm: `spawn-team`/`verify` are refused while the project is off screen; use
   `open-claude --run-now` per station.
-- The owner's own Gmail is live: the Windows scheduled task "TacoSort-<username>" runs the editable
-  install every 15 minutes, so it picks up code mid-edit. Keep the code working between edits (or ask
-  before pausing the task). `tacosort preview` and the read-only scratch scripts never move mail; a real
-  `run` needs the owner's OK.
+- The owner's own mail is live: the Windows scheduled task "TacoSort-<username>" runs every 15 minutes
+  from the owner's live copy, `%LOCALAPPDATA%\Programs\TacoSort\venv` (since 2026-11-01: a normal install
+  in a folder only the owner can change; the project folder lets every account on the PC write). Code
+  edits here don't reach it. To ship a change to it (ask first): `<live venv>\Scripts\python -m pip install
+  --no-deps --force-reinstall D:\ClaudeProjects\Email_Organization`, then restart the phone page. Its
+  Desktop + Start menu shortcuts point there too. `tacosort preview` and the read-only scratch scripts
+  never move mail; a real `run` needs the owner's OK.
 - `tacosort setup` asks questions: run it in a canvas terminal, not via `!` (no input, and bash eats
   backslashes in `.venv\Scripts\...`). Typing into that terminal with `nodeterm.sh write` eats
   backslashes too: send `.venv/Scripts/tacosort.exe setup` (forward slashes work in PowerShell).
@@ -70,9 +73,10 @@ The owner isn't a programmer: explain in plain words.
   "Main") with non-default settings (`hold_hours: 24`, `unsure_to_folder`, `security_keep_days: 3`,
   `business_keep_days: 3`, `old_mail_days: 180`). Defaults for
   other users stay conservative: new behaviour that moves more mail ships off by default.
-- The owner's phone page is live (on since 2026-10-31, port 8747, pythonw from the
-  venv). It keeps the code it started with: after changing `phone.py`, `actions.py` or `web/`, ask before
-  `tacosort phone off` + `on` to restart it. Other `tailscale serve` ports (5091, 8743) belong to other projects.
+- The owner's phone page is live (on since 2026-10-31, port 8747, pythonw from the live copy). It keeps
+  the code it started with: after updating the live copy, ask before `tacosort phone off` + `on` (run from
+  the live copy) to restart it. Stopping goes through `POST /api/stop`, which phone pages before
+  2026-11-01 didn't have. Other `tailscale serve` ports (5091, 8743) belong to other projects.
 - `recheck_inbox` runs on the first plain run of each day: a code change that widens what moves acts on
   the owner's whole Inbox at the next scheduled run, without a `--backlog`. Preview first.
 - A security, platform ("Message from Buyer") or contact guard always beats the look-alike and unsure
