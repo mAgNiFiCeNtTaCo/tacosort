@@ -121,6 +121,7 @@ def window(tmp_path, monkeypatch):
     from tacosort import app
 
     monkeypatch.setattr(app, "schedule_is_on", lambda: (False, "The background schedule is off."))
+    monkeypatch.setattr(app, "phone_state", lambda path: (False, "The phone page is off.", ""))
     try:
         root = tk.Tk()
     except tk.TclError:

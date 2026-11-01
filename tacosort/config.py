@@ -348,6 +348,11 @@ def config_from_dict(data: Any, warnings: list[str] | None = None) -> AppConfig:
         cfg.old_mail_folder = str(data["old_mail_folder"] or "").strip()
     if "recheck_inbox" in data:
         cfg.recheck_inbox = _to_bool(data["recheck_inbox"], "recheck_inbox")
+    if "phone_port" in data:
+        cfg.phone_port = _to_int(data["phone_port"], "phone_port")
+    if "phone_logins" in data:
+        cfg.phone_logins = [str(v).strip().lower() for v in _as_list(data["phone_logins"], "'phone_logins'")
+                            if str(v).strip()]
     if "data_dir" in data:
         cfg.data_dir = str(data["data_dir"] or "")
     return cfg
@@ -444,6 +449,8 @@ def config_to_dict(cfg: AppConfig) -> dict:
         "business_keep_days": cfg.business_keep_days,
         "old_mail_days": cfg.old_mail_days,
         "old_mail_folder": cfg.old_mail_folder,
+        "phone_port": cfg.phone_port,
+        "phone_logins": list(cfg.phone_logins),
         "ai": {
             "enabled": cfg.ai.enabled,
             "model": cfg.ai.model,
@@ -580,6 +587,10 @@ def config_problems(cfg: AppConfig) -> list[str]:
     if cfg.old_mail_days and (not cfg.old_mail_folder or "/" in cfg.old_mail_folder
                               or cfg.old_mail_folder.lower() == "inbox"):
         problems.append("old_mail_folder must be a plain folder name such as Old mail.")
+    if not 1024 <= cfg.phone_port <= 65535:
+        problems.append("phone_port must be a port number between 1024 and 65535; 8747 is the usual one.")
+    if any("@" not in v for v in cfg.phone_logins):
+        problems.append("phone_logins must be Tailscale login names such as you@gmail.com or you@github.")
     if cfg.look_alike_min < 0 or cfg.look_alike_min == 1:
         problems.append("look_alike_min must be 0 (off) or at least 2; 5 is a good value.")
     if cfg.ai.max_per_run < 0:

@@ -21,6 +21,10 @@ The owner isn't a programmer: explain in plain words.
 - `tacosort/cli.py`, `config.py`, `report.py`: the command line.
 - `tacosort/app.py` (the window), `options.py` (what each tick box means), `launch.py` (the built app's
   entry: window, CLI or `--smoke-test`), `assets/` (icon, drawn by `packaging/make_icon.py`).
+- `tacosort/actions.py`: the mail work the window and the phone page share (preview, sort, undo, learn).
+- `tacosort/phone.py` + `tacosort/web/`: the phone page (`tacosort phone on|off|status|serve`): a stdlib
+  server on 127.0.0.1:8747 behind `tailscale serve`, answering only `phone_logins`; starts with Windows
+  through the HKCU Run value "TacoSort phone page".
 - `packaging/build.py` + `.github/workflows/build.yml`: the one-file app; a `v*` tag publishes a release.
 - `tests/`, `.github/workflows/ci.yml`, `examples/config.example.yaml`.
 - `_team/` (gitignored): station briefs and review reports.
@@ -42,6 +46,8 @@ The owner isn't a programmer: explain in plain words.
   never commit it.
 - Public repo: push freely, but nothing personal in committed files.
 - Not on PyPI: docs install with `pipx install git+https://github.com/mAgNiFiCeNtTaCo/tacosort`.
+- The phone page: never Funnel, never bind anything but 127.0.0.1; a change (POST) needs `X-TacoSort: 1`,
+  JSON and a same-origin Origin; a request through Tailscale needs a login in `phone_logins`.
 - The window only touches widgets on its own thread: mail work goes through `Jobs.start`, log lines
   through `Jobs.later`. The built app has no console (`sys.stdout` is None until launch.py fixes it).
 
@@ -64,6 +70,9 @@ The owner isn't a programmer: explain in plain words.
   "Main") with non-default settings (`hold_hours: 24`, `unsure_to_folder`, `security_keep_days: 3`,
   `business_keep_days: 3`, `old_mail_days: 180`). Defaults for
   other users stay conservative: new behaviour that moves more mail ships off by default.
+- The owner's phone page is live (on since 2026-10-31, port 8747, pythonw from the
+  venv). It keeps the code it started with: after changing `phone.py`, `actions.py` or `web/`, ask before
+  `tacosort phone off` + `on` to restart it. Other `tailscale serve` ports (5091, 8743) belong to other projects.
 - `recheck_inbox` runs on the first plain run of each day: a code change that widens what moves acts on
   the owner's whole Inbox at the next scheduled run, without a `--backlog`. Preview first.
 - A security, platform ("Message from Buyer") or contact guard always beats the look-alike and unsure

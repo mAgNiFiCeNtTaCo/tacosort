@@ -603,6 +603,25 @@ def cmd_app(args: argparse.Namespace, ctx: Ctx) -> int:
     return app_main(["--config", str(ctx.path)])
 
 
+def cmd_phone(args: argparse.Namespace, ctx: Ctx) -> int:
+    """The phone page over Tailscale: on, off, status, or serve (what runs in the background)."""
+    phone = _module("phone")
+    action = args.phone_action
+    if action == "serve":
+        return phone.main_serve(ctx.path, args.port)
+    try:
+        if action == "on":
+            _need_accounts(ctx)
+            say(phone.turn_on(ctx.path))
+        elif action == "off":
+            say(phone.turn_off(ctx.path))
+        else:
+            say(phone.describe(ctx.path)[1])
+    except phone.PhoneError as e:
+        raise UserError(str(e)) from None
+    return EXIT_OK
+
+
 def cmd_accounts(args: argparse.Namespace, ctx: Ctx) -> int:
     action = args.accounts_action
     if action == "add":
@@ -987,6 +1006,15 @@ def build_parser() -> argparse.ArgumentParser:
 
     s = sub.add_parser("app", help="open the TacoSort window: accounts, tick-box options, preview and sort")
     s.set_defaults(func=cmd_app)
+
+    s = sub.add_parser("phone", help="use TacoSort from your phone over Tailscale (on, off, status)")
+    ph = s.add_subparsers(dest="phone_action", metavar="ACTION", required=True)
+    ph.add_parser("on", help="share the phone page with your own Tailscale devices; start it now and with Windows")
+    ph.add_parser("off", help="stop the phone page and don't start it with Windows")
+    ph.add_parser("status", help="is it on, and at which address?")
+    srv = ph.add_parser("serve", help="run the phone page in this window (what starts in the background)")
+    srv.add_argument("--port", type=int, help="listen on this port instead of phone_port (8747)")
+    s.set_defaults(func=cmd_phone)
 
     s = sub.add_parser("accounts", help="list, add, remove or test your email accounts")
     acc = s.add_subparsers(dest="accounts_action", metavar="ACTION", required=True)

@@ -122,6 +122,12 @@ business_keep_days: 0
 old_mail_days: 0
 old_mail_folder: Old mail
 
+# ---- Phone page (tacosort phone on) ----------------------------------------------------------------
+# The page listens on 127.0.0.1 at phone_port; `tailscale serve` passes your own devices' requests to it.
+# phone_logins: the Tailscale logins allowed to use it (`tacosort phone on` adds your own).
+phone_port: 8747
+phone_logins: []
+
 # ---- Waiting time ---------------------------------------------------------------------------------------
 # New mail stays in the Inbox this many hours before it is sorted, so you see it there first.
 # 0 sorts it at once. The background run picks it up once it is old enough.

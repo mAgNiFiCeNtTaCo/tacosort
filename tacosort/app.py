@@ -27,11 +27,23 @@ from tkinter import messagebox, ttk
 from typing import Any
 
 from . import __version__, cli, options
+from . import phone as phone_page
+from .actions import (  # noqa: F401 - the mail work lives in actions.py; these names stay importable here
+    MAX_SORT_ROUNDS,
+    SAFETY_LIMIT_TEXT,
+    enabled_accounts,
+    learn,
+    preview,
+    schedule_is_on,
+    sort_now,
+    try_login,
+    undo_last,
+    write_report,
+)
 from .backend import BackendError
 from .config import (
     ConfigError,
     account_id_problem,
-    data_dir,
     default_config_path,
     load_config,
     save_config,
@@ -41,130 +53,22 @@ from .models import AccountConfig, AppConfig
 ASSETS = Path(__file__).parent / "assets"
 APP_ID = "TacoSort.App"
 PAD = 8
-MAX_SORT_ROUNDS = 100            # "Sort my Inbox now" repeats runs of max_moves_per_run until done
-SAFETY_LIMIT_TEXT = "reached the safety limit"
-
-Log = Callable[[str], None]
 
 
-# ---- mail work (no window code: these run on the helper thread) ------------------------------------
-def try_login(acct: AccountConfig, password: str | None = None) -> tuple[str | None, int]:
-    """(problem or None, number of folders). With `password`, that one is tried (nothing is saved)."""
-    backend = (cli.make_backend(acct) if password is None
-               else cli.make_backend(acct, secret_getter=lambda _id: password))
+def phone_state(path: Path) -> tuple[bool, str, str]:
+    """(on, one plain line, the address to open on the phone) for the phone page (slow: helper thread)."""
     try:
-        backend.connect()
-        return None, len(backend.list_folders())
-    except BackendError as e:
-        return str(e) or "The login didn't work.", 0
-    except Exception as e:  # noqa: BLE001 - network trouble and the like: never show internals or secrets
-        return f"Couldn't reach the mail server ({type(e).__name__}).", 0
-    finally:
-        cli._close(backend)
-
-
-def enabled_accounts(cfg: AppConfig) -> list[AccountConfig]:
-    return [a for a in cfg.accounts if a.enabled]
-
-
-def learn(cfg: AppConfig, log: Log) -> Any:
-    accounts = enabled_accounts(cfg)
-    store = cli.open_store(cfg)
-    try:
-        return cli._engine().learn_from_folders(cli._only(cfg, accounts), store, cli._backends(accounts),
-                                                log=log)
-    finally:
-        cli._close(store)
-
-
-def preview(cfg: AppConfig, log: Log) -> tuple[list[Any], int, int, list[str]]:
-    """(planned moves, messages looked at, kept, problems). Moves nothing."""
-    moves: list[Any] = []
-    scanned = kept = 0
-    problems: list[str] = []
-    ok: list[str] = []
-    store = cli.open_store(cfg)
-    try:
-        for acct in enabled_accounts(cfg):
-            log(f"Looking at {acct.email} (nothing will be moved)...")
-            rep = cli._engine().run_once(cli._only(cfg, [acct]), store, cli._backends([acct]),
-                                         dry_run=True, backlog=True, log=log)
-            if not rep.run_id:
-                problems.append("TacoSort is busy with another run right now; try again in a minute.")
-                continue
-            moves.extend(rep.moves)
-            scanned += rep.scanned
-            kept += rep.kept
-            problems.extend(rep.errors)
-            if not rep.errors:
-                ok.append(acct.id)
-    finally:
-        cli._close(store)
-    if ok:
-        cli.mark_previewed(cfg, ok)
-    return moves, scanned, kept, problems
-
-
-def sort_now(cfg: AppConfig, log: Log) -> tuple[int, list[str]]:
-    """Sort everything in the Inbox, in runs of max_moves_per_run until nothing is left. (moved, problems)"""
-    accounts = enabled_accounts(cfg)
-    moved = 0
-    problems: list[str] = []
-    store = cli.open_store(cfg)
-    try:
-        for _ in range(MAX_SORT_ROUNDS):
-            limit_hit = []
-
-            def tell(line: str, _hit: list = limit_hit) -> None:
-                if SAFETY_LIMIT_TEXT in line:
-                    _hit.append(line)
-                log(line)
-
-            rep = cli._engine().run_once(cli._only(cfg, accounts), store, cli._backends(accounts),
-                                         dry_run=False, backlog=True, log=tell)
-            if not rep.run_id:
-                problems.append("TacoSort is busy with another run right now; try again in a minute.")
-                break
-            moved += rep.moved
-            problems.extend(rep.errors)
-            if not limit_hit or rep.errors:
-                break
-            log("More to sort: starting the next round...")
-    finally:
-        cli._close(store)
-    cli.mark_previewed(cfg, [a.id for a in accounts])
-    return moved, problems
-
-
-def undo_last(cfg: AppConfig, log: Log) -> int:
-    accounts = cfg.accounts
-    store = cli.open_store(cfg)
-    try:
-        return cli._engine().undo(cfg, store, cli._backends(accounts), log=log)
-    finally:
-        cli._close(store)
-
-
-def write_report(cfg: AppConfig) -> Path:
-    from .report import build_report
-
-    store = cli._store_if_exists(cfg)
-    try:
-        html = build_report(store, cfg)
-    finally:
-        cli._close(store)
-    out = data_dir(cfg) / "report.html"
-    out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(html, encoding="utf-8")
-    return out
-
-
-def schedule_is_on() -> tuple[bool, str]:
-    try:
-        text = cli._schedule().status()
+        on, text = phone_page.describe(path)
+        return on, text, phone_page.address(load_config(path)) if on else ""
     except Exception as e:  # noqa: BLE001 - the window still works without knowing
-        return False, f"Couldn't check the background schedule ({type(e).__name__})."
-    return text.startswith("The background schedule is on"), text
+        return False, f"Couldn't check the phone page ({type(e).__name__}).", ""
+
+
+def switch_phone(path: Path, on: bool) -> str:
+    try:
+        return phone_page.turn_on(path) if on else phone_page.turn_off(path)
+    except phone_page.PhoneError as e:
+        raise cli.UserError(str(e)) from None
 
 
 # ---- window helpers ---------------------------------------------------------------------------------
@@ -481,6 +385,21 @@ class App:
         wrapped(bg, "Runs while you are logged in to this computer, even with this window closed.", width=400,
                 foreground="#555").pack(anchor="w", padx=(24, 0))
 
+        ph = ttk.LabelFrame(right, text="On your phone (over Tailscale)", padding=PAD)
+        ph.pack(fill="x", pady=(0, PAD))
+        wrapped(ph, "Use TacoSort from your phone's browser: status, preview, sort, undo and these options. Only "
+                    "your own devices signed in to Tailscale can open it. It starts with Windows while it is on.",
+                width=400, foreground="#555").pack(anchor="w")
+        self.phone_note = tk.StringVar(value="Checking...")
+        wrapped(ph, "", width=400, textvariable=self.phone_note).pack(anchor="w", pady=(4, 0))
+        row = ttk.Frame(ph)
+        row.pack(fill="x", pady=(4, 0))
+        self.phone_button = self._button(row, "Turn on", self.toggle_phone)
+        self.phone_button.pack(side="left")
+        self._button(row, "Copy address", self.copy_phone_address).pack(side="left", padx=PAD)
+        self.phone_on = False
+        self.phone_address = ""
+
         save_row = ttk.Frame(right)
         save_row.pack(fill="x", pady=(PAD, 0))
         self._button(save_row, "Save settings", self.save_options).pack(side="left")
@@ -507,6 +426,42 @@ class App:
         self.interval_var.set(str(values.interval_minutes))
         self.sched_var.set(schedule_is_on()[0])
         self.opt_note.set("")
+        self.refresh_phone()
+
+    # ---- phone page ------------------------------------------------------------------------------
+    def refresh_phone(self) -> None:
+        """Ask on a helper thread (Tailscale can take a second) and show the answer here."""
+        def ask() -> None:
+            state = phone_state(self.path)
+            self.jobs.later(lambda: self._show_phone(*state))
+
+        threading.Thread(target=ask, daemon=True).start()
+
+    def _show_phone(self, on: bool, text: str, address: str) -> None:
+        self.phone_on, self.phone_address = on, address
+        self.phone_note.set(text)
+        self.phone_button.configure(text="Turn off" if on else "Turn on")
+
+    def toggle_phone(self) -> None:
+        want_on = not self.phone_on
+        self.phone_note.set("Turning the phone page on..." if want_on else "Turning the phone page off...")
+
+        def done(result: Any, error: BaseException | None) -> None:
+            self.phone_note.set(result if error is None else f"That didn't work: {plain_error(error)}")
+            if error is None:
+                self.phone_on = want_on
+                self.phone_button.configure(text="Turn off" if want_on else "Turn on")
+                self.refresh_phone()
+
+        self.jobs.start(lambda: switch_phone(self.path, want_on), done)
+
+    def copy_phone_address(self) -> None:
+        if not self.phone_address:
+            self.phone_note.set("Turn the phone page on first; then its address can be copied.")
+            return
+        self.root.clipboard_clear()
+        self.root.clipboard_append(self.phone_address)
+        self.phone_note.set(f"Copied {self.phone_address}: open it in Safari or Chrome on your phone.")
 
     def save_options(self) -> None:
         values = options.Values(

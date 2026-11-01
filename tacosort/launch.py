@@ -40,6 +40,11 @@ def smoke_test(path: str) -> int:
     for name in ("tacosort.ico", "tacosort.png"):
         if not (ASSETS / name).exists():
             raise SystemExit(f"missing {name}")
+    from tacosort.phone import FILES, WEB
+
+    for name, _ in FILES.values():
+        if not (WEB / name).exists():
+            raise SystemExit(f"missing web/{name}")
     lines.append("ok")
     with open(path, "w", encoding="utf-8") as f:
         f.write("\n".join(lines) + "\n")

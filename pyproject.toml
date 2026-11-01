@@ -41,7 +41,7 @@ tacosort-app = "tacosort.app:main"
 include = ["tacosort*"]
 
 [tool.setuptools.package-data]
-tacosort = ["assets/*.png", "assets/*.ico"]
+tacosort = ["assets/*.png", "assets/*.ico", "web/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

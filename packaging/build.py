@@ -26,6 +26,7 @@ ROOT = Path(__file__).resolve().parent.parent
 DIST = ROOT / "dist"
 BUILD = ROOT / "build"
 ASSETS = ROOT / "tacosort" / "assets"
+WEB = ROOT / "tacosort" / "web"
 
 
 def version() -> str:
@@ -50,6 +51,7 @@ def pyinstaller_args(kind: str) -> list[str]:
         "--noconfirm", "--clean",
         "--distpath", str(DIST), "--workpath", str(BUILD), "--specpath", str(BUILD),
         "--add-data", f"{ASSETS}{os.pathsep}tacosort/assets",
+        "--add-data", f"{WEB}{os.pathsep}tacosort/web",   # the phone page
         "--collect-submodules", "tacosort",              # parts imported by name at run time
         "--collect-submodules", "keyring.backends",
         "--copy-metadata", "keyring",                    # keyring finds its backends through package metadata

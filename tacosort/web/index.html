@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f766e">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="TacoSort">
+<meta name="referrer" content="no-referrer">
+<title>TacoSort</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon.png" type="image/png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="stylesheet" href="/app.css">
+<script src="/app.js" defer></script>
+</head>
+<body>
+<header class="top">
+  <img src="/icon.png" alt="" class="logo">
+  <h1>TacoSort</h1>
+  <span id="busy" class="busy" hidden>Working…</span>
+</header>
+
+<main>
+  <p id="problem" class="problem" hidden></p>
+
+  <section id="tab-home" class="tab">
+    <div class="card">
+      <div class="row">
+        <div>
+          <h2>Background sorting</h2>
+          <p id="sched-text" class="muted">Checking…</p>
+        </div>
+        <label class="switch"><input type="checkbox" id="sched"><span></span></label>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Last sort</h2>
+      <p id="last-run" class="big">…</p>
+      <p id="today" class="muted"></p>
+    </div>
+    <div class="card">
+      <h2>Accounts</h2>
+      <ul id="accounts" class="list"></ul>
+    </div>
+    <p id="version" class="muted small center"></p>
+  </section>
+
+  <section id="tab-sort" class="tab" hidden>
+    <div class="card">
+      <p class="muted">Start with a preview: it shows where each email in your Inbox would go and moves nothing.</p>
+      <button id="do-preview" class="btn primary">Preview</button>
+      <button id="do-sort" class="btn">Sort my Inbox now</button>
+      <button id="do-undo" class="btn">Undo last sort</button>
+      <button id="do-learn" class="btn quiet">Learn from my folders</button>
+    </div>
+    <div id="job" class="card" hidden>
+      <h2 id="job-title"></h2>
+      <p id="job-summary" class="big"></p>
+      <div id="job-result"></div>
+      <details id="job-log-box"><summary>What it did</summary><pre id="job-log"></pre></details>
+    </div>
+  </section>
+
+  <section id="tab-moves" class="tab" hidden>
+    <ul id="moves" class="list moves"></ul>
+    <button id="more-moves" class="btn quiet" hidden>Show more</button>
+  </section>
+
+  <section id="tab-settings" class="tab" hidden>
+    <form id="settings">
+      <div id="groups"></div>
+      <div class="card">
+        <h2>Folders to sort into</h2>
+        <p class="muted small">Unticked: that kind of mail stays in the Inbox.</p>
+        <div id="folders"></div>
+      </div>
+      <div class="card">
+        <h2>How often</h2>
+        <label class="field">Sort new mail every <input type="number" id="interval" min="5" max="1439" inputmode="numeric"> minutes</label>
+      </div>
+      <p id="settings-note" class="note" hidden></p>
+      <button type="submit" class="btn primary">Save settings</button>
+    </form>
+  </section>
+</main>
+
+<nav class="tabs">
+  <button data-tab="home" class="on">Home</button>
+  <button data-tab="sort">Sort</button>
+  <button data-tab="moves">Moves</button>
+  <button data-tab="settings">Settings</button>
+</nav>
+</body>
+</html>

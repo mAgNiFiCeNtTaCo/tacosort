@@ -70,7 +70,8 @@ INBOX (2,341)                            INBOX (37)        <- people, replies, s
   Linux Secret Service), never in a file or a log. TacoSort uses *app passwords*, which you can cancel
   at any time without changing your real password.
 - **Nothing leaves your computer** except the connection to your own mail server (and, only if you
-  turn AI on, the few details listed in [docs/privacy.md](docs/privacy.md)).
+  turn AI on, the few details listed in [docs/privacy.md](docs/privacy.md)). The optional phone page
+  is reachable only from your own devices on Tailscale, never from the internet.
 
 ## Install
 
@@ -329,6 +330,30 @@ puts it back.
 other checks couldn't decide on, and at most `max_per_run` (50) per run. Never attachments, never
 your password, never whole messages. Details: [docs/privacy.md](docs/privacy.md).
 
+## On your phone (optional, over Tailscale)
+
+TacoSort can show a page in your phone's browser with the same buttons as the window: status, Preview,
+Sort my Inbox now, Undo last sort, every move, background sorting on or off, and the tick-box options.
+It uses [Tailscale](https://tailscale.com) (free for personal use) to reach your computer, so nothing
+is opened to the internet.
+
+1. Install Tailscale on the computer and on your phone, and sign in to both with the same account.
+2. In the app: Options tab, *On your phone*, **Turn on**. Or on the command line: `tacosort phone on`.
+3. On the phone, open the address it shows (like `https://your-pc.tailnet-name.ts.net:8747/`) and add it
+   to your home screen (Safari: Share, Add to Home Screen).
+
+While it is on, it starts by itself when you sign in to Windows. **Turn off** (or `tacosort phone off`)
+stops it and stops it starting. The computer has to be on for the phone page to work.
+
+**Who can use it:** only the Tailscale login that turned it on. Other people in your tailnet (a friend
+you invited, for example) get "Not allowed". To let another login in, add it under `phone_logins` in
+the settings file. The page runs on `127.0.0.1` (this computer only) and `tailscale serve` passes your
+devices' requests to it over HTTPS; it never uses Tailscale Funnel. If Tailscale says HTTPS isn't on,
+turn on HTTPS certificates in the Tailscale admin console (DNS page) and try again.
+
+On macOS and Linux it doesn't start by itself yet: run `tacosort phone serve` (for example from your
+login items) after `tacosort phone on`.
+
 ## Undo
 
 - `tacosort undo`: puts back everything from the last run.
@@ -375,13 +400,14 @@ you can cancel at your provider at any time.
 
 ## Uninstall
 
-**The app:** untick background sorting on the Options tab and click Save settings, remove each
+**The app:** turn off the phone page if you turned it on, untick background sorting on the Options
+tab and click Save settings, remove each
 account on the Accounts tab (this also deletes its password from the keychain), then delete the
 TacoSort file. Optionally cancel the app passwords at your provider.
 
 **The command line:**
 
-1. `tacosort schedule off` (stops the background job).
+1. `tacosort schedule off` (stops the background job) and `tacosort phone off` (if you used the phone page).
 2. `tacosort accounts remove ID` for each account (this also deletes its password from the keychain).
 3. `tacosort config ai-key --remove` if you saved an AI key.
 4. `pipx uninstall tacosort`.

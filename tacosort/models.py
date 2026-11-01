@@ -207,6 +207,8 @@ class AppConfig:
     business_keep_days: int = 0           # people's business mail goes to Business after this many days (0 = never)
     old_mail_days: int = 0                # read mail left in the Inbox moves to old_mail_folder at this age (0 = never)
     old_mail_folder: str = "Old mail"
+    phone_port: int = 8747                # the phone page listens on 127.0.0.1 at this port
+    phone_logins: list[str] = field(default_factory=list)   # Tailscale logins allowed to use the phone page
 
     def security_folder_name(self) -> str:
         return f"{self.folder_prefix}/{self.security_folder}" if self.folder_prefix else self.security_folder
