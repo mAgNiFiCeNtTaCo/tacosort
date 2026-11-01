@@ -3,16 +3,19 @@
 TacoSort (called TidyInbox until 2026-10-28) is an open-source (MIT) Python tool that sorts every email account a person has (any IMAP
 server, Outlook through OAuth2) into one shared folder scheme and keeps it sorted in the background.
 
-## Where it stands (2026-10-29)
+## Where it stands (2026-10-31)
 - Public at https://github.com/mAgNiFiCeNtTaCo/tacosort. **Release 0.1.0** (2026-10-29,
   https://github.com/mAgNiFiCeNtTaCo/tacosort/releases/tag/v0.1.0): a one-file app for Windows
   (15 MB), macOS Apple silicon (zip) and Linux. With Python: `pipx install
   git+https://github.com/mAgNiFiCeNtTaCo/tacosort` (it is not on PyPI); `tacosort app` opens the window.
+- **Phone page** (2026-10-31, in `main`, not yet in a release): `tacosort phone on` / the app's Options tab
+  shares it with the owner's own Tailscale devices (127.0.0.1:8747 behind `tailscale serve`). On for the
+  owner since 2026-10-31, starting with Windows. Desktop + Start menu shortcut "TacoSort" opens the window
+  from the venv.
 - Start: `tacosort setup` → `tacosort preview` → `tacosort run --backlog --yes` (old mail) →
   `tacosort schedule on` (keeps new mail sorted).
-- Tests: `.venv\Scripts\python -m pytest -q`: 676 passed, 2 skipped (POSIX-only), ruff clean.
-  GitHub CI green on Windows, macOS and Linux (run 40741390253; the Mac jobs got no runner 3 times on
-  2026-10-28, a GitHub-side shortage: a re-run the same day passed).
+- Tests: `.venv\Scripts\python -m pytest -q`: 696 passed, 2 skipped (POSIX-only), ruff clean.
+  GitHub CI green on Windows, macOS and Linux (2026-10-31, commit caef3f8). CI jobs stop after 20 minutes.
 - In real use on three of the owner's accounts (app passwords, background schedule every 15 min):
   personal Gmail Inbox 59 -> 1, SRGaming Gmail (card-selling business) 299 -> 18, Yahoo "Main"
   ~10,600 -> 174 (since 2026-10-29), plus mail younger than 24 hours. What stays: recent mail from
@@ -24,6 +27,42 @@ server, Outlook through OAuth2) into one shared folder scheme and keeps it sorte
 - Untested for real: Outlook/Google OAuth, AI sorting against the live API, the Windows at-logon trigger.
 
 ## Log
+### 2026-10-31: Phone page over Tailscale; CI hang on the Mac fixed
+- **CI fix (2026-10-30, fb4381e):** the three pushes after 4efab8e had their macOS jobs hang 6 hours until
+  GitHub cancelled them. Cause: `test_ticking_background_sorting_sets_up_the_schedule` pumped Tk with
+  `root.update()`, which blocks on the headless Mac runner. The test now runs the job's hand-back from the
+  queue itself; CI jobs get `timeout-minutes: 20` and pytest `faulthandler_timeout=120` (a stuck test
+  prints every thread). The release builds were not affected.
+- Owner's ask: "can we also create a tailscale application and desktop application we can use". Choices:
+  full control from the phone; always starts, with an on/off button; desktop + Start menu shortcut.
+- **`tacosort/actions.py`**: the mail work (try_login, learn, preview, sort_now, undo_last, write_report,
+  schedule_is_on) moved out of `app.py` so the phone page can use it without Tkinter; `app.py` re-exports
+  the names.
+- **`tacosort/phone.py` + `tacosort/web/`** (stdlib `http.server`, no new dependency; plain HTML/CSS/JS,
+  home-screen manifest): tabs Home (schedule switch, last run, moved today, accounts), Sort (preview grouped
+  by folder, sort now, undo, learn; one job at a time, polled), Moves, Settings (the window's tick boxes
+  through `options.read/apply`). Safety: listens on 127.0.0.1 only; a request through Tailscale must carry a
+  `Tailscale-User-Login` in `phone_logins` (filled with the owner's login on `phone on`); any other Host
+  name is refused (DNS rebinding); a change needs header `X-TacoSort: 1`, JSON and a same-origin Origin
+  (cross-site pages can't send that); strict CSP, no request log.
+- **On/off:** `tacosort phone on|off|status|serve`, and Turn on / Turn off + Copy address in the window's
+  Options tab. On = remember the login, `tailscale serve --bg --https=8747`, HKCU Run value "TacoSort phone
+  page", start in the background (pythonw, detached). Off = remove all three; stop kills only the pid the
+  page reports on `/api/ping`. Autostart is Windows only; macOS/Linux run `tacosort phone serve`.
+- New settings `phone_port` (8747) and `phone_logins`. Build: `web/` in package data and PyInstaller
+  `--add-data`; the smoke test checks the web files.
+- **Decision:** TacoSort stays on the main PC, not the home server: the server is the box meant to fall
+  first if hacked, and email passwords there could reset every other account. TacoSort is light (one run
+  ~40 s every 15 min). Cost: no sorting and no phone page while the PC is off.
+- Turned on for the owner: works through https://<pc>.ts.net:8747 from this PC; Ship Desk (5091) and
+  TacoVault (8743) serve entries untouched. Desktop + Start menu shortcut to `.venv\Scripts\tacosort-app.exe`.
+- Checked with screenshots (demo data, headless Edge). `/slop-check` diff clean
+  (AI_SlopAgent/reports/2026-10-31-Email_Organization.md). Tests 696 passed; CI green.
+- Resources (2026-10-31 21:49, phone page on): Email_Organization 2 processes, CPU 0%, RAM 37 MB, port
+  8747, disk 175 MB; whole PC CPU 15% of 32 threads, RAM 24.1 of 64 GB.
+- **Open:** phone page not in a release yet (0.2.0 tag needs the owner's OK); the running phone page keeps
+  the code it started with (restart with `phone off` + `on`, ask first); no autostart on macOS/Linux.
+
 ### 2026-10-29: The TacoSort app and release 0.1.0
 - Owner's ask: "make the install easier and make it an app if needed with tickable options".
 - **`tacosort/app.py`** (Tkinter, no new dependency): tabs Accounts (add with the provider's app-password

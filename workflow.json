@@ -336,6 +336,51 @@
         "A windowed PyInstaller app has no stdout: give it somewhere to write before any print",
         "A frozen app's scheduled task must run the app itself, not python -m"
       ]
+    },
+    {
+      "title": "Phone page over Tailscale; CI hang on the Mac fixed",
+      "date": "2026-10-31",
+      "summary": "The same session fixed a test that hung the macOS CI jobs, then built a phone page served over Tailscale with full control, turned it on for the owner and added a desktop shortcut.",
+      "stages": [
+        {
+          "name": "Session",
+          "kind": "solo",
+          "sessions": [
+            {
+              "id": "979da9f6",
+              "role": "Orchestrator (continued): CI fix",
+              "start": "2026-10-30T21:03",
+              "end": "2026-10-30T21:10",
+              "did": "Found the macOS CI hang (root.update() in a window test), fixed the test, added CI time limits",
+              "outcome": "done",
+              "files": 2
+            },
+            {
+              "id": "979da9f6",
+              "role": "Orchestrator (continued): phone page",
+              "start": "2026-10-31T21:16",
+              "end": "2026-10-31T21:50",
+              "did": "actions.py, phone.py, web/ page, phone on/off in CLI and window, tests, README; turned on for the owner; desktop shortcut",
+              "outcome": "done",
+              "files": 17
+            }
+          ]
+        }
+      ],
+      "events": [
+        {
+          "at": "2026-10-31T21:16",
+          "text": "Owner asked for a Tailscale app and a desktop app"
+        },
+        {
+          "at": "2026-10-31T21:44",
+          "text": "Phone page on for the owner over Tailscale"
+        }
+      ],
+      "lessons": [
+        "Pumping Tk with root.update() in a test can block forever on a headless macOS runner: drain the job queue directly",
+        "Give CI jobs a timeout-minutes; GitHub's default is 6 hours"
+      ]
     }
   ]
 }
