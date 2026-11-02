@@ -381,6 +381,71 @@
         "Pumping Tk with root.update() in a test can block forever on a headless macOS runner: drain the job queue directly",
         "Give CI jobs a timeout-minutes; GitHub's default is 6 hours"
       ]
+    },
+    {
+      "title": "Security audit and slop check fixed; the live copy moved to the user folder",
+      "date": "2026-11-01",
+      "summary": "A security audit and a slop check ran side by side; every finding was fixed and the owner's background sorting, phone page and shortcuts moved to a copy only the owner can change.",
+      "stages": [
+        {
+          "name": "Ask",
+          "kind": "lead",
+          "sessions": [
+            {
+              "id": "979da9f6",
+              "role": "Orchestrator (continued)",
+              "start": "2026-11-01T00:02",
+              "end": "2026-11-01T00:09",
+              "did": "Started the security audit and the slop check as two subagents",
+              "outcome": "done",
+              "files": 0
+            }
+          ]
+        },
+        {
+          "name": "Checks",
+          "kind": "review",
+          "sessions": [
+            {
+              "id": "a5942119",
+              "role": "Security audit (subagent)",
+              "start": "2026-11-01T00:09",
+              "end": "2026-11-01T00:19",
+              "did": "Phone page held against other users and websites; holes: other accounts, stop by pid, planted tailscale/schtasks, writable project folder, unpinned build",
+              "outcome": "done",
+              "files": 0
+            },
+            {
+              "id": "ad7ae7ee",
+              "role": "Slop check (subagent)",
+              "start": "2026-11-01T00:09",
+              "end": "2026-11-01T00:29",
+              "did": "README promises that overstated the app, phone page missing from privacy/security docs, invented store calls in report.py, personal details",
+              "outcome": "done",
+              "files": 0
+            }
+          ]
+        },
+        {
+          "name": "Fixes",
+          "kind": "fix",
+          "sessions": [
+            {
+              "id": "979da9f6",
+              "role": "Orchestrator (continued)",
+              "start": "2026-11-01T00:29",
+              "end": "2026-11-01T01:50",
+              "did": "Asked the owner six choices; peer.py, /api/stop, exclusive port, safe program lookups, hashed build + attestation, doc rewrites, personal details out; live copy installed and switched over, verified through Tailscale",
+              "outcome": "done",
+              "files": 29
+            }
+          ]
+        }
+      ],
+      "lessons": [
+        "A project folder every account can write is no place for code a scheduled task runs: install a live copy in the user folder.",
+        "shutil.which on Windows searches the current folder first even with path=."
+      ]
     }
   ]
 }

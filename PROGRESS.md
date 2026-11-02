@@ -3,19 +3,23 @@
 TacoSort (called TidyInbox until 2026-10-28) is an open-source (MIT) Python tool that sorts every email account a person has (any IMAP
 server, Outlook through OAuth2) into one shared folder scheme and keeps it sorted in the background.
 
-## Where it stands (2026-10-31)
+## Where it stands (2026-11-01)
 - Public at https://github.com/mAgNiFiCeNtTaCo/tacosort. **Release 0.1.0** (2026-10-29,
   https://github.com/mAgNiFiCeNtTaCo/tacosort/releases/tag/v0.1.0): a one-file app for Windows
   (15 MB), macOS Apple silicon (zip) and Linux. With Python: `pipx install
   git+https://github.com/mAgNiFiCeNtTaCo/tacosort` (it is not on PyPI); `tacosort app` opens the window.
 - **Phone page** (2026-10-31, in `main`, not yet in a release): `tacosort phone on` / the app's Options tab
   shares it with the owner's own Tailscale devices (127.0.0.1:8747 behind `tailscale serve`). On for the
-  owner since 2026-10-31, starting with Windows. Desktop + Start menu shortcut "TacoSort" opens the window
-  from the venv.
+  owner since 2026-10-31, starting with Windows. Since 2026-11-01 it answers only Tailscale itself or the
+  owner's own programs, and stops through `POST /api/stop`.
+- **Live copy** (2026-11-01): the owner's task, phone page and Desktop + Start menu shortcuts run from
+  `%LOCALAPPDATA%\Programs\TacoSort\venv`, not the project folder; update it after a change (CLAUDE.md).
+- Security audit and slop check 2026-11-01: all findings fixed (b7fa6d0); releases from 0.2.0 on carry
+  `SHA256SUMS.txt` and a build attestation.
 - Start: `tacosort setup` → `tacosort preview` → `tacosort run --backlog --yes` (old mail) →
   `tacosort schedule on` (keeps new mail sorted).
-- Tests: `.venv\Scripts\python -m pytest -q`: 696 passed, 2 skipped (POSIX-only), ruff clean.
-  GitHub CI green on Windows, macOS and Linux (2026-10-31, commit caef3f8). CI jobs stop after 20 minutes.
+- Tests: `.venv\Scripts\python -m pytest -q`: 707 passed, 2 skipped (POSIX-only), ruff clean.
+  GitHub CI green on Windows, macOS and Linux (2026-11-01, commit b7fa6d0). CI jobs stop after 20 minutes.
 - In real use on three of the owner's accounts (app passwords, background schedule every 15 min):
   personal Gmail Inbox 59 -> 1, business Gmail 299 -> 18, Yahoo "Main"
   ~10,600 -> 174 (since 2026-10-29), plus mail younger than 24 hours. What stays: recent mail from
@@ -27,6 +31,48 @@ server, Outlook through OAuth2) into one shared folder scheme and keeps it sorte
 - Untested for real: Outlook/Google OAuth, AI sorting against the live API, the Windows at-logon trigger.
 
 ## Log
+### 2026-11-01: Security audit and slop check fixed; the live copy moved to the user folder
+- Owner's ask: "have we audited this and check for ai slop yet?" -> "start both". First security audit
+  (`Security_Agent_Audit/reports/2026-11-01-Email_Organization.md`, proofs p1-p4) and a slop check
+  (`AI_SlopAgent/reports/2026-11-01-Email_Organization.md`), run side by side as two subagents.
+- Owner's choices: the PC is used only by them; fix everything; reword the README's preview promise
+  instead of adding a preview gate; take personal details out of the current files (no history rewrite,
+  older commits still hold them); switch the live setup now; update Python (postponed, see below).
+- **Security fixes (b7fa6d0):**
+  - New `tacosort/peer.py` asks Windows (GetExtendedTcpTable) or Linux (`/proc/net/tcp` uid) who owns
+    the other end of each 127.0.0.1 connection. The phone page refuses another account's program, and
+    trusts a Tailscale login header only from Tailscale's own service (its pid, or a tailscaled.exe that
+    the service started). macOS answers "unknown" and keeps the old checks.
+  - Turn off = `POST /api/stop` (this computer only), not killing the pid the port reported; `ping`
+    ignores a listener owned by another account. Port bound with SO_EXCLUSIVEADDRUSE, 15 s read timeout.
+  - `tailscale` is looked up in its install folder, then PATH without the current folder (`shutil.which`
+    puts the current folder first on Windows even with `path=`); schtasks and notepad by full System32 path.
+  - Release build: exact package versions with hashes (`packaging/requirements-build.txt`, from
+    `uv pip compile --universal --generate-hashes`), `--require-hashes`, a build attestation and
+    `SHA256SUMS.txt` on each release; Dependabot watches `/packaging`.
+- **Live copy:** the scheduled task, the phone page's Run value and both "TacoSort" shortcuts now run a
+  normal (not editable) install in `%LOCALAPPDATA%\Programs\TacoSort\venv`, which only the owner can
+  change. Why: `D:\ClaudeProjects` lets every account on the PC write, so any account could change the
+  code the task ran. Code edits in the project no longer reach the live copy; CLAUDE.md says how to update
+  it (4eb0f6b). Checked: task "To Run" is the new pythonw every 15 min; phone page restarted from it; ping,
+  status and the page answer 200 through Tailscale and locally, a faked wrong login gets 403;
+  `tailscale serve` still has its 3 entries.
+- **Writing fixes (slop check):** README promises match what the app does (preview, unsure mail), "every
+  15 minutes", how to check a download; privacy.md and SECURITY.md cover the phone page; the Google
+  sign-in hint that led nowhere removed; `report.py` calls the store's real methods (invented names and a
+  TypeError retry gone); build-team leftovers and pasted noqa reasons removed; the business, school domain
+  and a real sender's name replaced with neutral words.
+- **Accepted / false alarms:** proof p1 still says HOLE for programs under the owner's own account: they
+  are trusted on purpose (they can already read the keychain). Proof p4 flags the project folder because it
+  reads `direct_url.json`; the live copy loads from its own site-packages (checked).
+- **Not done:** Python 3.14.10 update, postponed because Bathroom, Ship Desk, tacocam, Document Vault,
+  TacoVault, Whatnot Borders and the BabyG panel run on that Python (`py install 3.14 --update` once they
+  are closed). Side effect: `py list` updated the Python install manager to 26.4. Two Dependabot PRs
+  (upload/download-artifact) open. Release 0.2.0 needs the owner's OK. No tag ruleset on GitHub yet.
+- Tests 707 passed, 2 skipped; ruff clean; CI and the build green on Windows, macOS and Linux.
+- Resources (2026-11-01 23:55, task + phone page running): 2 processes, 27 MB RAM, 0% CPU, port 8747,
+  disk 174 MB; whole PC CPU 21% of 32 threads, RAM 47.9 of 64 GB, GPU 99% (ImageMaker).
+
 ### 2026-10-31: Phone page over Tailscale; CI hang on the Mac fixed
 - **CI fix (2026-10-30, fb4381e):** the three pushes after 4efab8e had their macOS jobs hang 6 hours until
   GitHub cancelled them. Cause: `test_ticking_background_sorting_sets_up_the_schedule` pumped Tk with
