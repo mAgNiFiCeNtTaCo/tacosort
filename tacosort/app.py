@@ -1,13 +1,15 @@
 """The TacoSort app: the same TacoSort in a window, for people who'd rather not type commands.
 
-Three tabs, in the order a new person needs them:
-  Accounts  add an email account (with the steps to get an app password), test it, switch it off
-  Options   tick boxes for every setting, the folders to use, and the background schedule
+A side bar with four pages:
+  Home      what TacoSort is doing: background sorting, the last sort, your accounts, the phone page
   Sort      learn from your folders, preview (moves nothing), sort now, undo, see every move
+  Accounts  add an email account (with the steps to get an app password), test it, switch it off
+  Settings  a switch for every setting, the folders to use, the background schedule, the phone page
 
-Mail work runs on a helper thread so the window never freezes; only the main thread touches the
-window (results come back through a queue). The settings file, the keychain, the memory and the log
-are the same ones the `tacosort` command uses, so both can be used side by side.
+The look (colours, cards, switches) comes from widgets.py and theme.py; the side bar's coloured dots
+pick a theme. Mail work runs on a helper thread so the window never freezes; only the main thread
+touches the window (results come back through a queue). The settings file, the keychain, the memory and
+the log are the same ones the `tacosort` command uses, so both can be used side by side.
 """
 
 from __future__ import annotations
@@ -22,11 +24,12 @@ import threading
 import tkinter as tk
 import webbrowser
 from collections.abc import Callable
+from datetime import datetime
 from pathlib import Path
 from tkinter import messagebox, ttk
 from typing import Any
 
-from . import __version__, cli, options
+from . import __version__, cli, options, theme
 from . import phone as phone_page
 from .actions import (  # noqa: F401 - the mail work lives in actions.py; these names stay importable here
     MAX_SORT_ROUNDS,
@@ -40,6 +43,7 @@ from .actions import (  # noqa: F401 - the mail work lives in actions.py; these 
     undo_last,
     write_report,
 )
+from .actions import status as sort_status
 from .backend import BackendError
 from .config import (
     ConfigError,
@@ -49,10 +53,15 @@ from .config import (
     save_config,
 )
 from .models import AccountConfig, AppConfig
+from .widgets import Look, ScrollFrame, scroll_when_needed
 
 ASSETS = Path(__file__).parent / "assets"
 APP_ID = "TacoSort.App"
 PAD = 8
+PAGES = (("home", "Home"), ("sort", "Sort"), ("accounts", "Accounts"), ("settings", "Settings"))
+INTRO = ("TacoSort files robot mail (receipts, newsletters, promotions...) into folders, so your Inbox keeps "
+         "mail from people. It never deletes anything, never marks mail as read, and every move can be undone. "
+         "Passwords stay in your computer's keychain.")
 
 
 def phone_state(path: Path) -> tuple[bool, str, str]:
@@ -122,7 +131,7 @@ _SETUP_HINT = re.compile(r"\b([Rr])un ['`]tacosort (?:setup|accounts add)['`](?:
 def for_app(text: str) -> str:
     """Messages written for the command ("run 'tacosort setup'") pointed at the window instead."""
     return _SETUP_HINT.sub(lambda m: ("U" if m.group(1) == "R" else "u") + "se Add account... on the Accounts "
-                           "tab (with the same email address)", text)
+                           "page (with the same email address)", text)
 
 
 def plain_error(e: BaseException) -> str:
@@ -133,29 +142,17 @@ def plain_error(e: BaseException) -> str:
     return f"Something went wrong: {type(e).__name__}: {e}"
 
 
-def wrapped(parent: tk.Misc, text: str, width: int = 520, **kw: Any) -> ttk.Label:
-    return ttk.Label(parent, text=text, wraplength=width, justify="left", **kw)
-
-
-class ScrollFrame(ttk.Frame):
-    """A frame whose contents scroll with the mouse wheel when the window is too small."""
-
-    def __init__(self, parent: tk.Misc):
-        super().__init__(parent)
-        self.canvas = tk.Canvas(self, highlightthickness=0, borderwidth=0)
-        bar = ttk.Scrollbar(self, orient="vertical", command=self.canvas.yview)
-        self.inner = ttk.Frame(self.canvas)
-        self.inner.bind("<Configure>", lambda _e: self.canvas.configure(scrollregion=self.canvas.bbox("all")))
-        self._win = self.canvas.create_window((0, 0), window=self.inner, anchor="nw")
-        self.canvas.bind("<Configure>", lambda e: self.canvas.itemconfigure(self._win, width=e.width))
-        self.canvas.configure(yscrollcommand=bar.set)
-        self.canvas.pack(side="left", fill="both", expand=True)
-        bar.pack(side="right", fill="y")
-        self.bind_all("<MouseWheel>", self._wheel, add="+")
-
-    def _wheel(self, event: tk.Event) -> None:
-        if self.winfo_ismapped() and str(event.widget).startswith(str(self)):
-            self.canvas.yview_scroll(int(-event.delta / 120) or (-1 if event.delta > 0 else 1), "units")
+def when_text(at: datetime | None) -> tuple[str, str]:
+    """("2:30 PM", "Today") for a time today, ("Nov 20", "Nov 20, 2:30 PM") for an older one."""
+    if at is None:
+        return "Not yet", ""
+    local = at.astimezone() if at.tzinfo else at
+    clock = local.strftime("%I:%M %p").lstrip("0")
+    days = (datetime.now().date() - local.date()).days
+    if days == 0:
+        return clock, "Today"
+    day = f"{local.strftime('%b')} {local.day}"
+    return ("Yesterday" if days == 1 else day), f"{day}, {clock}"
 
 
 # ---- the window -------------------------------------------------------------------------------------
@@ -164,42 +161,131 @@ class App:
         self.root = root
         self.path = config_path
         self.cfg = AppConfig()
-        self.action_buttons: list[ttk.Button] = []
+        self.action_buttons: list[ttk.Widget] = []
         root.title("TacoSort")
-        root.geometry("1000x780")
-        root.minsize(760, 520)
+        self.look = Look(root, self._saved_theme())
+        px = self.look.px
+        wide = min(px(1120), root.winfo_screenwidth() - px(60))          # fits a small or zoomed screen
+        tall = min(px(780), root.winfo_screenheight() - px(110))
+        root.geometry(f"{wide}x{tall}")
+        root.minsize(min(px(920), wide), min(px(600), tall))
         _set_icon(root)
         self.jobs = Jobs(root, self._set_busy)
 
-        head = ttk.Frame(root, padding=(PAD * 2, PAD * 2, PAD * 2, 0))
-        head.pack(fill="x")
-        ttk.Label(head, text="TacoSort", font=("TkDefaultFont", 18, "bold")).pack(side="left")
-        ttk.Label(head, text=f"  version {__version__}").pack(side="left", pady=(8, 0))
-        self.progress = ttk.Progressbar(head, mode="indeterminate", length=160)
-        wrapped(root, "Sorts robot mail (receipts, newsletters, promotions...) into folders, so your Inbox keeps "
-                      "mail from people. It never deletes anything, never marks mail as read, and every move "
-                      "can be undone. Passwords stay in your computer's keychain.", width=900,
-                padding=(PAD * 2, 4, PAD * 2, PAD)).pack(fill="x")
-
-        self.tabs = ttk.Notebook(root)
-        self.tabs.pack(fill="both", expand=True, padx=PAD * 2, pady=(0, PAD))
-        self.accounts_tab = ttk.Frame(self.tabs, padding=PAD * 2)
-        self.options_tab = ttk.Frame(self.tabs)
-        self.sort_tab = ttk.Frame(self.tabs, padding=PAD * 2)
-        self.tabs.add(self.accounts_tab, text="  1. Accounts  ")
-        self.tabs.add(self.options_tab, text="  2. Options  ")
-        self.tabs.add(self.sort_tab, text="  3. Sort  ")
-
+        self._build_side()
+        ttk.Frame(root, style="Line.TFrame", width=max(1, px(1))).pack(side="left", fill="y")
+        main = ttk.Frame(root)
+        main.pack(side="left", fill="both", expand=True)
+        top = ttk.Frame(main, padding=(px(PAD * 3), px(PAD * 3), px(PAD * 3), px(PAD)))
+        top.pack(fill="x")
+        self.title = tk.StringVar()
+        ttk.Label(top, textvariable=self.title, style="H1.TLabel").pack(side="left")
+        self.progress = ttk.Progressbar(top, mode="indeterminate", length=px(160))
         self.status = tk.StringVar(value="")
-        ttk.Label(root, textvariable=self.status, padding=(PAD * 2, 0, PAD * 2, PAD)).pack(fill="x")
+        ttk.Label(main, textvariable=self.status, style="Small.TLabel",
+                  padding=(px(PAD * 3), px(PAD), px(PAD * 3), px(PAD))).pack(side="bottom", fill="x")
+        holder = ttk.Frame(main)
+        holder.pack(fill="both", expand=True)
+        self.pages = {name: ttk.Frame(holder) for name, _ in PAGES}
+        self.page = ""
 
+        self._build_home()
+        self._build_sort()
         self._build_accounts()
         self._build_options()
-        self._build_sort()
+        self.look.on_change(self._paint)
+        self._paint()
+        self._wide = 0
+        root.bind("<Configure>", self._resized, add="+")
         self.ok = self.reload()        # False: the settings file is broken, so the window must not save over it
         root.protocol("WM_DELETE_WINDOW", self._close)
-        if not self.cfg.accounts:
-            self.tabs.select(self.accounts_tab)
+        self.show("home" if self.cfg.accounts else "accounts")
+
+    def _saved_theme(self) -> str:
+        try:
+            return load_config(self.path).theme
+        except ConfigError:
+            return theme.DEFAULT           # reload() explains the problem
+
+    # ---- side bar -------------------------------------------------------------------------------
+    def _build_side(self) -> None:
+        px = self.look.px
+        self.side = side = ttk.Frame(self.root, style="Side.TFrame", padding=(px(PAD * 1.5), px(PAD * 2)))
+        side.pack(side="left", fill="y")
+        brand = ttk.Frame(side, style="Side.TFrame")
+        brand.pack(fill="x", pady=(0, px(PAD * 2.5)), padx=px(PAD / 2))
+        with contextlib.suppress(tk.TclError, OSError):
+            big = tk.PhotoImage(master=self.root, file=str(ASSETS / "tacosort.png"))
+            logo = big.subsample(max(1, big.width() // px(34)))
+            self.look.kept.append(logo)
+            ttk.Label(brand, image=logo, style="Side.TLabel").pack(side="left", padx=(0, px(PAD + 2)))
+        ttk.Label(brand, text="TacoSort", style="Side.Brand.TLabel").pack(side="left")
+
+        self.nav: dict[str, ttk.Button] = {}
+        for name, title in PAGES:
+            b = ttk.Button(side, text=f"  {title}", compound="left", width=14, cursor="hand2",
+                           style="Side.Nav.TButton", command=lambda n=name: self.show(n))
+            b.pack(fill="x", pady=px(2))
+            self.look.follow(b, f"icon-{name}")
+            self.nav[name] = b
+
+        ttk.Label(side, text=f"Version {__version__}", style="Side.Small.TLabel").pack(side="bottom", anchor="w",
+                                                                                      padx=px(PAD / 2))
+        self.look_name = tk.StringVar()
+        dots = ttk.Frame(side, style="Side.TFrame")
+        dots.pack(side="bottom", anchor="w", pady=(px(4), px(PAD * 2)))
+        ttk.Label(side, textvariable=self.look_name, style="Side.Small.TLabel").pack(side="bottom", anchor="w",
+                                                                                    padx=px(PAD / 2))
+        self.swatches: dict[str, ttk.Button] = {}
+        for i, name in enumerate(theme.NAMES):
+            b = ttk.Button(dots, style="Side.Swatch.TButton", cursor="hand2", takefocus=True,
+                           command=lambda n=name: self.pick_theme(n))
+            b.grid(row=i // 4, column=i % 4, padx=px(1), pady=px(1))
+            b.bind("<Enter>", lambda _e, n=name: self.look_name.set(f"Look: {theme.label(n)}"))
+            b.bind("<Leave>", lambda _e: self._show_look())
+            self.swatches[name] = b
+        self._show_look()
+
+    def _show_look(self) -> None:
+        self.look_name.set(f"Look: {theme.label(self.look.name)}")
+        for name, b in self.swatches.items():
+            self.look.follow(b, f"swatch-{name}{'-on' if name == self.look.name else ''}")
+
+    def pick_theme(self, name: str) -> None:
+        """Repaint in the picked look and remember it (the phone page uses the same setting)."""
+        self.look.use(name)
+        self._show_look()
+        if self.ok and self.cfg.theme != name:
+            self.cfg = dataclasses.replace(self.cfg, theme=name)
+            save_config(self.cfg, self.path)
+
+    def _resized(self, event: tk.Event) -> None:
+        if event.widget is self.root and event.width != self._wide:
+            self._wide = event.width
+            # (the side bar's asked-for width: its real one is still 1 when the window first appears)
+            self.look.rewrap(event.width - self.side.winfo_reqwidth() - self.look.px(PAD * 6 + 2))
+
+    def _paint(self) -> None:
+        """Colours for the few widgets ttk styles don't reach."""
+        c = self.look.c
+        self.log_box.configure(background=c["surface"], foreground=c["text"], insertbackground=c["text"],
+                               selectbackground=theme.mix(c["surface"], c["accent"], 0.35),
+                               selectforeground=c["text"], font=self.look.fonts["small"])
+        for tree in (self.acct_list, self.moves):
+            tree.tag_configure("odd", background=self.look.stripe)
+
+    def show(self, name: str) -> None:
+        """Show one page ("home", "sort", "accounts" or "settings")."""
+        if self.page:
+            self.pages[self.page].pack_forget()
+        self.page = name
+        self.pages[name].pack(fill="both", expand=True)
+        self.title.set(dict(PAGES)[name])
+        for key, b in self.nav.items():
+            b.configure(style="Side.NavOn.TButton" if key == name else "Side.Nav.TButton")
+            self.look.follow(b, f"icon-{key}-on" if key == name else f"icon-{key}")
+        if name == "home":
+            self._fill_home()
 
     # ---- shared ---------------------------------------------------------------------------------
     def reload(self) -> bool:
@@ -208,6 +294,9 @@ class App:
         except ConfigError as e:
             messagebox.showerror("TacoSort", f"There's a problem with your settings file ({self.path}):\n\n{e}")
             return False
+        if self.cfg.theme != self.look.name:
+            self.look.use(self.cfg.theme)
+            self._show_look()
         self._fill_accounts()
         self._fill_options()
         self._refresh_status()
@@ -224,13 +313,67 @@ class App:
             self.progress.pack_forget()
             self._refresh_status()
 
-    def _button(self, parent: tk.Misc, text: str, command: Callable[[], None], **kw: Any) -> ttk.Button:
-        b = ttk.Button(parent, text=text, command=command, **kw)
+    def _button(self, parent: tk.Misc, text: str, command: Callable[[], None], kind: str = "Plain",
+                **kw: Any) -> ttk.Button:
+        b = ttk.Button(parent, text=text, command=command, cursor="hand2",
+                       style=self.look.style_for(parent, f"{kind}.TButton"), **kw)
         self.action_buttons.append(b)
         return b
 
+    def _card(self, parent: tk.Misc, title: str = "", pad: float = PAD * 2) -> ttk.Frame:
+        """A rounded panel; pack or grid it yourself."""
+        card = ttk.Frame(parent, style="Panel.TFrame", padding=self.look.px(pad))
+        self.look.within(card, parent, pad * 2)
+        if title:
+            ttk.Label(card, text=title, style="Card.H2.TLabel").pack(anchor="w", pady=(0, self.look.px(PAD)))
+        return card
+
+    def _switch_row(self, box: tk.Misc, text: str, variable: tk.BooleanVar, help_text: str = "",
+                    number: tk.StringVar | None = None, unit: str = "", low: int = 0, high: int = 0) -> None:
+        """One setting: a switch, what it does, an optional number and a line of help."""
+        px = self.look.px
+        row = ttk.Frame(box, style="Card.TFrame")
+        row.pack(fill="x", pady=px(5))
+        row.columnconfigure(1, weight=1)
+        switch = ttk.Checkbutton(row, variable=variable, style="Card.Switch.TCheckbutton", cursor="hand2")
+        switch.grid(row=0, column=0, sticky="nw", padx=(0, px(PAD + 4)))
+        words = ttk.Frame(row, style="Card.TFrame")
+        words.grid(row=0, column=1, sticky="ew")
+        self.look.within(words, box, 40 + PAD + 4)
+        label = self.look.wrapped(words, text)
+        label.pack(fill="x")
+        label.bind("<Button-1>", lambda _e: switch.invoke())
+        if number is not None:
+            line = ttk.Frame(words, style="Card.TFrame")
+            line.pack(fill="x", pady=(px(4), 0))
+            ttk.Spinbox(line, from_=low, to=high, textvariable=number, width=6).pack(side="left")
+            ttk.Label(line, text=unit, style="Card.Muted.TLabel").pack(side="left", padx=(px(6), 0))
+        if help_text:
+            self.look.wrapped(words, help_text, "Small.TLabel").pack(fill="x", pady=(px(2), 0))
+
+    def _table(self, parent: tk.Misc, columns: tuple[str, ...], titles: tuple[str, ...], widths: tuple[int, ...],
+               height: int, **kw: Any) -> ttk.Treeview:
+        """A list inside a rounded card (the card is packed here; the list is returned)."""
+        px = self.look.px
+        card = self._card(parent, pad=PAD * 0.75)
+        card.pack(fill="both", expand=True)
+        tree = ttk.Treeview(card, columns=columns, show="headings", height=height, **kw)
+        for col, title, width in zip(columns, titles, widths):
+            tree.heading(col, text=title, anchor="w")
+            tree.column(col, width=px(width), anchor="w")
+        bar = ttk.Scrollbar(card, orient="vertical", command=tree.yview, style="Card.Vertical.TScrollbar")
+        tree.pack(side="left", fill="both", expand=True)
+        scroll_when_needed(tree, bar)
+        return tree
+
+    def _page_body(self, name: str) -> ttk.Frame:
+        px = self.look.px
+        body = ttk.Frame(self.pages[name], padding=(px(PAD * 3), 0, px(PAD * 3), px(PAD)))
+        body.pack(fill="both", expand=True)
+        return body
+
     def _log(self, line: str) -> None:
-        """Safe from the helper thread: the line is added to the Sort tab's log on the window's thread."""
+        """Safe from the helper thread: the line is added to the Sort page's log on the window's thread."""
         self.jobs.later(lambda: self._append_log(line))
 
     def _append_log(self, line: str) -> None:
@@ -238,15 +381,22 @@ class App:
         self.log_box.insert("end", for_app(line).rstrip() + "\n")
         self.log_box.see("end")
         self.log_box.configure(state="disabled")
+        self.log_lines += 1
+        if line.startswith("Problem"):
+            self._show_log(True)
+        else:
+            self._show_log(self.log_open)
 
     def _refresh_status(self) -> None:
         n = len(self.cfg.accounts)
+        on, _text = schedule_is_on() if n else (False, "")
+        self.sched_on = on
         if not n:
             self.status.set("No email accounts yet: start with Add account.")
-            return
-        on, _text = schedule_is_on()
-        auto = "Sorting automatically in the background." if on else "Background sorting is off."
-        self.status.set(f"{n} account(s). {auto}")
+        else:
+            auto = "Sorting automatically in the background." if on else "Background sorting is off."
+            self.status.set(f"{n} account{'' if n == 1 else 's'}. {auto}")
+        self._fill_home()
 
     def _close(self) -> None:
         if self.jobs.busy:
@@ -255,32 +405,154 @@ class App:
             return
         self.root.destroy()
 
-    # ---- Accounts tab ----------------------------------------------------------------------------
+    # ---- Home page -------------------------------------------------------------------------------
+    def _build_home(self) -> None:
+        px = self.look.px
+        scroll = ScrollFrame(self.pages["home"], self.look)
+        scroll.pack(fill="both", expand=True)
+        body = ttk.Frame(scroll.inner, padding=(px(PAD * 3), 0, px(PAD * 3), px(PAD)))
+        body.pack(fill="both", expand=True)
+        self.look.wrapped(body, INTRO, "Muted.TLabel").pack(fill="x", pady=(0, px(PAD * 2)))
+
+        self.welcome = self._card(body, "Welcome to TacoSort")
+        self.look.wrapped(self.welcome, "Start by adding the email account you want sorted. TacoSort checks the login "
+                              "works before it saves anything, and moves nothing until you say so.",
+                "Muted.TLabel").pack(fill="x", pady=(0, px(PAD)))
+        self._button(self.welcome, "Add your first account", self.add_account, "Primary").pack(anchor="w")
+
+        self.tiles = ttk.Frame(body)
+        self.tiles.pack(fill="x")
+        self.home: dict[str, tuple[tk.StringVar, tk.StringVar]] = {}
+        names = (("schedule", "Background sorting"), ("last", "Last sort"), ("today", "Moved today"),
+                 ("phone", "Phone page"))
+        for i, (key, title) in enumerate(names):
+            self.tiles.columnconfigure(i, weight=1, uniform="tile")
+            self.look.column(self.tiles, 0.25, PAD)
+            tile = self._card(self.tiles)
+            tile.grid(row=0, column=i, sticky="nsew", padx=(0 if i == 0 else px(PAD), 0))
+            ttk.Label(tile, text=title, style="Card.Small.TLabel").pack(anchor="w")
+            value, sub = tk.StringVar(value="..."), tk.StringVar()
+            ttk.Label(tile, textvariable=value, style="Card.Stat.TLabel").pack(anchor="w", pady=(px(2), 0))
+            self.look.wrapped(tile, "", "Small.TLabel", textvariable=sub).pack(fill="x")
+            self.home[key] = (value, sub)
+            if key == "schedule":
+                self.home_sched = tk.BooleanVar()
+                switch = ttk.Checkbutton(tile, variable=self.home_sched, style="Card.Switch.TCheckbutton",
+                                         cursor="hand2", command=self.toggle_schedule)
+                switch.pack(anchor="w", pady=(px(PAD), 0))
+                self.action_buttons.append(switch)
+        lower = ttk.Frame(body)
+        lower.pack(fill="x", pady=(px(PAD), 0))
+        lower.columnconfigure(0, weight=3, uniform="low")
+        lower.columnconfigure(1, weight=2, uniform="low")
+        accounts = self._card(lower)
+        accounts.grid(row=0, column=0, sticky="nsew")
+        head = ttk.Frame(accounts, style="Card.TFrame")
+        head.pack(fill="x", pady=(0, px(PAD / 2)))
+        ttk.Label(head, text="Accounts", style="Card.H2.TLabel").pack(side="left")
+        ttk.Button(head, text="Manage", style="Card.Quiet.TButton", cursor="hand2",
+                   command=lambda: self.show("accounts")).pack(side="right")
+        self.home_accounts = ttk.Frame(accounts, style="Card.TFrame")
+        self.home_accounts.pack(fill="x")
+
+        self.look.column(lower, 0.4, PAD)
+        quick = self._card(lower, "Sort now")
+        quick.grid(row=0, column=1, sticky="nsew", padx=(px(PAD), 0))
+        self.look.wrapped(quick, "A preview shows where each email would go and moves nothing.", "Muted.TLabel").pack(
+            fill="x", pady=(0, px(PAD)))
+        self._button(quick, "Preview", lambda: (self.show("sort"), self.preview()), "Primary").pack(fill="x")
+        self._button(quick, "Sort my Inbox now", lambda: (self.show("sort"), self.sort_now())).pack(
+            fill="x", pady=(px(PAD), 0))
+        self.home_note = tk.StringVar()
+        self.look.wrapped(body, "", "Muted.TLabel", textvariable=self.home_note).pack(fill="x", pady=(px(PAD), 0))
+
+    def _fill_home(self) -> None:
+        px = self.look.px
+        cfg = self.cfg
+        if cfg.accounts:
+            self.welcome.pack_forget()
+        else:
+            self.welcome.pack(fill="x", pady=(0, px(PAD)), before=self.tiles)
+        on = getattr(self, "sched_on", False)
+        self.home_sched.set(on)
+        self.home["schedule"][0].set("On" if on else "Off")
+        self.home["schedule"][1].set(f"New mail is sorted every {cfg.interval_minutes} minutes." if on
+                                     else "Nothing is sorted until you turn it on.")
+        try:
+            run, today = sort_status(cfg)
+        except Exception:  # noqa: BLE001 - the Home page still opens when the memory file can't be read
+            run, today = None, 0
+        value, day = when_text(run["started"] if run else None)
+        self.home["last"][0].set(value)
+        if not run:
+            self.home["last"][1].set("TacoSort hasn't sorted anything yet.")
+        elif not run["scanned"]:
+            self.home["last"][1].set(f"{day}: no new mail to sort.")
+        else:
+            self.home["last"][1].set(f"{day}: moved {run['moved']} of {run['scanned']} checked.")
+        self.home["today"][0].set(str(today))
+        self.home["today"][1].set("email moved into a folder." if today == 1 else "emails moved into folders.")
+
+        for child in self.home_accounts.winfo_children():
+            child.destroy()
+        providers = cli._providers().PROVIDERS
+        for a in cfg.accounts:
+            row = ttk.Frame(self.home_accounts, style="Card.TFrame")
+            row.pack(fill="x", pady=px(4))
+            self.look.picture(row, "dot-on" if a.enabled else "dot-off").pack(side="left", padx=(px(2), px(PAD + 2)))
+            ttk.Label(row, text=a.email, style="Card.TLabel").pack(side="left")
+            name = providers[a.provider].name if a.provider in providers else a.provider
+            ttk.Label(row, text=name if a.enabled else f"{name}, off", style="Card.Small.TLabel").pack(side="right")
+        if not cfg.accounts:
+            ttk.Label(self.home_accounts, text="No accounts yet.", style="Card.Muted.TLabel").pack(anchor="w")
+
+    def toggle_schedule(self) -> None:
+        """The Home page's switch: background sorting on or off, with the saved number of minutes."""
+        want_on = self.home_sched.get()
+        if want_on and not enabled_accounts(self.cfg):
+            self.home_sched.set(False)
+            self.home_note.set("Add an account before turning on background sorting.")
+            return
+        if not want_on and not messagebox.askyesno("Background sorting", "Turn off background sorting?\n\nNew "
+                                                   "mail stays in the Inbox until you turn it on again."):
+            self.home_sched.set(True)
+            return
+        sched = cli._schedule()
+        minutes, path = self.cfg.interval_minutes, self.path.resolve()
+
+        def done(result: Any, error: BaseException | None) -> None:
+            self.home_note.set(str(result) if error is None else "The background schedule couldn't be changed: "
+                               f"{plain_error(error)}")
+            self.sched_var.set(schedule_is_on()[0])
+
+        if not self.jobs.start(lambda: sched.install(minutes, path) if want_on else sched.uninstall(), done):
+            self.home_sched.set(not want_on)
+
+    # ---- Accounts page ---------------------------------------------------------------------------
     def _build_accounts(self) -> None:
-        tab = self.accounts_tab
-        wrapped(tab, "Add each email account you want sorted. TacoSort checks the login works before it saves "
-                     "anything.", width=860).pack(anchor="w", pady=(0, PAD))
-        cols = ("name", "email", "provider", "status")
-        self.acct_list = ttk.Treeview(tab, columns=cols, show="headings", height=8, selectmode="browse")
-        for col, title, width in zip(cols, ("Short name", "Email", "Provider", "Status"), (160, 320, 140, 120)):
-            self.acct_list.heading(col, text=title, anchor="w")
-            self.acct_list.column(col, width=width, anchor="w")
-        self.acct_list.pack(fill="both", expand=True)
-        row = ttk.Frame(tab, padding=(0, PAD, 0, 0))
+        px = self.look.px
+        tab = self._page_body("accounts")
+        self.look.wrapped(tab, "Add each email account you want sorted. TacoSort checks the login works before it saves "
+                     "anything.", "Muted.TLabel").pack(fill="x", pady=(0, px(PAD * 1.5)))
+        self.acct_list = self._table(tab, ("name", "email", "provider", "status"),
+                                     ("Short name", "Email", "Provider", "Status"), (160, 300, 160, 100), 8,
+                                     selectmode="browse")
+        row = ttk.Frame(tab, padding=(0, px(PAD * 1.5), 0, 0))
         row.pack(fill="x")
-        self._button(row, "Add account...", self.add_account).pack(side="left")
-        self._button(row, "Test login", self.test_account).pack(side="left", padx=PAD)
+        self._button(row, "Add account...", self.add_account, "Primary").pack(side="left")
+        self._button(row, "Test login", self.test_account).pack(side="left", padx=px(PAD))
         self._button(row, "Turn on / off", self.toggle_account).pack(side="left")
-        self._button(row, "Remove", self.remove_account).pack(side="left", padx=PAD)
+        self._button(row, "Remove", self.remove_account, "Danger").pack(side="left", padx=px(PAD))
         self.acct_note = tk.StringVar()
-        wrapped(tab, "", width=860, textvariable=self.acct_note).pack(anchor="w", pady=(PAD, 0))
+        self.look.wrapped(tab, "", textvariable=self.acct_note).pack(fill="x", pady=(px(PAD), 0))
 
     def _fill_accounts(self) -> None:
         self.acct_list.delete(*self.acct_list.get_children())
         providers = cli._providers().PROVIDERS
-        for a in self.cfg.accounts:
+        for i, a in enumerate(self.cfg.accounts):
             name = providers[a.provider].name if a.provider in providers else a.provider
-            self.acct_list.insert("", "end", iid=a.id, values=(a.id, a.email, name, "On" if a.enabled else "Off"))
+            self.acct_list.insert("", "end", iid=a.id, values=(a.id, a.email, name, "On" if a.enabled else "Off"),
+                                  tags=("odd",) if i % 2 else ())
         if not self.cfg.accounts:
             self.acct_note.set("No accounts yet. Click Add account... to start.")
 
@@ -334,78 +606,71 @@ class App:
                                f"keychain ({e}); you can delete the 'tacosort' entries for '{acct.id}' by hand.")
         self.reload()
 
-    # ---- Options tab -----------------------------------------------------------------------------
+    # ---- Settings page ---------------------------------------------------------------------------
     def _build_options(self) -> None:
-        scroll = ScrollFrame(self.options_tab)
+        px = self.look.px
+        page = self.pages["settings"]
+        bar = ttk.Frame(page, padding=(px(PAD * 3), px(PAD), px(PAD * 3), 0))
+        bar.pack(side="bottom", fill="x")
+        ttk.Frame(page, style="Line.TFrame", height=max(1, px(1))).pack(side="bottom", fill="x")
+        self._button(bar, "Save settings", self.save_options, "Primary").pack(side="left")
+        self._button(bar, "Undo changes", self.reload).pack(side="left", padx=px(PAD))
+        self.opt_note = tk.StringVar()
+        self.look.column(bar, 1.0, 300)
+        self.look.wrapped(bar, "", textvariable=self.opt_note).pack(side="left", fill="x", expand=True)
+
+        scroll = ScrollFrame(page, self.look)
         scroll.pack(fill="both", expand=True)
-        body = scroll.inner
+        body = ttk.Frame(scroll.inner, padding=(px(PAD * 3), 0, px(PAD * 3), px(PAD)))
+        body.pack(fill="both", expand=True)
         body.columnconfigure(0, weight=1, uniform="col")
         body.columnconfigure(1, weight=1, uniform="col")
-        left = ttk.Frame(body, padding=PAD * 2)
-        right = ttk.Frame(body, padding=PAD * 2)
-        left.grid(row=0, column=0, sticky="nsew")
-        right.grid(row=0, column=1, sticky="nsew")
+        left = ttk.Frame(body)
+        right = ttk.Frame(body)
+        self.look.column(body, 0.5, PAD + 6)        # two columns, less the gap and the scroll bar
+        left.grid(row=0, column=0, sticky="nsew", padx=(0, px(PAD)))
+        right.grid(row=0, column=1, sticky="nsew", padx=(px(PAD), 0))
 
         self.opt_vars: dict[str, tuple[tk.BooleanVar, tk.StringVar | None]] = {}
         for title, group in options.GROUPS:
-            box = ttk.LabelFrame(left, text=title, padding=PAD)
-            box.pack(fill="x", pady=(0, PAD))
+            box = self._card(left, title)
+            box.pack(fill="x", pady=(0, px(PAD * 1.5)))
             for o in group:
                 ticked = tk.BooleanVar()
                 number = tk.StringVar() if o.unit else None
-                line = ttk.Frame(box)
-                line.pack(fill="x", anchor="w")
-                ttk.Checkbutton(line, text=o.label, variable=ticked).pack(side="left")
-                if number is not None:
-                    ttk.Spinbox(line, from_=o.low, to=o.high, textvariable=number, width=6).pack(
-                        side="left", padx=(6, 4))
-                    ttk.Label(line, text=o.unit).pack(side="left")
-                if o.help:
-                    wrapped(box, o.help, width=400, foreground="#555").pack(anchor="w", padx=(24, 0),
-                                                                             pady=(0, 4))
+                self._switch_row(box, o.label, ticked, o.help, number, o.unit, o.low, o.high)
                 self.opt_vars[o.field] = (ticked, number)
 
-        cats = ttk.LabelFrame(right, text="Folders to sort into", padding=PAD)
-        cats.pack(fill="x", pady=(0, PAD))
-        wrapped(cats, "Untick a folder and that kind of mail stays in the Inbox.", width=400,
-                foreground="#555").pack(anchor="w", pady=(0, 4))
-        self.cats_box = ttk.Frame(cats)
+        cats = self._card(right, "Folders to sort into")
+        cats.pack(fill="x", pady=(0, px(PAD * 1.5)))
+        self.look.wrapped(cats, "Switch a folder off and that kind of mail stays in the Inbox.", "Small.TLabel").pack(
+            fill="x", pady=(0, px(4)))
+        self.cats_box = ttk.Frame(cats, style="Card.TFrame")
         self.cats_box.pack(fill="x")
         self.cat_vars: dict[str, tk.BooleanVar] = {}
 
-        bg = ttk.LabelFrame(right, text="In the background", padding=PAD)
-        bg.pack(fill="x", pady=(0, PAD))
+        bg = self._card(right, "In the background")
+        bg.pack(fill="x", pady=(0, px(PAD * 1.5)))
         self.sched_var = tk.BooleanVar()
         self.interval_var = tk.StringVar()
-        line = ttk.Frame(bg)
-        line.pack(fill="x")
-        ttk.Checkbutton(line, text="Sort new mail automatically every", variable=self.sched_var).pack(side="left")
-        ttk.Spinbox(line, from_=5, to=1439, textvariable=self.interval_var, width=6).pack(side="left", padx=(6, 4))
-        ttk.Label(line, text="minutes").pack(side="left")
-        wrapped(bg, "Runs while you are logged in to this computer, even with this window closed.", width=400,
-                foreground="#555").pack(anchor="w", padx=(24, 0))
+        self._switch_row(bg, "Sort new mail automatically every", self.sched_var,
+                         "Runs while you are logged in to this computer, even with this window closed.",
+                         self.interval_var, "minutes", 5, 1439)
 
-        ph = ttk.LabelFrame(right, text="On your phone (over Tailscale)", padding=PAD)
-        ph.pack(fill="x", pady=(0, PAD))
-        wrapped(ph, "Use TacoSort from your phone's browser: status, preview, sort, undo and these options. Only "
-                    "your own devices signed in to Tailscale can open it. It starts with Windows while it is on.",
-                width=400, foreground="#555").pack(anchor="w")
+        ph = self._card(right, "On your phone (over Tailscale)")
+        ph.pack(fill="x", pady=(0, px(PAD * 1.5)))
+        self.look.wrapped(ph, "Use TacoSort from your phone's browser: status, preview, sort, undo and these settings. "
+                    "Only your own devices signed in to Tailscale can open it. It starts with Windows while it "
+                    "is on.", "Small.TLabel").pack(fill="x")
         self.phone_note = tk.StringVar(value="Checking...")
-        wrapped(ph, "", width=400, textvariable=self.phone_note).pack(anchor="w", pady=(4, 0))
-        row = ttk.Frame(ph)
-        row.pack(fill="x", pady=(4, 0))
+        self.look.wrapped(ph, "", textvariable=self.phone_note).pack(fill="x", pady=(px(PAD), 0))
+        row = ttk.Frame(ph, style="Card.TFrame")
+        row.pack(fill="x", pady=(px(PAD), 0))
         self.phone_button = self._button(row, "Turn on", self.toggle_phone)
         self.phone_button.pack(side="left")
-        self._button(row, "Copy address", self.copy_phone_address).pack(side="left", padx=PAD)
+        self._button(row, "Copy address", self.copy_phone_address, "Quiet").pack(side="left", padx=px(PAD))
         self.phone_on = False
         self.phone_address = ""
-
-        save_row = ttk.Frame(right)
-        save_row.pack(fill="x", pady=(PAD, 0))
-        self._button(save_row, "Save settings", self.save_options).pack(side="left")
-        self._button(save_row, "Undo changes", self.reload).pack(side="left", padx=PAD)
-        self.opt_note = tk.StringVar()
-        wrapped(right, "", width=400, textvariable=self.opt_note).pack(anchor="w", pady=(PAD, 0))
 
     def _fill_options(self) -> None:
         values = options.read(self.cfg)
@@ -419,9 +684,7 @@ class App:
         self.cat_vars = {}
         for key, folder, about in options.categories(self.cfg):
             var = tk.BooleanVar(value=values.categories.get(key, False))
-            ttk.Checkbutton(self.cats_box, text=folder, variable=var).pack(anchor="w")
-            if about:
-                wrapped(self.cats_box, about, width=380, foreground="#555").pack(anchor="w", padx=(24, 0))
+            self._switch_row(self.cats_box, folder, var, about)
             self.cat_vars[key] = var
         self.interval_var.set(str(values.interval_minutes))
         self.sched_var.set(schedule_is_on()[0])
@@ -441,6 +704,9 @@ class App:
         self.phone_on, self.phone_address = on, address
         self.phone_note.set(text)
         self.phone_button.configure(text="Turn off" if on else "Turn on")
+        self.home["phone"][0].set("On" if on else "Off")
+        self.home["phone"][1].set("Your own Tailscale devices can open it." if on
+                                  else "Turn it on in Settings to use TacoSort from your phone.")
 
     def toggle_phone(self) -> None:
         want_on = not self.phone_on
@@ -480,7 +746,7 @@ class App:
         if not want_on and not was_on:
             self.opt_note.set("Saved. The next sort uses these settings.")
             return
-        # Ticked: set the task up again every time, so it uses this interval and this copy of the app
+        # Switched on: set the task up again every time, so it uses this interval and this copy of the app
         # (after the app file was moved, opening it and saving once fixes the schedule).
         if want_on and not enabled_accounts(new):
             self.opt_note.set("Saved. Add an account before turning on background sorting.")
@@ -502,70 +768,81 @@ class App:
 
         self.jobs.start(work, done)
 
-    # ---- Sort tab --------------------------------------------------------------------------------
+    # ---- Sort page -------------------------------------------------------------------------------
     def _build_sort(self) -> None:
-        tab = self.sort_tab
-        wrapped(tab, "Start with a preview: it shows where each email in your Inbox would go and moves nothing. "
+        px = self.look.px
+        tab = self._page_body("sort")
+        self.look.wrapped(tab, "Start with a preview: it shows where each email in your Inbox would go and moves nothing. "
                      "Happy with it? Sort my Inbox now moves them. Undo last sort puts them back.",
-                width=900).pack(anchor="w", pady=(0, PAD))
+                "Muted.TLabel").pack(fill="x", pady=(0, px(PAD * 1.5)))
         row = ttk.Frame(tab)
-        row.pack(fill="x", pady=(0, PAD))
-        self._button(row, "Learn from my folders", self.learn).pack(side="left")
-        self._button(row, "Preview (moves nothing)", self.preview).pack(side="left", padx=PAD)
-        self._button(row, "Sort my Inbox now", self.sort_now).pack(side="left")
-        self._button(row, "Undo last sort", self.undo).pack(side="left", padx=PAD)
-        self._button(row, "Show every move", self.report).pack(side="left")
+        row.pack(fill="x", pady=(0, px(PAD * 1.5)))
+        self._button(row, "Preview (moves nothing)", self.preview, "Primary").pack(side="left")
+        self._button(row, "Sort my Inbox now", self.sort_now).pack(side="left", padx=px(PAD))
+        self._button(row, "Undo last sort", self.undo).pack(side="left")
+        self._button(row, "Show every move", self.report, "Quiet").pack(side="right")
+        self._button(row, "Learn from my folders", self.learn, "Quiet").pack(side="right", padx=px(PAD))
 
         self.summary = tk.StringVar(value="No preview yet.")
-        ttk.Label(tab, textvariable=self.summary, font=("TkDefaultFont", 10, "bold")).pack(anchor="w")
-        panes = ttk.PanedWindow(tab, orient="vertical")
-        panes.pack(fill="both", expand=True, pady=(4, 0))
-        table = ttk.Frame(panes)
-        cols = ("account", "sender", "subject", "folder", "why")
-        self.moves = ttk.Treeview(table, columns=cols, show="headings", height=10)
-        for col, title, width in zip(cols, ("Account", "From", "Subject", "Goes to", "Why"),
-                                     (100, 200, 280, 170, 260)):
-            self.moves.heading(col, text=title, anchor="w")
-            self.moves.column(col, width=width, anchor="w")
-        bar = ttk.Scrollbar(table, orient="vertical", command=self.moves.yview)
-        self.moves.configure(yscrollcommand=bar.set)
-        self.moves.pack(side="left", fill="both", expand=True)
-        bar.pack(side="right", fill="y")
-        panes.add(table, weight=3)
-        logs = ttk.Frame(panes)
-        self.log_box = tk.Text(logs, height=6, wrap="word", state="disabled", relief="flat",
-                               background="#f6f6f6")
-        log_bar = ttk.Scrollbar(logs, orient="vertical", command=self.log_box.yview)
-        self.log_box.configure(yscrollcommand=log_bar.set)
+        ttk.Label(tab, textvariable=self.summary, style="H2.TLabel").pack(anchor="w", pady=(0, px(PAD)))
+
+        self.log_card = self._card(tab, pad=PAD)
+        self.log_box = tk.Text(self.log_card, height=7, wrap="word", state="disabled", relief="flat",
+                               borderwidth=0, highlightthickness=0, padx=px(6), pady=px(4))
+        log_bar = ttk.Scrollbar(self.log_card, orient="vertical", command=self.log_box.yview,
+                                style="Card.Vertical.TScrollbar")
         self.log_box.pack(side="left", fill="both", expand=True)
-        log_bar.pack(side="right", fill="y")
-        panes.add(logs, weight=1)
+        scroll_when_needed(self.log_box, log_bar)
+        self.log_open = False
+        self.log_lines = 0
+        self.log_toggle = ttk.Button(tab, style="Quiet.TButton", cursor="hand2",
+                                     command=lambda: self._show_log(not self.log_open))
+        self.log_toggle.pack(side="bottom", anchor="w", pady=(px(PAD / 2), 0))
+        self.moves = self._table(tab, ("account", "sender", "subject", "folder", "why"),
+                                 ("Account", "From", "Subject", "Goes to", "Why"), (80, 150, 230, 160, 200), 10)
+        self._show_log(False)
+
+    def _show_log(self, show: bool) -> None:
+        """Fold the "what it did" lines open or shut, under the list of moves."""
+        self.log_open = show
+        count = f" ({self.log_lines} lines)" if self.log_lines else ""
+        self.log_toggle.configure(text=("Hide what it did" if show else "Show what it did") + count)
+        if show and not self.log_card.winfo_manager():
+            self.log_card.pack(side="bottom", fill="x", pady=(self.look.px(PAD), 0), before=self.log_toggle)
+            self.log_box.see("end")
+        elif not show and self.log_card.winfo_manager():
+            self.log_card.pack_forget()
 
     def _need_accounts(self) -> bool:
         if enabled_accounts(self.cfg):
             return True
-        messagebox.showinfo("TacoSort", "Add an email account first (the Accounts tab).")
-        self.tabs.select(self.accounts_tab)
+        messagebox.showinfo("TacoSort", "Add an email account first (the Accounts page).")
+        self.show("accounts")
         return False
 
     def _show_moves(self, moves: list[Any]) -> None:
         self.moves.delete(*self.moves.get_children())
-        for m in moves:
-            self.moves.insert("", "end", values=(m.account, m.sender, m.subject, m.to_folder, m.reason))
+        for i, m in enumerate(moves):
+            self.moves.insert("", "end", values=(m.account, m.sender, m.subject, m.to_folder, m.reason),
+                              tags=("odd",) if i % 2 else ())
 
     def learn(self) -> None:
         if not self._need_accounts():
             return
         cfg = self.cfg
         self._log("Learning from the folders you already have (nothing is moved)...")
+        self.summary.set("Learning from your folders (nothing is moved)...")
 
         def done(rep: Any, error: BaseException | None) -> None:
             if error is not None:
+                self.summary.set("Learning didn't finish.")
                 self._append_log(f"Problem: {plain_error(error)}")
                 return
-            self._append_log(f"Looked at {rep.messages_scanned} messages in {rep.folders_scanned} folders. "
-                             f"Learned {rep.rules_learned} sender rules and found {rep.contacts_found} people "
-                             "you write to.")
+            said = (f"Looked at {rep.messages_scanned} messages in {rep.folders_scanned} folders. "
+                    f"Learned {rep.rules_learned} sender rules and found {rep.contacts_found} people "
+                    "you write to.")
+            self.summary.set(said)
+            self._append_log(said)
             for e in rep.errors:
                 self._append_log(f"Problem: {e}")
 
@@ -644,13 +921,16 @@ class AddAccount:
 
     def __init__(self, app: App):
         self.app = app
-        self.win = tk.Toplevel(app.root)
+        self.px = px = app.look.px
+        self.win = tk.Toplevel(app.root, background=app.look.c["bg"])
         self.win.title("Add an email account")
         self.win.transient(app.root)
-        self.win.geometry("620x560")
+        self.win.geometry(f"{px(640)}x{px(600)}")
         _set_icon(self.win)
-        self.body = ttk.Frame(self.win, padding=PAD * 2)
+        app.look.title_bar(self.win)
+        self.body = ttk.Frame(self.win, padding=px(PAD * 3))
         self.body.pack(fill="both", expand=True)
+        app.look.column(self.body, fixed=640 - PAD * 6)
         self.provider: Any = None
         self.email = tk.StringVar()
         self.short = tk.StringVar()
@@ -668,14 +948,17 @@ class AddAccount:
             child.destroy()
 
     def _step_email(self) -> None:
+        px = self.px
         self._clear()
-        ttk.Label(self.body, text="Your email address").pack(anchor="w")
-        entry = ttk.Entry(self.body, textvariable=self.email, width=50)
-        entry.pack(anchor="w", pady=(2, PAD))
+        ttk.Label(self.body, text="Add an email account", style="H2.TLabel").pack(anchor="w", pady=(0, px(PAD * 2)))
+        ttk.Label(self.body, text="Your email address", style="Muted.TLabel").pack(anchor="w")
+        entry = ttk.Entry(self.body, textvariable=self.email, width=46)
+        entry.pack(anchor="w", pady=(px(4), px(PAD * 1.5)))
         entry.focus_set()
         entry.bind("<Return>", lambda _e: self._next())
-        ttk.Button(self.body, text="Next", command=self._next).pack(anchor="w")
-        wrapped(self.body, "", width=560, textvariable=self.note, foreground="#a00").pack(anchor="w", pady=PAD)
+        ttk.Button(self.body, text="Next", command=self._next, style="Primary.TButton", cursor="hand2").pack(
+            anchor="w")
+        self.app.look.wrapped(self.body, "", "Danger.TLabel", textvariable=self.note).pack(fill="x", pady=px(PAD))
 
     def _next(self) -> None:
         email = self.email.get().strip()
@@ -698,67 +981,71 @@ class AddAccount:
         self._step_details()
 
     def _step_details(self) -> None:
+        px = self.px
         self._clear()
         p = self.provider
         b = self.body
         if self.existing is not None:
-            wrapped(b, f"{self.existing.email} is already set up (as '{self.existing.id}'). You can give it a new "
-                       "app password here.", width=560).pack(anchor="w", pady=(0, PAD))
+            self.app.look.wrapped(b, f"{self.existing.email} is already set up (as '{self.existing.id}'). You can give it a new "
+                       "app password here.").pack(fill="x", pady=(0, px(PAD)))
         elif p.key == "custom":
-            wrapped(b, "TacoSort doesn't recognise this email provider, so it needs the IMAP server details. "
-                       "Your provider's help pages list them (look for 'IMAP settings').", width=560).pack(
-                anchor="w", pady=(0, PAD))
+            self.app.look.wrapped(b, "TacoSort doesn't recognise this email provider, so it needs the IMAP server details. "
+                       "Your provider's help pages list them (look for 'IMAP settings').").pack(
+                fill="x", pady=(0, px(PAD)))
             grid = ttk.Frame(b)
-            grid.pack(anchor="w", pady=(0, PAD))
-            ttk.Label(grid, text="IMAP server").grid(row=0, column=0, sticky="w")
-            ttk.Entry(grid, textvariable=self.host, width=32).grid(row=0, column=1, sticky="w", padx=6)
-            ttk.Label(grid, text="Port").grid(row=1, column=0, sticky="w")
-            ttk.Entry(grid, textvariable=self.port, width=8).grid(row=1, column=1, sticky="w", padx=6)
-            ttk.Checkbutton(grid, text="Uses SSL/TLS (almost always yes for port 993)",
-                            variable=self.ssl).grid(row=2, column=1, sticky="w", padx=6)
+            grid.pack(anchor="w", pady=(0, px(PAD)))
+            ttk.Label(grid, text="IMAP server", style="Muted.TLabel").grid(row=0, column=0, sticky="w")
+            ttk.Entry(grid, textvariable=self.host, width=32).grid(row=0, column=1, sticky="w", padx=px(8),
+                                                                    pady=px(3))
+            ttk.Label(grid, text="Port", style="Muted.TLabel").grid(row=1, column=0, sticky="w")
+            ttk.Entry(grid, textvariable=self.port, width=8).grid(row=1, column=1, sticky="w", padx=px(8),
+                                                                   pady=px(3))
+            ttk.Checkbutton(grid, text="  Uses SSL/TLS (almost always yes for port 993)", variable=self.ssl,
+                            style="Switch.TCheckbutton").grid(row=2, column=1, sticky="w", padx=px(8), pady=px(3))
         else:
-            ttk.Label(b, text=f"This looks like a {p.name} account.", font=("TkDefaultFont", 10, "bold")).pack(
-                anchor="w", pady=(0, PAD))
+            ttk.Label(b, text=f"This looks like a {p.name} account.", style="H2.TLabel").pack(
+                anchor="w", pady=(0, px(PAD * 1.5)))
         if self.existing is None:
             line = ttk.Frame(b)
-            line.pack(anchor="w", pady=(0, PAD))
-            ttk.Label(line, text="Short name for this account").pack(side="left")
-            ttk.Entry(line, textvariable=self.short, width=24).pack(side="left", padx=6)
+            line.pack(anchor="w", pady=(0, px(PAD * 1.5)))
+            ttk.Label(line, text="Short name for this account", style="Muted.TLabel").pack(side="left")
+            ttk.Entry(line, textvariable=self.short, width=24).pack(side="left", padx=px(8))
 
         row = ttk.Frame(b)               # packed below the explanation; its buttons are made inside it
         if p.auth == "password":
-            wrapped(b, f"TacoSort needs an app password for {p.name}: a separate password just for TacoSort, "
-                       "which you can cancel at any time without changing your normal password.",
-                    width=560).pack(anchor="w")
+            self.app.look.wrapped(b, f"TacoSort needs an app password for {p.name}: a separate password just for TacoSort, "
+                       "which you can cancel at any time without changing your normal password.").pack(fill="x")
             notes = (getattr(p, "notes", "") or "").strip()
             if notes:
-                wrapped(b, notes, width=560, foreground="#444").pack(anchor="w", pady=(4, 0))
+                self.app.look.wrapped(b, notes, "Muted.TLabel").pack(fill="x", pady=(px(6), 0))
             if p.app_password_url:
-                ttk.Button(b, text="Open the page where you make one",
-                           command=lambda: webbrowser.open(p.app_password_url)).pack(anchor="w", pady=PAD)
+                ttk.Button(b, text="Open the page where you make one", cursor="hand2",
+                           command=lambda: webbrowser.open(p.app_password_url)).pack(anchor="w", pady=px(PAD * 1.5))
             line = ttk.Frame(b)
-            line.pack(anchor="w", pady=(0, PAD))
-            ttk.Label(line, text="App password").pack(side="left")
-            ttk.Entry(line, textvariable=self.password, show="•", width=30).pack(side="left", padx=6)
-            self.save_button = ttk.Button(row, text="Test and save", command=self._save_password)
+            line.pack(anchor="w", pady=(0, px(PAD)))
+            ttk.Label(line, text="App password", style="Muted.TLabel").pack(side="left")
+            ttk.Entry(line, textvariable=self.password, show="•", width=30).pack(side="left", padx=px(8))
+            self.save_button = ttk.Button(row, text="Test and save", command=self._save_password,
+                                          style="Primary.TButton", cursor="hand2")
         elif p.auth == "oauth2-microsoft":
-            wrapped(b, "Microsoft doesn't let mail programs sign in to Outlook.com / Hotmail with a password. "
+            self.app.look.wrapped(b, "Microsoft doesn't let mail programs sign in to Outlook.com / Hotmail with a password. "
                        "TacoSort signs in the Microsoft way: you approve it once in your browser. For that it "
                        "needs a free 'client ID' you create once on Microsoft's website (docs/outlook-oauth.md "
-                       "in the TacoSort guide walks you through it, about 10 minutes).", width=560).pack(anchor="w")
+                       "in the TacoSort guide walks you through it, about 10 minutes).").pack(fill="x")
             line = ttk.Frame(b)
-            line.pack(anchor="w", pady=PAD)
-            ttk.Label(line, text="Client ID").pack(side="left")
-            ttk.Entry(line, textvariable=self.client_id, width=40).pack(side="left", padx=6)
-            self.save_button = ttk.Button(row, text="Sign in with Microsoft", command=self._save_microsoft)
+            line.pack(anchor="w", pady=px(PAD * 1.5))
+            ttk.Label(line, text="Client ID", style="Muted.TLabel").pack(side="left")
+            ttk.Entry(line, textvariable=self.client_id, width=40).pack(side="left", padx=px(8))
+            self.save_button = ttk.Button(row, text="Sign in with Microsoft", command=self._save_microsoft,
+                                          style="Primary.TButton", cursor="hand2")
         else:
-            wrapped(b, f"{p.name} needs a sign-in type ({p.auth}) this window can't set up yet. Use "
-                       "`tacosort accounts add` in a terminal (see docs/providers.md).", width=560).pack(anchor="w")
-            self.save_button = ttk.Button(row, text="Close", command=self.win.destroy)
-        row.pack(anchor="w", pady=PAD)
+            self.app.look.wrapped(b, f"{p.name} needs a sign-in type ({p.auth}) this window can't set up yet. Use "
+                       "`tacosort accounts add` in a terminal (see docs/providers.md).").pack(fill="x")
+            self.save_button = ttk.Button(row, text="Close", command=self.win.destroy, cursor="hand2")
+        row.pack(anchor="w", pady=px(PAD))
         self.save_button.pack(side="left")
-        ttk.Button(row, text="Back", command=self._step_email).pack(side="left", padx=PAD)
-        wrapped(b, "", width=560, textvariable=self.note).pack(anchor="w")
+        ttk.Button(row, text="Back", command=self._step_email, cursor="hand2").pack(side="left", padx=px(PAD))
+        self.app.look.wrapped(b, "", textvariable=self.note).pack(fill="x")
 
     def _account(self) -> AccountConfig | None:
         """The new account from the form, or None (with the reason shown) when something is missing."""
@@ -816,7 +1103,7 @@ class AddAccount:
                 save_config(self.app.cfg, self.app.path)
             self.app.reload()
             self.app.acct_note.set(f"Connected! {acct.email} has {folders} folders. "
-                                   + ("Next: the Options tab, then Preview on the Sort tab." if is_new
+                                   + ("Next: look over Settings, then Preview on the Sort page." if is_new
                                       else "The new password is saved."))
             self.win.destroy()
 

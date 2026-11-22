@@ -128,6 +128,11 @@ old_mail_folder: Old mail
 phone_port: 8747
 phone_logins: []
 
+# ---- Look ------------------------------------------------------------------------------------------
+# The colours of the window and the phone page: system (light or dark, like your computer), light, dark,
+# midnight, taco, rose or contrast. The window's side bar and the phone page's Settings change it too.
+theme: system
+
 # ---- Waiting time ---------------------------------------------------------------------------------------
 # New mail stays in the Inbox this many hours before it is sorted, so you see it there first.
 # 0 sorts it at once. The background run picks it up once it is old enough.

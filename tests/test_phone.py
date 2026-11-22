@@ -118,6 +118,40 @@ def test_options_round_trip(server):
     assert status == 200 and not data["ok"] and data["problems"]
 
 
+def test_the_look_is_served_and_saved(server):
+    from tacosort import theme
+
+    status, body, resp = ask(server, url="/themes.css")
+    assert status == 200 and resp.getheader("Content-Type").startswith("text/css")
+    assert body.decode() == theme.css() and resp.getheader("X-Content-Type-Options") == "nosniff"
+    status, body, resp = ask(server, url="/theme.js")
+    assert status == 200 and resp.getheader("Content-Type").startswith("text/javascript")
+    assert ask(server)[1]["theme"] == "system"
+    data = ask(server, url="/api/options")[1]
+    assert data["theme"] == "system" and data["themes"][0] == {"name": "system", "label": "System"}
+    assert [t["name"] for t in data["themes"]] == theme.NAMES
+
+    status, data, _ = ask(server, "POST", "/api/options", body={"theme": "midnight"})
+    assert status == 200 and data["ok"], data
+    saved = load_config(server.path)
+    assert saved.theme == "midnight" and saved.interval_minutes == 15 and saved.phone_logins == [ME]
+    assert ask(server)[1]["theme"] == "midnight"
+    status, data, _ = ask(server, "POST", "/api/options", body={"theme": "<script>"})
+    assert status == 200 and not data["ok"] and load_config(server.path).theme == "midnight"
+
+
+def test_the_page_only_loads_its_own_files():
+    """The page's rules (CSP) allow no inline script or style, so the files must not rely on any."""
+    import re
+
+    html = (phone.WEB / "index.html").read_text(encoding="utf-8")
+    assert not re.search(r"<script(?![^>]*\bsrc=)", html) and "<style" not in html and " style=" not in html
+    assert not re.search(r"\son\w+=", html)                        # no onclick= and friends
+    for ref in re.findall(r'(?:src|href)="([^"]+)"', html):
+        assert ref.startswith("/") and not ref.startswith("//"), ref
+        assert ref in phone.FILES or ref in phone.ICONS or ref == "/themes.css", ref
+
+
 def test_a_preview_job_runs_and_reports(server, monkeypatch):
     release = threading.Event()
     move = SimpleNamespace(at=None, account="a", sender="shop@x.com", subject="Sale", from_folder="INBOX",

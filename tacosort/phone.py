@@ -32,7 +32,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlsplit
 
-from . import __version__, actions, cli, options, peer
+from . import __version__, actions, cli, options, peer, theme
 from .backend import BackendError
 from .config import ConfigError, config_problems, load_config, save_config
 from .models import AppConfig
@@ -49,6 +49,7 @@ PROXY_HEADERS = ("Tailscale-User-Login", "X-Forwarded-For", "X-Forwarded-Host", 
 FILES = {
     "/": ("index.html", "text/html; charset=utf-8"),
     "/app.js": ("app.js", "text/javascript; charset=utf-8"),
+    "/theme.js": ("theme.js", "text/javascript; charset=utf-8"),
     "/app.css": ("app.css", "text/css; charset=utf-8"),
     "/manifest.webmanifest": ("manifest.webmanifest", "application/manifest+json"),
 }
@@ -86,7 +87,7 @@ _SETUP_HINT = re.compile(r"\b([Rr])un ['`]tacosort (?:setup|accounts add)['`](?:
 def for_phone(text: str) -> str:
     """Messages written for the command ("run 'tacosort setup'") pointed at the app on the computer."""
     return _SETUP_HINT.sub(lambda m: ("O" if m.group(1) == "R" else "o") + "pen TacoSort on your computer and "
-                           "use Add account... on the Accounts tab (with the same email address)", text)
+                           "use Add account... on the Accounts page (with the same email address)", text)
 
 
 def plain_error(e: BaseException) -> str:
@@ -120,19 +121,12 @@ class Phone:
     def status(self) -> dict:
         cfg = self.cfg()
         on, text = actions.schedule_is_on()
-        last, today = None, 0
-        store = cli._store_if_exists(cfg)
-        try:
-            if store is not None:
-                run = store.last_run(dry_run=False)
-                if run:
-                    last = {"started": _iso(run["started"]), "finished": _iso(run["finished"]),
-                            "scanned": run["scanned"], "moved": run["moved"], "errors": run["errors"]}
-                midnight = datetime.now().astimezone().replace(hour=0, minute=0, second=0, microsecond=0)
-                today = store.moves_since(midnight)
-        finally:
-            cli._close(store)
-        return {"version": __version__,
+        run, today = actions.status(cfg)
+        last = None
+        if run:
+            last = {"started": _iso(run["started"]), "finished": _iso(run["finished"]),
+                    "scanned": run["scanned"], "moved": run["moved"], "errors": run["errors"]}
+        return {"version": __version__, "theme": cfg.theme,
                 "accounts": [{"id": a.id, "email": a.email, "enabled": a.enabled} for a in cfg.accounts],
                 "schedule": {"on": on, "text": text, "interval": cfg.interval_minutes},
                 "last_run": last, "moved_today": today, "job": self.job_json()}
@@ -157,7 +151,9 @@ class Phone:
                  "ticked": values.options[o.field][0], "number": values.options[o.field][1]} for o in opts]})
         folders = [{"key": key, "folder": folder, "about": about, "ticked": values.categories.get(key, False)}
                    for key, folder, about in options.categories(cfg)]
-        return {"groups": groups, "folders": folders, "interval": values.interval_minutes}
+        looks = [{"name": name, "label": theme.label(name)} for name in theme.NAMES]
+        return {"groups": groups, "folders": folders, "interval": values.interval_minutes,
+                "theme": values.theme, "themes": looks}
 
     # ---- changing -----------------------------------------------------------------------------------
     def save_options(self, body: dict) -> dict:
@@ -174,7 +170,8 @@ class Phone:
         for key, ticked in (body.get("folders") or {}).items():
             if key in cats:
                 cats[key] = bool(ticked)
-        values = options.Values(opts, cats, body.get("interval", current.interval_minutes))
+        values = options.Values(opts, cats, body.get("interval", current.interval_minutes),
+                                str(body.get("theme") or ""))
         new, problems = options.apply(cfg, values)
         if problems:
             return {"ok": False, "problems": problems}
@@ -383,6 +380,8 @@ class Handler(BaseHTTPRequestHandler):
         if path in FILES:
             name, kind = FILES[path]
             self._send(200, (WEB / name).read_bytes(), kind)
+        elif path == "/themes.css":
+            self._send(200, theme.css().encode("utf-8"), "text/css; charset=utf-8")
         elif path in ICONS:
             self._send(200, (ASSETS / "tacosort.png").read_bytes(), "image/png")
         elif path == "/api/ping":

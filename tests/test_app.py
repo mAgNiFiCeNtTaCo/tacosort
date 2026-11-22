@@ -217,6 +217,127 @@ def test_toggle_and_remove_account(window, tmp_path, monkeypatch):
     assert load_config(path).accounts == [] and forgotten == ["a"]
 
 
+def drain(w, seconds=10):
+    """Run a job's hand-back ourselves: root.update() can block on a Mac with no screen (CI hung there)."""
+    import contextlib
+    import queue
+    import time
+
+    deadline = time.monotonic() + seconds
+    while w.jobs.busy and time.monotonic() < deadline:
+        with contextlib.suppress(queue.Empty):
+            w.jobs._q.get(timeout=0.05)()
+
+
+def test_home_page_shows_what_tacosort_is_doing(window, tmp_path, monkeypatch):
+    from datetime import datetime
+
+    app, root = window
+    path = tmp_path / "config.yaml"
+    save_config(cfg(interval_minutes=20), path)
+    monkeypatch.setattr(app, "schedule_is_on", lambda: (True, "The background schedule is on."))
+    monkeypatch.setattr(app, "sort_status", lambda c: ({"started": datetime.now().astimezone(), "moved": 4,
+                                                        "scanned": 37, "errors": []}, 23))
+    w = app.App(root, path)
+    assert w.page == "home" and w.title.get() == "Home"
+    assert w.home["schedule"][0].get() == "On" and "every 20 minutes" in w.home["schedule"][1].get()
+    assert w.home_sched.get() is True
+    assert w.home["last"][1].get() == "Today: moved 4 of 37 checked."
+    assert w.home["today"][0].get() == "23"
+    assert w.status.get() == "1 account. Sorting automatically in the background."
+    assert not w.welcome.winfo_manager()                 # the first-run card is for people with no account
+    monkeypatch.setattr(app, "sort_status", lambda c: ({"started": datetime.now().astimezone(), "moved": 0,
+                                                        "scanned": 0, "errors": []}, 23))
+    w._fill_home()
+    assert w.home["last"][1].get() == "Today: no new mail to sort."
+    for name, title in app.PAGES:
+        w.show(name)
+        assert w.page == name and w.title.get() == title and w.pages[name].winfo_manager() == "pack"
+        assert str(w.nav[name].cget("style")) == "Side.NavOn.TButton"
+
+
+def test_a_new_person_starts_on_accounts_with_a_welcome(window, tmp_path):
+    app, root = window
+    path = tmp_path / "config.yaml"
+    save_config(AppConfig(), path)
+    w = app.App(root, path)
+    assert w.page == "accounts" and w.status.get().startswith("No email accounts yet")
+    assert w.welcome.winfo_manager() == "pack"
+    assert w.home["last"][0].get() == "Not yet" and w.home["schedule"][0].get() == "Off"
+
+
+def test_when_text():
+    from datetime import datetime, timedelta
+
+    from tacosort.app import when_text
+
+    now = datetime.now().astimezone().replace(hour=14, minute=5)
+    assert when_text(now) == ("2:05 PM", "Today")
+    assert when_text(now - timedelta(days=1))[0] == "Yesterday"
+    assert when_text(datetime(2026, 3, 5, 9, 30)) == ("Mar 5", "Mar 5, 9:30 AM")     # no time zone: taken as local
+    assert when_text(None) == ("Not yet", "")
+
+
+def test_picking_a_look_repaints_and_saves_it(window, tmp_path):
+    from tacosort import theme
+
+    app, root = window
+    path = tmp_path / "config.yaml"
+    save_config(cfg(theme="taco"), path)
+    w = app.App(root, path)
+    assert w.look.name == "taco" and w.look.c["accent"] == theme.THEMES["taco"][2]["accent"]
+    assert w.look_name.get() == "Look: Taco"
+    w.pick_theme("midnight")
+    assert load_config(path).theme == "midnight" and w.look.name == "midnight"
+    assert w.look.c == theme.THEMES["midnight"][2] and w.look_name.get() == "Look: Midnight"
+    assert str(w.log_box.cget("background")) == theme.THEMES["midnight"][2]["surface"]
+    assert root.tk.call("ttk::style", "theme", "use") == "tacosort-midnight"
+    for name in theme.NAMES:                             # every look can be drawn
+        w.pick_theme(name)
+    assert load_config(path).theme == "contrast" and load_config(path).accounts[0].id == "a"
+
+
+def test_wrapped_text_follows_the_window_width(window, tmp_path):
+    app, root = window
+    path = tmp_path / "config.yaml"
+    save_config(cfg(), path)
+    w = app.App(root, path)
+    look = w.look
+    wide = look.wrapped(w.pages["home"], "words " * 40)
+    tile = w.tiles.winfo_children()[0]
+    narrow = look.wrapped(tile, "words " * 40)
+    look.rewrap(800)
+    assert int(str(wide.cget("wraplength"))) == 800
+    assert int(str(narrow.cget("wraplength"))) == 200 - look.px(8 + 32)      # a quarter, less gap and padding
+    look.rewrap(100)
+    assert int(str(narrow.cget("wraplength"))) == look.px(120)               # never too narrow to read
+
+
+def test_home_switch_turns_background_sorting_on(window, tmp_path, monkeypatch):
+    app, root = window
+    path = tmp_path / "config.yaml"
+    save_config(cfg(interval_minutes=45), path)
+    calls = []
+
+    class Sched:
+        @staticmethod
+        def install(minutes, config_path):
+            calls.append((minutes, config_path))
+            return "TacoSort will now run every 45 minutes."
+
+    monkeypatch.setattr(app.cli, "_schedule", lambda: Sched)
+    w = app.App(root, path)
+    w.home_sched.set(True)
+    w.toggle_schedule()
+    drain(w)
+    assert calls == [(45, path.resolve())] and "every 45 minutes" in w.home_note.get()
+
+    w.cfg.accounts[0].enabled = False                    # nothing to sort: refused, with the reason
+    w.home_sched.set(True)
+    w.toggle_schedule()
+    assert w.home_sched.get() is False and "Add an account" in w.home_note.get() and len(calls) == 1
+
+
 def test_try_login_reports_plainly(monkeypatch):
     from tacosort import app
     from tacosort.backend import BackendError
@@ -246,9 +367,9 @@ def test_command_hints_point_at_the_window():
     from tacosort.app import for_app
 
     assert for_app("No password is saved for account 'a'. Run 'tacosort setup' to enter it.") == (
-        "No password is saved for account 'a'. Use Add account... on the Accounts tab (with the same email "
+        "No password is saved for account 'a'. Use Add account... on the Accounts page (with the same email "
         "address) to enter it.")
-    assert "Accounts tab" in for_app("then run `tacosort setup` again.")
+    assert "Accounts page" in for_app("then run `tacosort setup` again.")
     assert for_app("Nothing to change here.") == "Nothing to change here."
 
 

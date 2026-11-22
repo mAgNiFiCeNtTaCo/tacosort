@@ -1,146 +1,153 @@
-:root {
-  --bg: #f4f6f6;
-  --card: #ffffff;
-  --text: #17201f;
-  --muted: #5d6967;
-  --line: #dfe5e4;
-  --accent: #0f766e;
-  --accent-text: #ffffff;
-  --warn-bg: #fff4e5;
-  --warn-text: #7a4100;
-  --ok: #15803d;
-}
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #0f1514;
-    --card: #182120;
-    --text: #e6eceb;
-    --muted: #9aa8a6;
-    --line: #2a3533;
-    --accent: #2dd4bf;
-    --accent-text: #062b27;
-    --warn-bg: #3a2a12;
-    --warn-text: #ffd59e;
-    --ok: #4ade80;
-  }
-}
-
+/* TacoSort's phone page. The colours (--bg, --surface, --accent...) come from /themes.css. */
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
 body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font: 16px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  padding-bottom: calc(64px + env(safe-area-inset-bottom));
+  font: 16px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI", Roboto, sans-serif;
+  padding-bottom: calc(76px + env(safe-area-inset-bottom));
+  -webkit-tap-highlight-color: transparent;
 }
 [hidden] { display: none !important; }
 
 .top {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: calc(10px + env(safe-area-inset-top)) 16px 10px;
-  background: var(--card);
-  border-bottom: 1px solid var(--line);
+  gap: 12px;
+  padding: calc(14px + env(safe-area-inset-top)) 20px 10px;
+  background: var(--bg);
   position: sticky;
   top: 0;
   z-index: 2;
 }
-.top h1 { font-size: 19px; margin: 0; flex: 1; }
-.logo { width: 30px; height: 30px; border-radius: 7px; }
-.busy { font-size: 14px; color: var(--accent); font-weight: 600; }
+.top h1 { font-size: 26px; font-weight: 700; letter-spacing: -0.01em; margin: 0; flex: 1; }
+.logo { width: 34px; height: 34px; border-radius: 9px; }
+.busy {
+  font-size: 13px; font-weight: 600; color: var(--accent-text); background: var(--accent);
+  padding: 4px 12px; border-radius: 999px;
+}
 
-main { padding: 12px 16px; max-width: 640px; margin: 0 auto; }
+main { padding: 6px 16px 12px; max-width: 640px; margin: 0 auto; }
 .card {
-  background: var(--card);
+  background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 14px;
-  padding: 14px 16px;
+  border-radius: 18px;
+  padding: 16px 18px;
   margin-bottom: 12px;
 }
-h2 { font-size: 15px; margin: 0 0 6px; }
+.tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+h2 { font-size: 17px; font-weight: 650; margin: 0 0 8px; }
 p { margin: 0 0 8px; }
+.card > p:last-child, .card > div > p:last-child { margin-bottom: 0; }
 .muted { color: var(--muted); }
 .small { font-size: 13px; }
 .center { text-align: center; }
-.big { font-size: 18px; font-weight: 600; }
-.row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.label { font-size: 13px; color: var(--muted); margin: 0 0 2px; }
+.stat { font-size: 26px; font-weight: 700; letter-spacing: -0.01em; margin: 0 0 2px; overflow-wrap: anywhere; }
+.big { font-size: 19px; font-weight: 650; }
+.row { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
 .problem, .note {
   background: var(--warn-bg);
   color: var(--warn-text);
-  border-radius: 10px;
-  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
 }
-.note.good { background: transparent; color: var(--ok); padding: 0; }
+.note.good { background: transparent; border: 0; color: var(--ok); padding: 0; font-weight: 600; }
 
 .list { list-style: none; margin: 0; padding: 0; }
-.list li { padding: 8px 0; border-top: 1px solid var(--line); }
-.list li:first-child { border-top: 0; }
-.dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 8px; background: var(--muted); }
-.dot.on { background: var(--ok); }
+.list li { padding: 10px 0; border-top: 1px solid var(--line); overflow-wrap: anywhere; }
+.list li:first-child { border-top: 0; padding-top: 2px; }
+.list li:last-child { padding-bottom: 2px; }
+.dot {
+  display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 10px;
+  border: 2px solid var(--muted);
+}
+.dot.on { background: var(--ok); border-color: var(--ok); }
 
-.moves li { padding: 10px 0; }
-.moves .who { font-weight: 600; overflow-wrap: anywhere; }
+.moves .who { font-weight: 650; overflow-wrap: anywhere; }
 .moves .subj { overflow-wrap: anywhere; }
-.moves .path { font-size: 13px; color: var(--accent); }
-.moves .why { font-size: 13px; color: var(--muted); }
+.moves .path {
+  display: inline-block; margin-top: 4px; font-size: 13px; font-weight: 600; color: var(--accent);
+  background: var(--surface2); border-radius: 999px; padding: 2px 10px;
+}
+.moves .why { font-size: 13px; color: var(--muted); margin-top: 2px; }
 .moves .undone { opacity: 0.55; }
 .moves .when { font-size: 12px; color: var(--muted); }
 
 .btn {
   display: block;
   width: 100%;
-  min-height: 46px;
-  margin: 8px 0 0;
-  border-radius: 12px;
+  min-height: 48px;
+  margin: 10px 0 0;
+  border-radius: 14px;
   border: 1px solid var(--line);
-  background: var(--card);
+  background: var(--surface);
   color: var(--text);
   font: inherit;
-  font-weight: 600;
+  font-weight: 650;
 }
+.btn:active { background: var(--surface2); }
 .btn.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+.btn.primary:active { filter: brightness(0.92); }
 .btn.quiet { border-color: transparent; background: transparent; color: var(--accent); }
 .btn:disabled { opacity: 0.5; }
+.btn:focus-visible, .tabs button:focus-visible, .look:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
 
 .switch { position: relative; width: 52px; height: 32px; flex: none; }
 .switch input { opacity: 0; width: 0; height: 0; position: absolute; }
 .switch span {
-  position: absolute; inset: 0; border-radius: 16px; background: var(--line); transition: background 0.15s;
+  position: absolute; inset: 0; border-radius: 16px; background: var(--surface2);
+  border: 2px solid var(--muted); transition: background 0.15s, border-color 0.15s;
 }
 .switch span::after {
-  content: ""; position: absolute; left: 3px; top: 3px; width: 26px; height: 26px; border-radius: 50%;
-  background: #fff; transition: transform 0.15s; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  content: ""; position: absolute; left: 4px; top: 4px; width: 20px; height: 20px; border-radius: 50%;
+  background: var(--muted); transition: transform 0.15s, background 0.15s;
 }
-.switch input:checked + span { background: var(--accent); }
-.switch input:checked + span::after { transform: translateX(20px); }
+.switch input:checked + span { background: var(--accent); border-color: var(--accent); }
+.switch input:checked + span::after { transform: translateX(20px); background: var(--accent-text); }
+.switch input:focus-visible + span { outline: 2px solid var(--text); outline-offset: 2px; }
+.switch input:disabled + span { opacity: 0.5; }
 
-.opt { display: flex; gap: 10px; align-items: flex-start; padding: 8px 0; border-top: 1px solid var(--line); }
+.opt { display: flex; gap: 14px; align-items: flex-start; padding: 12px 0; border-top: 1px solid var(--line); }
 .opt:first-of-type { border-top: 0; }
-.opt input[type="checkbox"] { width: 22px; height: 22px; margin: 1px 0 0; flex: none; accent-color: var(--accent); }
+.opt:last-child { padding-bottom: 2px; }
+.opt .words { flex: 1; min-width: 0; }
 .opt .help { font-size: 13px; color: var(--muted); margin: 2px 0 0; }
-.num { width: 76px; font: inherit; padding: 4px 6px; border: 1px solid var(--line); border-radius: 8px;
-  background: var(--bg); color: var(--text); margin-top: 6px; }
-.field .num, .field input { width: 76px; }
-.field input { font: inherit; padding: 4px 6px; border: 1px solid var(--line); border-radius: 8px;
-  background: var(--bg); color: var(--text); }
+.num, .field input {
+  width: 84px; font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: 10px;
+  background: var(--bg); color: var(--text);
+}
+.num { margin-top: 8px; }
+.num:focus, .field input:focus { outline: 2px solid var(--accent); outline-offset: 0; border-color: var(--accent); }
+.num:disabled { opacity: 0.5; }
 
-.folder-group { margin-top: 10px; }
-.folder-group h3 { font-size: 14px; margin: 0; display: flex; justify-content: space-between; }
-.folder-group ul { margin: 4px 0 0; padding-left: 0; list-style: none; font-size: 14px; }
-.folder-group li { padding: 4px 0; border-top: 1px solid var(--line); overflow-wrap: anywhere; }
+.looks { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 10px; }
+.look {
+  width: 40px; height: 40px; border-radius: 50%; padding: 0; border: 2px solid var(--line);
+  box-shadow: 0 0 0 3px var(--surface);
+}
+.look.on { box-shadow: 0 0 0 3px var(--surface), 0 0 0 6px var(--text); }
+
+.folder-group { margin-top: 12px; }
+.folder-group ul { margin: 6px 0 0; padding-left: 0; list-style: none; font-size: 14px; }
+.folder-group li { padding: 8px 0; border-top: 1px solid var(--line); overflow-wrap: anywhere; }
 
 pre { white-space: pre-wrap; font-size: 12px; color: var(--muted); max-height: 260px; overflow: auto; margin: 6px 0 0; }
-summary { color: var(--accent); font-size: 14px; margin-top: 8px; }
+summary { color: var(--accent); font-size: 14px; font-weight: 600; margin-top: 10px; }
 
 .tabs {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 3;
-  display: flex; background: var(--card); border-top: 1px solid var(--line);
-  padding-bottom: env(safe-area-inset-bottom);
+  display: flex; background: var(--surface); border-top: 1px solid var(--line);
+  padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
 }
 .tabs button {
-  flex: 1; min-height: 56px; border: 0; background: transparent; color: var(--muted);
-  font: inherit; font-size: 14px; font-weight: 600;
+  flex: 1; min-height: 54px; border: 0; border-radius: 14px; background: transparent; color: var(--muted);
+  font: inherit; font-size: 12px; font-weight: 600;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
 }
-.tabs button.on { color: var(--accent); }
+.tabs button.on { color: var(--accent); background: var(--surface2); }
+.ico { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.ico .fill { fill: currentColor; stroke: none; }

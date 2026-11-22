@@ -10,6 +10,7 @@ from __future__ import annotations
 import dataclasses
 from dataclasses import dataclass
 
+from . import theme as themes
 from .config import config_problems
 from .models import DEFAULT_CATEGORIES, INBOX, AppConfig
 
@@ -80,6 +81,7 @@ class Values:
     options: dict[str, tuple[bool, int]]
     categories: dict[str, bool]
     interval_minutes: int
+    theme: str = ""        # "" = leave the look as it is
 
 
 def read(cfg: AppConfig) -> Values:
@@ -91,7 +93,7 @@ def read(cfg: AppConfig) -> Values:
         else:
             opts[o.field] = (bool(value), 0)
     cats = {key: bool(cfg.categories.get(key)) for key, _, _ in categories(cfg)}
-    return Values(opts, cats, cfg.interval_minutes)
+    return Values(opts, cats, cfg.interval_minutes, cfg.theme)
 
 
 def apply(cfg: AppConfig, values: Values) -> tuple[AppConfig, list[str]]:
@@ -133,6 +135,11 @@ def apply(cfg: AppConfig, values: Values) -> tuple[AppConfig, list[str]]:
         problems.append("Sort every: pick between 5 and 1439 minutes.")
     else:
         changes["interval_minutes"] = interval
+    if values.theme:
+        if themes.problem(values.theme):
+            problems.append("Pick a look from the list.")
+        else:
+            changes["theme"] = values.theme
     new = dataclasses.replace(cfg, **changes)
     if not problems:
         problems = config_problems(new)

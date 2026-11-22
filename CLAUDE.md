@@ -19,8 +19,12 @@ The owner isn't a programmer: explain in plain words.
 - `tacosort/companies.py`: company sub-folders (`Promotions/Crunchyroll`), naming, the threshold, and
   where a company's unsure mail goes (`unsure` rows in `company_folders`).
 - `tacosort/cli.py`, `config.py`, `report.py`: the command line.
-- `tacosort/app.py` (the window), `options.py` (what each tick box means), `launch.py` (the built app's
-  entry: window, CLI or `--smoke-test`), `assets/` (icon, drawn by `packaging/make_icon.py`).
+- `tacosort/app.py` (the window: side bar with Home / Sort / Accounts / Settings), `options.py` (what
+  each setting's switch means), `launch.py` (the built app's entry: window, CLI or `--smoke-test`),
+  `assets/` (icon, drawn by `packaging/make_icon.py`).
+- `tacosort/theme.py` (the looks: colours per theme, used by the window and served to the phone page as
+  `/themes.css`; setting `theme`), `widgets.py` (`Look`: the ttk theme, rounded cards / buttons /
+  switches / icons drawn as PNGs in pure Python, fonts, text wrapping).
 - `tacosort/actions.py`: the mail work the window and the phone page share (preview, sort, undo, learn).
 - `tacosort/phone.py` + `tacosort/web/`: the phone page (`tacosort phone on|off|status|serve`): a stdlib
   server on 127.0.0.1:8747 behind `tailscale serve`, answering only `phone_logins`; starts with Windows
@@ -50,6 +54,8 @@ The owner isn't a programmer: explain in plain words.
   JSON and a same-origin Origin; a request through Tailscale needs a login in `phone_logins`.
 - The window only touches widgets on its own thread: mail work goes through `Jobs.start`, log lines
   through `Jobs.later`. The built app has no console (`sys.stdout` is None until launch.py fixes it).
+- The window's look: no new package (pure Tkinter). A new colour goes into every theme in `theme.py`
+  (a test checks each theme has every colour and that text is readable on it).
 
 ## Gotchas
 - Gmail folders are labels: Inbox mail with a label must never be learned as "move out".
@@ -77,6 +83,11 @@ The owner isn't a programmer: explain in plain words.
   the code it started with: after updating the live copy, ask before `tacosort phone off` + `on` (run from
   the live copy) to restart it. Stopping goes through `POST /api/stop`, which phone pages before
   2026-11-01 didn't have. Other `tailscale serve` ports (5091, 8743) belong to other projects.
+- Window layout traps (2026-11-21): a stretched ttk picture must have a wide middle (`Pic.grown`), or a
+  big card is drawn as thousands of 4-pixel tiles and every repaint takes seconds; text is wrapped from
+  the top down (`Look.column` / `Look.wrapped`), never from a label's own `<Configure>` (the layout
+  chased its tail). To see the window without touching mail: a demo settings file with `data_dir` set,
+  and `app.schedule_is_on` / `phone_state` / `sort_status` replaced.
 - `recheck_inbox` runs on the first plain run of each day: a code change that widens what moves acts on
   the owner's whole Inbox at the next scheduled run, without a `--backlog`. Preview first.
 - A security, platform ("Message from Buyer") or contact guard always beats the look-alike and unsure

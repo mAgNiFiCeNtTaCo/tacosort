@@ -2,6 +2,7 @@
 "use strict";
 
 const $ = (id) => document.getElementById(id);
+const TAB_TITLES = { home: "Home", sort: "Sort", moves: "Moves", settings: "Settings" };
 const JOB_TITLES = { preview: "Preview", sort: "Sort my Inbox now", undo: "Undo last sort", learn: "Learn from my folders" };
 let moveLimit = 50;
 let polling = null;
@@ -37,6 +38,27 @@ function showProblem(text) {
   $("problem").hidden = !text;
 }
 
+// ---- look -----------------------------------------------------------------------------------------
+function applyTheme(name) {
+  if (!name) return;
+  document.documentElement.dataset.theme = name;
+  try { localStorage.setItem("tacosort-theme", name); } catch (e) { /* private browsing */ }
+  const bar = getComputedStyle(document.documentElement).getPropertyValue("--bg").trim();
+  if (bar) document.querySelector('meta[name="theme-color"]').content = bar;
+  for (const b of document.querySelectorAll(".look")) b.classList.toggle("on", b.dataset.look === name);
+}
+
+async function pickTheme(name, label) {
+  applyTheme(name);
+  $("look-name").textContent = label;
+  try {
+    const data = await api("/api/options", { theme: name });
+    if (!data.ok) showProblem("Not saved: " + data.problems.join(" "));
+  } catch (e) {
+    showProblem(e.message);
+  }
+}
+
 function when(iso) {
   if (!iso) return "";
   const d = new Date(iso);
@@ -46,10 +68,21 @@ function when(iso) {
   return `${d.toLocaleDateString([], { month: "short", day: "numeric" })} ${time}`;
 }
 
+// ["2:30 PM", "Today"] for a time today, ["Nov 20", "Nov 20, 2:30 PM"] for an older one.
+function whenParts(iso) {
+  const d = new Date(iso);
+  const time = d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  if (d.toDateString() === new Date().toDateString()) return [time, "Today"];
+  const day = d.toLocaleDateString([], { month: "short", day: "numeric" });
+  return [day, `${day}, ${time}`];
+}
+
 // ---- tabs -----------------------------------------------------------------------------------------
 function showTab(name) {
   for (const b of document.querySelectorAll(".tabs button")) b.classList.toggle("on", b.dataset.tab === name);
   for (const s of document.querySelectorAll(".tab")) s.hidden = s.id !== `tab-${name}`;
+  $("title").textContent = TAB_TITLES[name];
+  window.scrollTo(0, 0);
   if (name === "home") loadStatus();
   if (name === "moves") loadMoves();
   if (name === "settings") loadSettings();
@@ -61,12 +94,19 @@ async function loadStatus() {
   try {
     const s = await api("/api/status");
     showProblem("");
+    applyTheme(s.theme);
     $("sched").checked = s.schedule.on;
-    $("sched-text").textContent = s.schedule.on ? `On: new mail is sorted every ${s.schedule.interval} minutes.`
-      : "Off: nothing is sorted until you turn it on.";
+    $("sched-big").textContent = s.schedule.on ? "On" : "Off";
+    $("sched-text").textContent = s.schedule.on ? `New mail is sorted every ${s.schedule.interval} minutes.`
+      : "Nothing is sorted until you turn it on.";
     const r = s.last_run;
-    $("last-run").textContent = r ? `${when(r.started)}: moved ${r.moved} of ${r.scanned} checked` : "Not yet";
-    $("today").textContent = `Moved today: ${s.moved_today}` + (r && r.errors.length ? ` · Problem: ${r.errors[0]}` : "");
+    const [big, day] = r ? whenParts(r.started) : ["Not yet", ""];
+    $("last-run").textContent = big;
+    $("last-sub").textContent = !r ? "TacoSort hasn't sorted anything yet."
+      : r.scanned ? `${day}: moved ${r.moved} of ${r.scanned} checked.` : `${day}: no new mail to sort.`;
+    $("today").textContent = s.moved_today;
+    $("run-problem").textContent = r && r.errors.length ? `Problem in the last sort: ${r.errors[0]}` : "";
+    $("run-problem").hidden = !(r && r.errors.length);
     const list = $("accounts");
     list.replaceChildren();
     for (const a of s.accounts) {
@@ -235,21 +275,41 @@ async function loadMoves() {
 }
 
 // ---- settings -------------------------------------------------------------------------------------
+function toggle(input) {
+  const box = el("label", "switch");
+  box.append(input, el("span"));
+  return box;
+}
+
 async function loadSettings() {
   try {
     const data = await api("/api/options");
+    const looks = $("looks");
+    looks.replaceChildren();
+    for (const t of data.themes) {
+      const b = el("button", "look");
+      b.type = "button";
+      b.dataset.look = t.name;
+      b.title = t.label;
+      b.setAttribute("aria-label", `${t.label} look`);
+      b.addEventListener("click", () => pickTheme(t.name, t.label));
+      looks.append(b);
+      if (t.name === data.theme) $("look-name").textContent = t.label;
+    }
+    applyTheme(data.theme);
     const groups = $("groups");
     groups.replaceChildren();
     for (const g of data.groups) {
       const card = el("div", "card");
       card.append(el("h2", "", g.title));
       for (const o of g.options) {
-        const row = el("label", "opt");
+        const row = el("div", "opt");
         const tick = el("input");
         tick.type = "checkbox";
         tick.checked = o.ticked;
         tick.dataset.field = o.field;
-        const text = el("div");
+        tick.setAttribute("aria-label", o.label);
+        const text = el("div", "words");
         text.append(el("div", "", o.label));
         if (o.help) text.append(el("p", "help", o.help));
         if (o.unit) {
@@ -266,7 +326,7 @@ async function loadSettings() {
           line.append(num, document.createTextNode(` ${o.unit}`));
           text.append(line);
         }
-        row.append(tick, text);
+        row.append(text, toggle(tick));
         card.append(row);
       }
       groups.append(card);
@@ -274,15 +334,16 @@ async function loadSettings() {
     const folders = $("folders");
     folders.replaceChildren();
     for (const f of data.folders) {
-      const row = el("label", "opt");
+      const row = el("div", "opt");
       const tick = el("input");
       tick.type = "checkbox";
       tick.checked = f.ticked;
       tick.dataset.folder = f.key;
-      const text = el("div");
+      tick.setAttribute("aria-label", f.folder);
+      const text = el("div", "words");
       text.append(el("div", "", f.folder));
       if (f.about) text.append(el("p", "help", f.about));
-      row.append(tick, text);
+      row.append(text, toggle(tick));
       folders.append(row);
     }
     $("interval").value = data.interval;

@@ -16,6 +16,7 @@ from typing import Any
 
 import yaml
 
+from . import theme
 from .models import DEFAULT_CATEGORIES, INBOX, AccountConfig, AIConfig, AppConfig, Rule
 
 CONFIG_FILENAME = "config.yaml"
@@ -353,6 +354,8 @@ def config_from_dict(data: Any, warnings: list[str] | None = None) -> AppConfig:
     if "phone_logins" in data:
         cfg.phone_logins = [str(v).strip().lower() for v in _as_list(data["phone_logins"], "'phone_logins'")
                             if str(v).strip()]
+    if "theme" in data:
+        cfg.theme = str(data["theme"] or theme.DEFAULT).strip().lower()
     if "data_dir" in data:
         cfg.data_dir = str(data["data_dir"] or "")
     return cfg
@@ -451,6 +454,7 @@ def config_to_dict(cfg: AppConfig) -> dict:
         "old_mail_folder": cfg.old_mail_folder,
         "phone_port": cfg.phone_port,
         "phone_logins": list(cfg.phone_logins),
+        "theme": cfg.theme,
         "ai": {
             "enabled": cfg.ai.enabled,
             "model": cfg.ai.model,
@@ -591,6 +595,8 @@ def config_problems(cfg: AppConfig) -> list[str]:
         problems.append("phone_port must be a port number between 1024 and 65535; 8747 is the usual one.")
     if any("@" not in v for v in cfg.phone_logins):
         problems.append("phone_logins must be Tailscale login names such as you@gmail.com or you@github.")
+    if theme.problem(cfg.theme):
+        problems.append(theme.problem(cfg.theme))
     if cfg.look_alike_min < 0 or cfg.look_alike_min == 1:
         problems.append("look_alike_min must be 0 (off) or at least 2; 5 is a good value.")
     if cfg.ai.max_per_run < 0:

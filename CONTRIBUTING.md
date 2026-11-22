@@ -49,7 +49,8 @@ never touch a real mailbox or your keychain. Please keep it that way: no network
 | `tacosort/store.py`, `learner.py`, `engine.py`, `schedule.py` | memory, learning, runs, undo, background job |
 | `tacosort/companies.py` | company sub-folders (Promotions/Crunchyroll) and their names |
 | `tacosort/cli.py`, `config.py`, `report.py` | the `tacosort` command, the settings file, the HTML report |
-| `tacosort/app.py`, `options.py`, `actions.py`, `launch.py` | the window, its tick boxes, the mail work it shares with the phone page, the built app's start |
+| `tacosort/app.py`, `options.py`, `actions.py`, `launch.py` | the window, its settings, the mail work it shares with the phone page, the built app's start |
+| `tacosort/theme.py`, `widgets.py` | the colour themes (shared with the phone page), and the cards, buttons, switches and icons the window draws with them |
 | `tacosort/phone.py`, `peer.py`, `web/` | the phone page over Tailscale, and who may connect to it |
 | `packaging/` | building the one-file app (`build.py`), its icon and its pinned build packages |
 

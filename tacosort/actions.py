@@ -6,6 +6,7 @@ No window or web code here: these run on a helper thread and report through `log
 from __future__ import annotations
 
 from collections.abc import Callable
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -130,6 +131,22 @@ def write_report(cfg: AppConfig) -> Path:
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(html, encoding="utf-8")
     return out
+
+
+def status(cfg: AppConfig) -> tuple[dict | None, int]:
+    """(the last real sort, how many emails were moved since midnight), read from TacoSort's memory.
+
+    The sort is a dict (started, finished, scanned, moved, errors), or None before the first one."""
+    last, today = None, 0
+    store = cli._store_if_exists(cfg)
+    try:
+        if store is not None:
+            last = store.last_run(dry_run=False) or None
+            midnight = datetime.now().astimezone().replace(hour=0, minute=0, second=0, microsecond=0)
+            today = store.moves_since(midnight)
+    finally:
+        cli._close(store)
+    return last, today
 
 
 def schedule_is_on() -> tuple[bool, str]:

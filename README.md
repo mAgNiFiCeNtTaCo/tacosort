@@ -102,16 +102,26 @@ SHA-256 with the `SHA256SUMS.txt` file on the release page (Windows: `certutil -
 macOS / Linux: `shasum -a 256 <file>`), or, with the GitHub command line, run
 `gh attestation verify <file> -R mAgNiFiCeNtTaCo/tacosort`.
 
-The window has three tabs, in the order you need them:
+The window has four pages, picked from the bar on the left:
 
-1. **Accounts**: add each email account. It shows where to make an app password for your provider,
-   and checks the login works before it saves anything.
-2. **Options**: tick boxes for every setting, the folders to use, and background sorting.
-3. **Sort**: **Preview** shows where each email in your Inbox would go and moves nothing. **Sort my
-   Inbox now** moves them, **Undo last sort** puts them back, and **Show every move** opens a page
-   listing every move and why it was made.
+- **Home**: whether background sorting is on, when the last sort ran, how many emails were moved
+  today, and your accounts.
+- **Sort**: **Preview** shows where each email in your Inbox would go and moves nothing. **Sort my
+  Inbox now** moves them, **Undo last sort** puts them back, and **Show every move** opens a page
+  listing every move and why it was made.
+- **Accounts**: add each email account. It shows where to make an app password for your provider,
+  and checks the login works before it saves anything.
+- **Settings**: a switch for every setting, the folders to use, background sorting and the phone page.
 
-![The Options tab: tick boxes for every setting](docs/images/app-options.png)
+![The Home page: background sorting, the last sort, moved today and your accounts](docs/images/app-home.png)
+
+The coloured dots at the bottom of the bar change the look: System (light or dark, like your computer),
+Light, Dark, Midnight, Taco, Rose and Contrast (black and white with strong lines, the easiest to read).
+
+![The Settings page in the Dark look](docs/images/app-settings-dark.png)
+
+The 0.1.0 download has the same things on three tabs with tick boxes; the pages and looks above come
+with the next release.
 
 ### With Python (for the command line)
 
@@ -161,9 +171,9 @@ pip install -e ".[dev]"
 
 ## Quick start (about 5 minutes)
 
-**With the app:** add your accounts on the Accounts tab, look over the tick boxes on the Options tab,
-then click Preview on the Sort tab. If the preview looks right, click Sort my Inbox now, and tick
-background sorting on the Options tab.
+**With the app:** add your accounts on the Accounts page, look over the switches in Settings, then
+click Preview on the Sort page. If the preview looks right, click Sort my Inbox now, and switch on
+background sorting on the Home page.
 
 **On the command line:**
 
@@ -339,12 +349,12 @@ your password, never whole messages. Details: [docs/privacy.md](docs/privacy.md)
 ## On your phone (optional, over Tailscale)
 
 TacoSort can show a page in your phone's browser with the same buttons as the window: status, Preview,
-Sort my Inbox now, Undo last sort, every move, background sorting on or off, and the tick-box options.
+Sort my Inbox now, Undo last sort, every move, background sorting on or off, the settings and the look.
 It uses [Tailscale](https://tailscale.com) (free for personal use) to reach your computer, so nothing
 is opened to the internet.
 
 1. Install Tailscale on the computer and on your phone, and sign in to both with the same account.
-2. In the app: Options tab, *On your phone*, **Turn on**. Or on the command line: `tacosort phone on`.
+2. In the app: Settings, *On your phone*, **Turn on**. Or on the command line: `tacosort phone on`.
 3. On the phone, open the address it shows (like `https://your-pc.tailnet-name.ts.net:8747/`) and add it
    to your home screen (Safari: Share, Add to Home Screen).
 
@@ -407,9 +417,9 @@ you can cancel at your provider at any time.
 
 ## Uninstall
 
-**The app:** turn off the phone page if you turned it on, untick background sorting on the Options
-tab and click Save settings, remove each
-account on the Accounts tab (this also deletes its password from the keychain), then delete the
+**The app:** turn off the phone page if you turned it on, switch off background sorting on the Home
+page, remove each
+account on the Accounts page (this also deletes its password from the keychain), then delete the
 TacoSort file. Optionally cancel the app passwords at your provider.
 
 **The command line:**

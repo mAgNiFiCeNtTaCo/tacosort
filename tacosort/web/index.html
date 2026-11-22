@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0f766e">
+<meta name="theme-color" content="#f4f6f6">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="TacoSort">
@@ -12,13 +12,15 @@
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" href="/icon.png" type="image/png">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="stylesheet" href="/themes.css">
 <link rel="stylesheet" href="/app.css">
+<script src="/theme.js"></script>
 <script src="/app.js" defer></script>
 </head>
 <body>
 <header class="top">
   <img src="/icon.png" alt="" class="logo">
-  <h1>TacoSort</h1>
+  <h1 id="title">Home</h1>
   <span id="busy" class="busy" hidden>Working…</span>
 </header>
 
@@ -29,17 +31,26 @@
     <div class="card">
       <div class="row">
         <div>
-          <h2>Background sorting</h2>
-          <p id="sched-text" class="muted">Checking…</p>
+          <p class="label">Background sorting</p>
+          <p id="sched-big" class="stat">…</p>
+          <p id="sched-text" class="muted small">Checking…</p>
         </div>
         <label class="switch"><input type="checkbox" id="sched"><span></span></label>
       </div>
     </div>
-    <div class="card">
-      <h2>Last sort</h2>
-      <p id="last-run" class="big">…</p>
-      <p id="today" class="muted"></p>
+    <div class="tiles">
+      <div class="card">
+        <p class="label">Last sort</p>
+        <p id="last-run" class="stat">…</p>
+        <p id="last-sub" class="muted small"></p>
+      </div>
+      <div class="card">
+        <p class="label">Moved today</p>
+        <p id="today" class="stat">…</p>
+        <p class="muted small">emails moved into folders.</p>
+      </div>
     </div>
+    <p id="run-problem" class="note" hidden></p>
     <div class="card">
       <h2>Accounts</h2>
       <ul id="accounts" class="list"></ul>
@@ -56,7 +67,7 @@
       <button id="do-learn" class="btn quiet">Learn from my folders</button>
     </div>
     <div id="job" class="card" hidden>
-      <h2 id="job-title"></h2>
+      <p id="job-title" class="label"></p>
       <p id="job-summary" class="big"></p>
       <div id="job-result"></div>
       <details id="job-log-box"><summary>What it did</summary><pre id="job-log"></pre></details>
@@ -64,16 +75,23 @@
   </section>
 
   <section id="tab-moves" class="tab" hidden>
-    <ul id="moves" class="list moves"></ul>
+    <div class="card">
+      <ul id="moves" class="list moves"></ul>
+    </div>
     <button id="more-moves" class="btn quiet" hidden>Show more</button>
   </section>
 
   <section id="tab-settings" class="tab" hidden>
+    <div class="card">
+      <h2>Look</h2>
+      <p id="look-name" class="muted small"></p>
+      <div id="looks" class="looks"></div>
+    </div>
     <form id="settings">
       <div id="groups"></div>
       <div class="card">
         <h2>Folders to sort into</h2>
-        <p class="muted small">Unticked: that kind of mail stays in the Inbox.</p>
+        <p class="muted small">Switched off: that kind of mail stays in the Inbox.</p>
         <div id="folders"></div>
       </div>
       <div class="card">
@@ -87,10 +105,10 @@
 </main>
 
 <nav class="tabs">
-  <button data-tab="home" class="on">Home</button>
-  <button data-tab="sort">Sort</button>
-  <button data-tab="moves">Moves</button>
-  <button data-tab="settings">Settings</button>
+  <button data-tab="home" class="on"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 11.5 12 4l8.5 7.5M6 10v10h12V10M10.500 20v-5.500h3V20"/></svg><span>Home</span></button>
+  <button data-tab="sort"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.500V13M8.500 9.500 12 13l3.500-3.500M4 14.500V20h16v-5.500"/></svg><span>Sort</span></button>
+  <button data-tab="moves"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 7h12M8 12h12M8 17h12"/><circle class="fill" cx="4.200" cy="7" r="1.200"/><circle class="fill" cx="4.200" cy="12" r="1.200"/><circle class="fill" cx="4.200" cy="17" r="1.200"/></svg><span>Moves</span></button>
+  <button data-tab="settings"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/><circle class="fill" cx="9" cy="7" r="2.600"/><circle class="fill" cx="15.500" cy="12" r="2.600"/><circle class="fill" cx="8" cy="17" r="2.600"/></svg><span>Settings</span></button>
 </nav>
 </body>
 </html>

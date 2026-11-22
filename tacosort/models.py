@@ -208,6 +208,7 @@ class AppConfig:
     old_mail_folder: str = "Old mail"
     phone_port: int = 8747                # the phone page listens on 127.0.0.1 at this port
     phone_logins: list[str] = field(default_factory=list)   # Tailscale logins allowed to use the phone page
+    theme: str = "system"                 # the look of the window and the phone page (theme.py lists them)
 
     def security_folder_name(self) -> str:
         return f"{self.folder_prefix}/{self.security_folder}" if self.folder_prefix else self.security_folder
