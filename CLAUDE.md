@@ -90,6 +90,11 @@ The owner isn't a programmer: explain in plain words.
   shares a folder on port 8796): `phone on` skips Tailscale when 8747 is already shared, and `phone off`
   leaves the entry behind. To restart the phone page, `off` + `on` from the live copy still works; adding
   the entry afresh needs a terminal run as administrator.
+- Dependabot's pip requests remake `packaging/requirements-build.txt` on Linux only and drop the Windows
+  and macOS packages (pefile, pywin32-ctypes, macholib): never merge them. Remake the list with the `uv pip
+  compile --universal` line at the top of that file (add `--upgrade`), keep its three header lines, then
+  run the Build workflow by hand to check all three systems. Release tags `v*` can't be moved or deleted
+  (GitHub ruleset "Release tags stay put", 2026-11-23): a bad release gets a new version number.
 - Window layout traps (2026-11-21): a stretched ttk picture must have a wide middle (`Pic.grown`), or a
   big card is drawn as thousands of 4-pixel tiles and every repaint takes seconds; text is wrapped from
   the top down (`Look.column` / `Look.wrapped`), never from a label's own `<Configure>` (the layout
