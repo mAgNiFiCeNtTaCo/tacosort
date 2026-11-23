@@ -3,23 +3,28 @@
 TacoSort (called TidyInbox until 2026-10-28) is an open-source (MIT) Python tool that sorts every email account a person has (any IMAP
 server, Outlook through OAuth2) into one shared folder scheme and keeps it sorted in the background.
 
-## Where it stands (2026-11-01)
-- Public at https://github.com/mAgNiFiCeNtTaCo/tacosort. **Release 0.1.0** (2026-10-29,
-  https://github.com/mAgNiFiCeNtTaCo/tacosort/releases/tag/v0.1.0): a one-file app for Windows
-  (15 MB), macOS Apple silicon (zip) and Linux. With Python: `pipx install
-  git+https://github.com/mAgNiFiCeNtTaCo/tacosort` (it is not on PyPI); `tacosort app` opens the window.
-- **Phone page** (2026-10-31, in `main`, not yet in a release): `tacosort phone on` / the app's Options tab
+## Where it stands (2026-11-23)
+- Public at https://github.com/mAgNiFiCeNtTaCo/tacosort. **Release 0.2.0** (2026-11-23,
+  https://github.com/mAgNiFiCeNtTaCo/tacosort/releases/tag/v0.2.0; 0.1.0 was 2026-10-29): a one-file app
+  for Windows (15 MB), macOS Apple silicon (zip) and Linux, with `SHA256SUMS.txt`. With Python: `pipx
+  install git+https://github.com/mAgNiFiCeNtTaCo/tacosort` (it is not on PyPI); `tacosort app` opens the
+  window.
+- **The window** (2026-11-21): a side bar with Home / Sort / Accounts / Settings, rounded cards, switches,
+  and seven looks (System, Light, Dark, Midnight, Taco, Rose, Contrast; setting `theme`). The phone page
+  has the same looks. Drawn with Tkinter alone, no new package.
+- **Phone page** (2026-10-31, released in 0.2.0): `tacosort phone on` / the app's Settings page
   shares it with the owner's own Tailscale devices (127.0.0.1:8747 behind `tailscale serve`). On for the
   owner since 2026-10-31, starting with Windows. Since 2026-11-01 it answers only Tailscale itself or the
   owner's own programs, and stops through `POST /api/stop`.
 - **Live copy** (2026-11-01): the owner's task, phone page and Desktop + Start menu shortcuts run from
   `%LOCALAPPDATA%\Programs\TacoSort\venv`, not the project folder; update it after a change (CLAUDE.md).
+  It is at 0.2.0 (commit 46a983a) since 2026-11-23.
 - Security audit and slop check 2026-11-01: all findings fixed (b7fa6d0); releases from 0.2.0 on carry
   `SHA256SUMS.txt` and a build attestation.
 - Start: `tacosort setup` → `tacosort preview` → `tacosort run --backlog --yes` (old mail) →
   `tacosort schedule on` (keeps new mail sorted).
-- Tests: `.venv\Scripts\python -m pytest -q`: 707 passed, 2 skipped (POSIX-only), ruff clean.
-  GitHub CI green on Windows, macOS and Linux (2026-11-01, commit b7fa6d0). CI jobs stop after 20 minutes.
+- Tests: `.venv\Scripts\python -m pytest -q`: 741 passed, 2 skipped (POSIX-only), ruff clean.
+  GitHub CI green on Windows, macOS and Linux (2026-11-23, commit 46a983a). CI jobs stop after 20 minutes.
 - In real use on three of the owner's accounts (app passwords, background schedule every 15 min):
   personal Gmail Inbox 59 -> 1, business Gmail 299 -> 18, Yahoo "Main"
   ~10,600 -> 174 (since 2026-10-29), plus mail younger than 24 hours. What stays: recent mail from
@@ -31,6 +36,45 @@ server, Outlook through OAuth2) into one shared folder scheme and keeps it sorte
 - Untested for real: Outlook/Google OAuth, AI sorting against the live API, the Windows at-logon trigger.
 
 ## Log
+### 2026-11-23: New look with themes (window and phone page); release 0.2.0
+- Owner's ask (2026-11-21): "make the application beautiful and fancy, make things tidy and easily
+  readable. add themes as well but choose the best design based on todays most sought after looks".
+  Their choices: restyle the window and the phone page; a side bar with a Home page.
+- **Window (7243efe):** side bar with Home / Sort / Accounts / Settings instead of three tabs. Home is
+  new: background sorting with a switch, last sort, moved today, the phone page, the accounts, and a
+  first-run card. Rounded cards, switches instead of tick boxes, one accent colour, larger type.
+- **Looks:** System (default; follows the computer), Light, Dark, Midnight, Taco, Rose, Contrast, saved as
+  the new `theme` setting. `tacosort/theme.py` holds the colours for both the window and the phone page
+  (`/themes.css`); tests check every theme has every colour and text reaches 4.5:1 contrast.
+- **How it is drawn:** no new package. `tacosort/widgets.py` makes the rounded pieces and icons as PNGs
+  in pure Python and uses them as ttk picture elements; each look is its own ttk theme built on `clam`.
+- **Phone page:** same colours, cards, switches, drawn tab icons, and a Look picker in Settings. Who may
+  connect, the POST rules and the 127.0.0.1 bind are unchanged; the page still loads only its own files.
+- **Bugs met while building:** a stretched picture with a 4-pixel middle was tiled thousands of times
+  (24 s to paint; fixed with a wide middle, `Pic.grown`, ~0.5 s); labels wrapping themselves from their
+  own `<Configure>` chased the layout and hung `root.update()` (now wrapped top-down, `Look.column` /
+  `Look.wrapped`); pictures freed off the main thread made a phone test flaky (cleared on the root's
+  `<Destroy>`).
+- `actions.status(cfg)`: the "last sort / moved today" lookup, shared by Home and `/api/status`.
+- **Checked:** screenshots of every page in every look at 100% and 150% scaling and of the phone page;
+  a read-only open on the owner's real settings; a local one-file build passed its self-check; slop
+  check clean (`AI_SlopAgent/reports/2026-11-21-Email_Organization.md`).
+- **2026-11-23, owner: "approve it all":** version 0.2.0 (6a173ad), live copy updated, phone page
+  restarted, tag `v0.2.0` pushed, release run 45127133855 green (Windows, macOS, Linux, checksums). The
+  release page has only the automatic changelog link, like 0.1.0.
+- **Tailscale snag (46a983a):** `tacosort phone on` failed after `off` with "must be a Windows local
+  admin to serve a path": since another program on the PC shares a folder through `tailscale serve`
+  (port 8796, not TacoSort's), Tailscale lets only an administrator change the list. The `off` had not
+  removed TacoSort's entry either, so the page was started again without touching Tailscale (down for a
+  couple of minutes). Fix: `phone on` checks `tailscale serve status --json` and skips Tailscale when the
+  port is already shared; otherwise it says to run `tacosort phone on` once as administrator.
+- Tests 741 passed, 2 skipped; ruff clean; CI green on all six jobs.
+- **Open:** Dependabot PRs (the imapclient bump in /packaging fails CI, not looked at); Python 3.14.10
+  update; no GitHub tag ruleset; no written release notes; `phone off` can't remove the Tailscale entry
+  without an administrator while port 8796's folder share exists (harmless: it points at a closed port).
+- Resources (2026-11-23 00:58, task + phone page running): 5 processes, 111 MB RAM, 1% of a core, port
+  8747, disk 178 MB; whole PC CPU 11% of 32 threads, RAM 25.0 of 64 GB, GPU 49%.
+
 ### 2026-11-01: Security audit and slop check fixed; the live copy moved to the user folder
 - Owner's ask: "have we audited this and check for ai slop yet?" -> "start both". First security audit
   (`Security_Agent_Audit/reports/2026-11-01-Email_Organization.md`, proofs p1-p4) and a slop check

@@ -83,6 +83,10 @@ The owner isn't a programmer: explain in plain words.
   the code it started with: after updating the live copy, ask before `tacosort phone off` + `on` (run from
   the live copy) to restart it. Stopping goes through `POST /api/stop`, which phone pages before
   2026-11-01 didn't have. Other `tailscale serve` ports (5091, 8743) belong to other projects.
+- Tailscale on the owner's PC only lets an administrator change `tailscale serve` (since another program
+  shares a folder on port 8796): `phone on` skips Tailscale when 8747 is already shared, and `phone off`
+  leaves the entry behind. To restart the phone page, `off` + `on` from the live copy still works; adding
+  the entry afresh needs a terminal run as administrator.
 - Window layout traps (2026-11-21): a stretched ttk picture must have a wide middle (`Pic.grown`), or a
   big card is drawn as thousands of 4-pixel tiles and every repaint takes seconds; text is wrapped from
   the top down (`Look.column` / `Look.wrapped`), never from a label's own `<Configure>` (the layout

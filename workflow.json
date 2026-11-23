@@ -446,6 +446,62 @@
         "A project folder every account can write is no place for code a scheduled task runs: install a live copy in the user folder.",
         "shutil.which on Windows searches the current folder first even with path=."
       ]
+    },
+    {
+      "title": "New look with themes (window and phone page); release 0.2.0",
+      "date": "2026-11-23",
+      "summary": "One session redesigned the window (side bar, Home page, cards, switches, seven looks) and the phone page to match, then, with the owner's OK, updated the live copy and published release 0.2.0.",
+      "stages": [
+        {
+          "name": "Plan",
+          "kind": "lead",
+          "sessions": [
+            {
+              "id": "979da9f6",
+              "role": "Solo (continued)",
+              "start": "2026-11-21T02:35",
+              "end": "2026-11-21T02:42",
+              "did": "Asked the owner two choices (window + phone page; side bar + Home page) and got the plan approved",
+              "outcome": "done",
+              "files": 0
+            }
+          ]
+        },
+        {
+          "name": "Build",
+          "kind": "solo",
+          "sessions": [
+            {
+              "id": "979da9f6",
+              "role": "Solo (continued)",
+              "start": "2026-11-21T23:17",
+              "end": "2026-11-22T00:53",
+              "did": "theme.py, widgets.py, the window rewritten, phone page restyled, tests, docs, screenshots in every look, slop check clean, pushed with CI green",
+              "outcome": "done",
+              "files": 22
+            }
+          ]
+        },
+        {
+          "name": "Release",
+          "kind": "fix",
+          "sessions": [
+            {
+              "id": "979da9f6",
+              "role": "Solo (continued)",
+              "start": "2026-11-23T00:20",
+              "end": "2026-11-23T01:00",
+              "did": "Version 0.2.0, live copy updated, phone page restarted (Tailscale admin snag fixed in code), tag v0.2.0 and the release build green",
+              "outcome": "done",
+              "files": 6
+            }
+          ]
+        }
+      ],
+      "lessons": [
+        "A stretched ttk picture needs a wide middle, or a big card is painted as thousands of tiny tiles.",
+        "Once any tailscale serve entry shares a folder, only an administrator can change the list: check before calling it."
+      ]
     }
   ]
 }
