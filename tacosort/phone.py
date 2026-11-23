@@ -597,14 +597,34 @@ def tailscale_me() -> tuple[str, str]:
     return name, login
 
 
+def tailscale_shares(port: int) -> bool:
+    """Is this port already shared to 127.0.0.1 on the same port (left from an earlier "on")?"""
+    try:
+        web = json.loads(_tailscale("serve", "status", "--json").stdout).get("Web") or {}
+        return any(host.endswith(f":{port}")
+                   and ((site.get("Handlers") or {}).get("/") or {}).get("Proxy") == f"http://127.0.0.1:{port}"
+                   for host, site in web.items())
+    except (ValueError, AttributeError, TypeError):
+        return False
+
+
 def tailscale_serve(port: int, on: bool) -> None:
     """Add or remove the `tailscale serve` entry for this port (tailnet only; other ports are not touched)."""
+    if on and tailscale_shares(port):
+        # Nothing to add. It also matters: once any program on the PC shares a folder through Tailscale,
+        # Tailscale lets only an administrator change the list, and a plain "on" would fail here.
+        return
     args = (["serve", "--bg", f"--https={port}", f"http://127.0.0.1:{port}"] if on
             else ["serve", f"--https={port}", "off"])
     done = _tailscale(*args)
     if done.returncode != 0 and on:
         text = (done.stderr or done.stdout or "").strip().splitlines()
-        raise PhoneError("Tailscale couldn't share the phone page: " + (text[-1] if text else "no reason given")
+        why = text[-1] if text else "no reason given"
+        if "local admin" in why:
+            raise PhoneError("Tailscale couldn't share the phone page: on this computer it only lets an "
+                             "administrator change what is shared. Open a terminal with \"Run as "
+                             "administrator\" and run `tacosort phone on` there once.")
+        raise PhoneError("Tailscale couldn't share the phone page: " + why
                          + ". If it mentions HTTPS, turn on HTTPS certificates in the Tailscale admin page "
                            "(DNS tab), then try again.")
 

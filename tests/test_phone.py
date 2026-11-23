@@ -287,6 +287,34 @@ def test_this_test_is_seen_as_me(server):
     assert phone.peer.kind_of_listener(server.port) == expected
 
 
+def test_a_port_that_is_already_shared_is_left_alone(monkeypatch):
+    """Turning on again must not ask Tailscale to change anything (it may want an administrator for that)."""
+    shared = {"Web": {"pc.tail1.ts.net:8747": {"Handlers": {"/": {"Proxy": "http://127.0.0.1:8747"}}},
+                      "pc.tail1.ts.net:8796": {"Handlers": {"/": {"Path": "somewhere"}}}}}
+    asked = []
+
+    def fake(*args, **kw):
+        asked.append(args)
+        return SimpleNamespace(stdout=json.dumps(shared), stderr="", returncode=0)
+
+    monkeypatch.setattr(phone, "_tailscale", fake)
+    phone.tailscale_serve(8747, True)
+    assert asked == [("serve", "status", "--json")]
+    assert not phone.tailscale_shares(8796) and not phone.tailscale_shares(9000)
+
+
+def test_an_admin_only_tailscale_is_explained(monkeypatch):
+    def fake(*args, **kw):
+        if args[:2] == ("serve", "status"):
+            return SimpleNamespace(stdout="{}", stderr="", returncode=0)
+        return SimpleNamespace(stdout="", stderr="401 Unauthorized: must be a Windows local admin to serve a path",
+                               returncode=1)
+
+    monkeypatch.setattr(phone, "_tailscale", fake)
+    with pytest.raises(phone.PhoneError, match="Run as administrator"):
+        phone.tailscale_serve(8747, True)
+
+
 def test_tailscale_is_never_taken_from_the_start_folder(tmp_path, monkeypatch):
     here, other = tmp_path / "downloads", tmp_path / "bin"
     here.mkdir()
