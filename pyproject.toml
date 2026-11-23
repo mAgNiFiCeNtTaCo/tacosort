@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tacosort"
-version = "0.2.0"
+version = "0.2.1"
 description = "Automatically organize all your email accounts with one consistent folder scheme, and keep them organized."
 readme = "README.md"
 requires-python = ">=3.10"
