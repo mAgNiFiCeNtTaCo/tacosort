@@ -120,9 +120,6 @@ Light, Dark, Midnight, Taco, Rose and Contrast (black and white with strong line
 
 ![The Settings page in the Dark look](docs/images/app-settings-dark.png)
 
-The 0.1.0 download has the same things on three tabs with tick boxes; the pages and looks above come
-with the next release.
-
 ### With Python (for the command line)
 
 TacoSort is installed straight from this GitHub page. It is **not** published on PyPI, so don't
