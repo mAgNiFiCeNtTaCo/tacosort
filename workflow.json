@@ -502,6 +502,31 @@
         "A stretched ttk picture needs a wide middle, or a big card is painted as thousands of tiny tiles.",
         "Once any tailscale serve entry shares a folder, only an administrator can change the list: check before calling it."
       ]
+    },
+    {
+      "title": "Plain words everywhere, a start guide and a Help page; release 0.2.1",
+      "date": "2026-11-23",
+      "summary": "One session reworded the window and the phone page for a first-time user, added a line beside every button, a start guide, tips and a Help page, then updated the live copy and published 0.2.1.",
+      "stages": [
+        {
+          "name": "Build and release",
+          "kind": "solo",
+          "sessions": [
+            {
+              "id": "979da9f6",
+              "role": "Solo (continued)",
+              "start": "2026-11-23T01:02",
+              "end": "2026-11-23T01:30",
+              "did": "Reworded every page, App._actions rows, start guide, Help page, widgets.Tip, phone page hints, tests, README pictures; live copy updated, phone page restarted, v0.2.1 released",
+              "outcome": "done",
+              "files": 11
+            }
+          ]
+        }
+      ],
+      "lessons": [
+        "Explanations beside the controls beat a manual: one line per button, written for someone who has never used the tool."
+      ]
     }
   ]
 }

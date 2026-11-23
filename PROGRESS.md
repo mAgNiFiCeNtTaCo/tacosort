@@ -4,12 +4,15 @@ TacoSort (called TidyInbox until 2026-10-28) is an open-source (MIT) Python tool
 server, Outlook through OAuth2) into one shared folder scheme and keeps it sorted in the background.
 
 ## Where it stands (2026-11-23)
-- Public at https://github.com/mAgNiFiCeNtTaCo/tacosort. **Release 0.2.0** (2026-11-23,
-  https://github.com/mAgNiFiCeNtTaCo/tacosort/releases/tag/v0.2.0; 0.1.0 was 2026-10-29): a one-file app
+- Public at https://github.com/mAgNiFiCeNtTaCo/tacosort. **Release 0.2.1** (2026-11-23,
+  https://github.com/mAgNiFiCeNtTaCo/tacosort/releases/tag/v0.2.1; 0.2.0 the same day, 0.1.0 2026-10-29): a one-file app
   for Windows (15 MB), macOS Apple silicon (zip) and Linux, with `SHA256SUMS.txt`. With Python: `pipx
   install git+https://github.com/mAgNiFiCeNtTaCo/tacosort` (it is not on PyPI); `tacosort app` opens the
   window.
-- **The window** (2026-11-21): a side bar with Home / Sort / Accounts / Settings, rounded cards, switches,
+- **Plain words** (2026-11-23, in 0.2.1): every button has a line saying what it does, every switch and
+  folder a line under it, Home has a three-step start guide, and there is a Help page; the window and the
+  phone page say "automatic sorting".
+- **The window** (2026-11-21): a side bar with Home / Sort / Accounts / Settings / Help, rounded cards, switches,
   and seven looks (System, Light, Dark, Midnight, Taco, Rose, Contrast; setting `theme`). The phone page
   has the same looks. Drawn with Tkinter alone, no new package.
 - **Phone page** (2026-10-31, released in 0.2.0): `tacosort phone on` / the app's Settings page
@@ -18,13 +21,13 @@ server, Outlook through OAuth2) into one shared folder scheme and keeps it sorte
   owner's own programs, and stops through `POST /api/stop`.
 - **Live copy** (2026-11-01): the owner's task, phone page and Desktop + Start menu shortcuts run from
   `%LOCALAPPDATA%\Programs\TacoSort\venv`, not the project folder; update it after a change (CLAUDE.md).
-  It is at 0.2.0 (commit 46a983a) since 2026-11-23.
+  It is at 0.2.1 (commit ed4b910) since 2026-11-23.
 - Security audit and slop check 2026-11-01: all findings fixed (b7fa6d0); releases from 0.2.0 on carry
   `SHA256SUMS.txt` and a build attestation.
 - Start: `tacosort setup` → `tacosort preview` → `tacosort run --backlog --yes` (old mail) →
   `tacosort schedule on` (keeps new mail sorted).
-- Tests: `.venv\Scripts\python -m pytest -q`: 741 passed, 2 skipped (POSIX-only), ruff clean.
-  GitHub CI green on Windows, macOS and Linux (2026-11-23, commit 46a983a). CI jobs stop after 20 minutes.
+- Tests: `.venv\Scripts\python -m pytest -q`: 745 passed, 2 skipped (POSIX-only), ruff clean.
+  GitHub CI green on Windows, macOS and Linux (2026-11-23, commit ed4b910). CI jobs stop after 20 minutes.
 - In real use on three of the owner's accounts (app passwords, background schedule every 15 min):
   personal Gmail Inbox 59 -> 1, business Gmail 299 -> 18, Yahoo "Main"
   ~10,600 -> 174 (since 2026-10-29), plus mail younger than 24 hours. What stays: recent mail from
@@ -36,6 +39,35 @@ server, Outlook through OAuth2) into one shared folder scheme and keeps it sorte
 - Untested for real: Outlook/Google OAuth, AI sorting against the live API, the Windows at-logon trigger.
 
 ## Log
+### 2026-11-23: Plain words everywhere, a start guide and a Help page; release 0.2.1
+- Owner's ask: "lets make this super easy for a dum person or 5 year old could understand how to use each
+  thing in the app". Done for everyone, with no "easy mode" switch (c90e261).
+- **Buttons explain themselves:** on Sort and Accounts each button sits in a row with a line saying what
+  pressing it does (`App._actions`). Smaller buttons, the side bar and the colour dots show a note when the
+  mouse rests on them (`widgets.Tip`).
+- **Start guide on Home:** "Start here: three small steps" (add your email, look first, let it sort by
+  itself). A step is marked "(done)" with a lit dot; the card goes away when all three are done.
+- **Settings:** every switch has a plain label and a line under it (`options.GROUPS` reworded); every
+  folder says what goes in it (`options.FOLDER_WORDS`; `models.DEFAULT_CATEGORIES` keeps the sorter's own
+  wording). The page says nothing changes until Save settings.
+- **Help:** a fifth page of short answers (`app.HELP`), each checked against what the code does.
+- **Names:** the window and the phone page say "automatic sorting" (the CLI still says background
+  schedule); Accounts headings are Nickname / Email address / Mail service / Tidied?; Add account says
+  "Step 1 of 2" / "Step 2 of 2" and what an app password is.
+- **Phone page:** the same lines under its buttons, an intro on Moves and Settings, a "What TacoSort
+  does" card on Home.
+- Fixed on the way: full-width text on a page with a scroll bar was cut off at the right (the column now
+  leaves room for the bar).
+- README (five pages, the lines beside buttons) and its two pictures redone; CLAUDE.md has a rule about
+  the wording. Slop check clean (`AI_SlopAgent/reports/2026-11-23-Email_Organization.md`).
+- **Owner: "update and restart yes, do it all":** version 0.2.1 (ed4b910), live copy updated, phone page
+  off + on (worked first time with the 46a983a fix), tag `v0.2.1`, release build green on Windows, macOS
+  and Linux.
+- Tests 745 passed, 2 skipped; ruff clean; CI green on all six jobs.
+- **Open:** unchanged from the entry below (Dependabot PRs, Python 3.14.10, tag ruleset, release notes).
+- Resources (2026-11-23 01:25, task + phone page running): 5 processes, 111 MB RAM, 0% CPU, port 8747,
+  disk 178 MB; whole PC CPU 9% of 32 threads, RAM 25.2 of 64 GB, GPU 28%.
+
 ### 2026-11-23: New look with themes (window and phone page); release 0.2.0
 - Owner's ask (2026-11-21): "make the application beautiful and fancy, make things tidy and easily
   readable. add themes as well but choose the best design based on todays most sought after looks".
