@@ -31,7 +31,7 @@
     <div class="card">
       <div class="row">
         <div>
-          <p class="label">Background sorting</p>
+          <p class="label">Automatic sorting</p>
           <p id="sched-big" class="stat">…</p>
           <p id="sched-text" class="muted small">Checking…</p>
         </div>
@@ -55,16 +55,24 @@
       <h2>Accounts</h2>
       <ul id="accounts" class="list"></ul>
     </div>
+    <div class="card">
+      <h2>What TacoSort does</h2>
+      <p class="muted">It moves mail from shops, apps and companies into folders. Mail from real people stays in your Inbox. Nothing is ever deleted, and Undo puts mail back.</p>
+    </div>
     <p id="version" class="muted small center"></p>
   </section>
 
   <section id="tab-sort" class="tab" hidden>
     <div class="card">
-      <p class="muted">Start with a preview: it shows where each email in your Inbox would go and moves nothing.</p>
+      <p class="muted">Not sure what will happen? Press Preview first. It only looks, and moves nothing.</p>
       <button id="do-preview" class="btn primary">Preview</button>
+      <p class="hint">Look first. Shows where each email would go. Nothing is moved.</p>
       <button id="do-sort" class="btn">Sort my Inbox now</button>
+      <p class="hint">Moves those emails into their folders. Mail from people stays in your Inbox.</p>
       <button id="do-undo" class="btn">Undo last sort</button>
-      <button id="do-learn" class="btn quiet">Learn from my folders</button>
+      <p class="hint">Changed your mind? Puts the emails from the last sort back.</p>
+      <button id="do-learn" class="btn">Learn from my folders</button>
+      <p class="hint">Looks at the folders you already made, so TacoSort files mail the way you do. Nothing is moved.</p>
     </div>
     <div id="job" class="card" hidden>
       <p id="job-title" class="label"></p>
@@ -75,6 +83,7 @@
   </section>
 
   <section id="tab-moves" class="tab" hidden>
+    <p class="muted intro">Every email TacoSort moved, newest first: who sent it and the folder it went to.</p>
     <div class="card">
       <ul id="moves" class="list moves"></ul>
     </div>
@@ -83,19 +92,22 @@
 
   <section id="tab-settings" class="tab" hidden>
     <div class="card">
-      <h2>Look</h2>
+      <h2>Colours</h2>
+      <p class="hint">Tap a dot to change the colours. It changes nothing about your mail.</p>
       <p id="look-name" class="muted small"></p>
       <div id="looks" class="looks"></div>
     </div>
     <form id="settings">
+      <p class="muted intro">Each switch is one choice: coloured means on, grey means off. Change what you like, then press Save settings at the bottom.</p>
       <div id="groups"></div>
       <div class="card">
-        <h2>Folders to sort into</h2>
-        <p class="muted small">Switched off: that kind of mail stays in the Inbox.</p>
+        <h2>Folders</h2>
+        <p class="hint">Each switch is one folder. On: that kind of mail goes into it. Off: it stays in your Inbox.</p>
         <div id="folders"></div>
       </div>
       <div class="card">
-        <h2>How often</h2>
+        <h2>Automatic sorting</h2>
+        <p class="hint">How often TacoSort checks for new mail and files it. The switch for it is on the Home tab.</p>
         <label class="field">Sort new mail every <input type="number" id="interval" min="5" max="1439" inputmode="numeric"> minutes</label>
       </div>
       <p id="settings-note" class="note" hidden></p>

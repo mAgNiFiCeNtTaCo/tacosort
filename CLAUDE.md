@@ -19,8 +19,8 @@ The owner isn't a programmer: explain in plain words.
 - `tacosort/companies.py`: company sub-folders (`Promotions/Crunchyroll`), naming, the threshold, and
   where a company's unsure mail goes (`unsure` rows in `company_folders`).
 - `tacosort/cli.py`, `config.py`, `report.py`: the command line.
-- `tacosort/app.py` (the window: side bar with Home / Sort / Accounts / Settings), `options.py` (what
-  each setting's switch means), `launch.py` (the built app's entry: window, CLI or `--smoke-test`),
+- `tacosort/app.py` (the window: side bar with Home / Sort / Accounts / Settings / Help), `options.py` (what
+  each setting's switch means, in plain words, and `FOLDER_WORDS` for the folders), `launch.py` (the built app's entry: window, CLI or `--smoke-test`),
   `assets/` (icon, drawn by `packaging/make_icon.py`).
 - `tacosort/theme.py` (the looks: colours per theme, used by the window and served to the phone page as
   `/themes.css`; setting `theme`), `widgets.py` (`Look`: the ttk theme, rounded cards / buttons /
@@ -54,6 +54,9 @@ The owner isn't a programmer: explain in plain words.
   JSON and a same-origin Origin; a request through Tailscale needs a login in `phone_logins`.
 - The window only touches widgets on its own thread: mail work goes through `Jobs.start`, log lines
   through `Jobs.later`. The built app has no console (`sys.stdout` is None until launch.py fixes it).
+- Words on screen are for someone who has never used a mail tool: every button gets a line saying what
+  pressing it does (`App._actions`, or a `Tip`), every switch a `help` line; the window says "automatic
+  sorting" (the CLI and docs for it say background schedule). The same goes for the phone page.
 - The window's look: no new package (pure Tkinter). A new colour goes into every theme in `theme.py`
   (a test checks each theme has every colour and that text is readable on it).
 

@@ -97,8 +97,8 @@ async function loadStatus() {
     applyTheme(s.theme);
     $("sched").checked = s.schedule.on;
     $("sched-big").textContent = s.schedule.on ? "On" : "Off";
-    $("sched-text").textContent = s.schedule.on ? `New mail is sorted every ${s.schedule.interval} minutes.`
-      : "Nothing is sorted until you turn it on.";
+    $("sched-text").textContent = s.schedule.on ? `TacoSort files new mail every ${s.schedule.interval} minutes.`
+      : "Flip the switch and TacoSort files new mail for you.";
     const r = s.last_run;
     const [big, day] = r ? whenParts(r.started) : ["Not yet", ""];
     $("last-run").textContent = big;
@@ -124,7 +124,7 @@ async function loadStatus() {
 
 async function toggleSchedule() {
   const on = $("sched").checked;
-  if (!on && !confirm("Turn off background sorting? New mail stays in the Inbox until you turn it on again.")) {
+  if (!on && !confirm("Turn off automatic sorting? New mail stays in the Inbox until you turn it on again.")) {
     $("sched").checked = true;
     return;
   }

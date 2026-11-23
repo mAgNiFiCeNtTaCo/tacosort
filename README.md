@@ -102,18 +102,24 @@ SHA-256 with the `SHA256SUMS.txt` file on the release page (Windows: `certutil -
 macOS / Linux: `shasum -a 256 <file>`), or, with the GitHub command line, run
 `gh attestation verify <file> -R mAgNiFiCeNtTaCo/tacosort`.
 
-The window has four pages, picked from the bar on the left:
+The window has five pages, picked from the bar on the left:
 
-- **Home**: whether background sorting is on, when the last sort ran, how many emails were moved
-  today, and your accounts.
+- **Home**: whether automatic sorting is on (with its switch), when the last sort ran, how many emails
+  were moved today, and your accounts. A new person sees three steps here: add your email, look first,
+  let it sort by itself.
 - **Sort**: **Preview** shows where each email in your Inbox would go and moves nothing. **Sort my
   Inbox now** moves them, **Undo last sort** puts them back, and **Show every move** opens a page
   listing every move and why it was made.
 - **Accounts**: add each email account. It shows where to make an app password for your provider,
   and checks the login works before it saves anything.
-- **Settings**: a switch for every setting, the folders to use, background sorting and the phone page.
+- **Settings**: a switch for every setting, the folders to use, automatic sorting and the phone page.
+- **Help**: short answers to the usual questions (will it delete my mail, where did an email go, how
+  do I get one back).
 
-![The Home page: background sorting, the last sort, moved today and your accounts](docs/images/app-home.png)
+Every button has a line beside it saying what pressing it does, every switch has a line under it, and
+resting the mouse on a button shows a short note.
+
+![The Home page: automatic sorting, the last sort, moved today and your accounts](docs/images/app-home.png)
 
 The coloured dots at the bottom of the bar change the look: System (light or dark, like your computer),
 Light, Dark, Midnight, Taco, Rose and Contrast (black and white with strong lines, the easiest to read).
@@ -170,7 +176,7 @@ pip install -e ".[dev]"
 
 **With the app:** add your accounts on the Accounts page, look over the switches in Settings, then
 click Preview on the Sort page. If the preview looks right, click Sort my Inbox now, and switch on
-background sorting on the Home page.
+automatic sorting on the Home page.
 
 **On the command line:**
 
@@ -346,7 +352,7 @@ your password, never whole messages. Details: [docs/privacy.md](docs/privacy.md)
 ## On your phone (optional, over Tailscale)
 
 TacoSort can show a page in your phone's browser with the same buttons as the window: status, Preview,
-Sort my Inbox now, Undo last sort, every move, background sorting on or off, the settings and the look.
+Sort my Inbox now, Undo last sort, every move, automatic sorting on or off, the settings and the look.
 It uses [Tailscale](https://tailscale.com) (free for personal use) to reach your computer, so nothing
 is opened to the internet.
 
@@ -414,7 +420,7 @@ you can cancel at your provider at any time.
 
 ## Uninstall
 
-**The app:** turn off the phone page if you turned it on, switch off background sorting on the Home
+**The app:** turn off the phone page if you turned it on, switch off automatic sorting on the Home
 page, remove each
 account on the Accounts page (this also deletes its password from the keychain), then delete the
 TacoSort file. Optionally cancel the app passwords at your provider.

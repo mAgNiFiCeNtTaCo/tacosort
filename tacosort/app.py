@@ -53,15 +53,47 @@ from .config import (
     save_config,
 )
 from .models import AccountConfig, AppConfig
-from .widgets import Look, ScrollFrame, scroll_when_needed
+from .widgets import Look, ScrollFrame, Tip, scroll_when_needed
 
 ASSETS = Path(__file__).parent / "assets"
 APP_ID = "TacoSort.App"
 PAD = 8
-PAGES = (("home", "Home"), ("sort", "Sort"), ("accounts", "Accounts"), ("settings", "Settings"))
-INTRO = ("TacoSort files robot mail (receipts, newsletters, promotions...) into folders, so your Inbox keeps "
-         "mail from people. It never deletes anything, never marks mail as read, and every move can be undone. "
-         "Passwords stay in your computer's keychain.")
+PAGES = (("home", "Home"), ("sort", "Sort"), ("accounts", "Accounts"), ("settings", "Settings"), ("help", "Help"))
+NAV_TIPS = {"home": "See what TacoSort is doing.", "sort": "Tidy your Inbox now, or look first.",
+            "accounts": "The email addresses TacoSort tidies.", "settings": "Choose how TacoSort tidies.",
+            "help": "Short answers to common questions."}
+INTRO = ("TacoSort tidies your email. Mail from shops, apps and companies goes into folders. Mail from real "
+         "people stays in your Inbox. It never throws mail away and never marks it as read, and you can always "
+         "put mail back. Your passwords stay in your computer's own password safe.")
+# The Help page: a question and its answer, in the words someone new would use.
+HELP = (
+    ("What does TacoSort do?",
+     ("It tidies your email. Mail sent by shops, apps and companies goes into folders such as Receipts or "
+     "Promotions. Mail from real people stays in your Inbox, so you see it first.")),
+    ("Will it delete my email?",
+     ("No. TacoSort never deletes an email and never marks one as read. It only moves mail into folders, and "
+     "every move can be undone.")),
+    ("Where did my email go?",
+     ("Into a folder in your mail app, next to your Inbox. For the full list, open the Sort page and press Show "
+     "every move. It names each email, the folder it went to, and why.")),
+    ("How do I get an email back?",
+     ("Open the Sort page and press Undo last sort. Or drag the email back to your Inbox in your mail app. With "
+     "Learning switched on in Settings, TacoSort notices and leaves that sender's mail in your Inbox from then "
+     "on.")),
+    ("What stays in my Inbox?",
+     "Mail from people, replies, starred mail and fresh security codes. You can change the details in Settings."),
+    ("What is a preview?",
+     ("A practice run. It shows where each email would go and moves nothing, so you can check before anything "
+     "happens.")),
+    ("What is automatic sorting?",
+     ("With its switch on (Home page), TacoSort checks for new mail every few minutes and files it for you, even "
+     "when this window is closed. With it off, mail only moves when you press Sort my Inbox now.")),
+    ("Is my password safe?",
+     ("TacoSort keeps it in your computer's own password safe (the keychain), never in a file. It uses an app "
+     "password: a second password made just for TacoSort, which you can cancel at any time.")),
+    ("What do the coloured dots do?",
+     "They change the colours of this window. Pick the one you like. It changes nothing about your mail."),
+)
 
 
 def phone_state(path: Path) -> tuple[bool, str, str]:
@@ -193,6 +225,7 @@ class App:
         self._build_sort()
         self._build_accounts()
         self._build_options()
+        self._build_help()
         self.look.on_change(self._paint)
         self._paint()
         self._wide = 0
@@ -227,6 +260,7 @@ class App:
                            style="Side.Nav.TButton", command=lambda n=name: self.show(n))
             b.pack(fill="x", pady=px(2))
             self.look.follow(b, f"icon-{name}")
+            Tip(b, self.look, NAV_TIPS[name])
             self.nav[name] = b
 
         ttk.Label(side, text=f"Version {__version__}", style="Side.Small.TLabel").pack(side="bottom", anchor="w",
@@ -243,6 +277,7 @@ class App:
             b.grid(row=i // 4, column=i % 4, padx=px(1), pady=px(1))
             b.bind("<Enter>", lambda _e, n=name: self.look_name.set(f"Look: {theme.label(n)}"))
             b.bind("<Leave>", lambda _e: self._show_look())
+            Tip(b, self.look, f"{theme.label(name)}: changes the colours of this window, nothing else.")
             self.swatches[name] = b
         self._show_look()
 
@@ -275,7 +310,7 @@ class App:
             tree.tag_configure("odd", background=self.look.stripe)
 
     def show(self, name: str) -> None:
-        """Show one page ("home", "sort", "accounts" or "settings")."""
+        """Show one page ("home", "sort", "accounts", "settings" or "help")."""
         if self.page:
             self.pages[self.page].pack_forget()
         self.page = name
@@ -326,6 +361,20 @@ class App:
         self.look.within(card, parent, pad * 2)
         if title:
             ttk.Label(card, text=title, style="Card.H2.TLabel").pack(anchor="w", pady=(0, self.look.px(PAD)))
+        return card
+
+    def _actions(self, parent: tk.Misc, rows: tuple[tuple[str, Callable[[], None], str, str], ...]) -> ttk.Frame:
+        """A card of buttons, each with a plain line beside it saying what pressing it does."""
+        px = self.look.px
+        card = self._card(parent, pad=PAD * 1.5)
+        card.columnconfigure(1, weight=1)
+        for i, (text, command, kind, about) in enumerate(rows):
+            self._button(card, text, command, kind, width=22).grid(row=i, column=0, sticky="ew", pady=px(3),
+                                                                    padx=(0, px(PAD * 1.5)))
+            words = ttk.Frame(card, style="Card.TFrame")
+            words.grid(row=i, column=1, sticky="ew")
+            self.look.column(words, 1.0, 250)          # the page, less the card's edges and the button
+            self.look.wrapped(words, about, "Muted.TLabel").pack(fill="x")
         return card
 
     def _switch_row(self, box: tk.Misc, text: str, variable: tk.BooleanVar, help_text: str = "",
@@ -392,9 +441,9 @@ class App:
         on, _text = schedule_is_on() if n else (False, "")
         self.sched_on = on
         if not n:
-            self.status.set("No email accounts yet: start with Add account.")
+            self.status.set("No email accounts yet: start with Add an email account.")
         else:
-            auto = "Sorting automatically in the background." if on else "Background sorting is off."
+            auto = "Sorting automatically in the background." if on else "Automatic sorting is off."
             self.status.set(f"{n} account{'' if n == 1 else 's'}. {auto}")
         self._fill_home()
 
@@ -412,19 +461,41 @@ class App:
         scroll.pack(fill="both", expand=True)
         body = ttk.Frame(scroll.inner, padding=(px(PAD * 3), 0, px(PAD * 3), px(PAD)))
         body.pack(fill="both", expand=True)
+        self.look.column(body, 1.0, PAD * 2 + 6)         # room for the scroll bar when the page is long
         self.look.wrapped(body, INTRO, "Muted.TLabel").pack(fill="x", pady=(0, px(PAD * 2)))
 
-        self.welcome = self._card(body, "Welcome to TacoSort")
-        self.look.wrapped(self.welcome, "Start by adding the email account you want sorted. TacoSort checks the login "
-                              "works before it saves anything, and moves nothing until you say so.",
-                "Muted.TLabel").pack(fill="x", pady=(0, px(PAD)))
-        self._button(self.welcome, "Add your first account", self.add_account, "Primary").pack(anchor="w")
+        # The start guide: shown until all three steps are done, each with a dot that lights up.
+        self.welcome = self._card(body, "Start here: three small steps")
+        self.previewed = False
+        self.steps: dict[str, tuple[ttk.Label, tk.StringVar, str]] = {}
+        for key, title, about, button, command in (
+                ("account", "1. Add your email", ("Tell TacoSort which email address to tidy. It checks your "
+                 "password works before it saves anything."), "Add my email", self.add_account),
+                ("preview", "2. Look first", "A preview shows where each email would go. Nothing is moved.",
+                 "Show me", lambda: (self.show("sort"), self.preview())),
+                ("auto", "3. Let it sort by itself", ("Happy with the preview? Flip the switch under \"Automatic "
+                 "sorting\" just below. TacoSort then files new mail for you."), "", None)):
+            row = ttk.Frame(self.welcome, style="Card.TFrame")
+            row.pack(fill="x", pady=px(4))
+            row.columnconfigure(1, weight=1)
+            dot = self.look.picture(row, "dot-off")
+            dot.grid(row=0, column=0, sticky="nw", padx=(px(2), px(PAD + 2)), pady=px(5))
+            words = ttk.Frame(row, style="Card.TFrame")
+            words.grid(row=0, column=1, sticky="ew")
+            self.look.within(words, self.welcome, 220)
+            shown = tk.StringVar(value=title)
+            ttk.Label(words, textvariable=shown, style="Card.Bold.TLabel").pack(anchor="w")
+            self.look.wrapped(words, about, "Small.TLabel").pack(fill="x")
+            if command is not None:
+                self._button(row, button, command, "Primary" if key == "account" else "Plain", width=14).grid(
+                    row=0, column=2, sticky="e", padx=(px(PAD), 0))
+            self.steps[key] = (dot, shown, title)
 
         self.tiles = ttk.Frame(body)
         self.tiles.pack(fill="x")
         self.home: dict[str, tuple[tk.StringVar, tk.StringVar]] = {}
-        names = (("schedule", "Background sorting"), ("last", "Last sort"), ("today", "Moved today"),
-                 ("phone", "Phone page"))
+        names = (("schedule", "Automatic sorting"), ("last", "Last sort"), ("today", "Moved today"),
+                 ("phone", "On your phone"))
         for i, (key, title) in enumerate(names):
             self.tiles.columnconfigure(i, weight=1, uniform="tile")
             self.look.column(self.tiles, 0.25, PAD)
@@ -440,6 +511,8 @@ class App:
                 switch = ttk.Checkbutton(tile, variable=self.home_sched, style="Card.Switch.TCheckbutton",
                                          cursor="hand2", command=self.toggle_schedule)
                 switch.pack(anchor="w", pady=(px(PAD), 0))
+                Tip(switch, self.look, "On: TacoSort files new mail by itself. Off: mail only moves when you "
+                                       "press Sort my Inbox now.")
                 self.action_buttons.append(switch)
         lower = ttk.Frame(body)
         lower.pack(fill="x", pady=(px(PAD), 0))
@@ -447,19 +520,24 @@ class App:
         lower.columnconfigure(1, weight=2, uniform="low")
         accounts = self._card(lower)
         accounts.grid(row=0, column=0, sticky="nsew")
+        self.look.column(accounts, 0.6, PAD * 5)
         head = ttk.Frame(accounts, style="Card.TFrame")
         head.pack(fill="x", pady=(0, px(PAD / 2)))
-        ttk.Label(head, text="Accounts", style="Card.H2.TLabel").pack(side="left")
-        ttk.Button(head, text="Manage", style="Card.Quiet.TButton", cursor="hand2",
-                   command=lambda: self.show("accounts")).pack(side="right")
+        ttk.Label(head, text="Your email accounts", style="Card.H2.TLabel").pack(side="left")
+        change = ttk.Button(head, text="Change", style="Card.Quiet.TButton", cursor="hand2",
+                            command=lambda: self.show("accounts"))
+        change.pack(side="right")
+        Tip(change, self.look, "Opens the Accounts page, where you add or remove an email address.")
         self.home_accounts = ttk.Frame(accounts, style="Card.TFrame")
         self.home_accounts.pack(fill="x")
+        self.look.wrapped(accounts, "A coloured dot means TacoSort tidies that account. A grey dot means it is "
+                          "switched off and left alone.", "Small.TLabel").pack(fill="x", pady=(px(PAD / 2), 0))
 
         self.look.column(lower, 0.4, PAD)
-        quick = self._card(lower, "Sort now")
+        quick = self._card(lower, "Tidy now")
         quick.grid(row=0, column=1, sticky="nsew", padx=(px(PAD), 0))
-        self.look.wrapped(quick, "A preview shows where each email would go and moves nothing.", "Muted.TLabel").pack(
-            fill="x", pady=(0, px(PAD)))
+        self.look.wrapped(quick, "Preview only looks: nothing is moved. Sort moves the mail into folders. You can "
+                          "always undo it on the Sort page.", "Muted.TLabel").pack(fill="x", pady=(0, px(PAD)))
         self._button(quick, "Preview", lambda: (self.show("sort"), self.preview()), "Primary").pack(fill="x")
         self._button(quick, "Sort my Inbox now", lambda: (self.show("sort"), self.sort_now())).pack(
             fill="x", pady=(px(PAD), 0))
@@ -469,19 +547,23 @@ class App:
     def _fill_home(self) -> None:
         px = self.look.px
         cfg = self.cfg
-        if cfg.accounts:
-            self.welcome.pack_forget()
-        else:
-            self.welcome.pack(fill="x", pady=(0, px(PAD)), before=self.tiles)
         on = getattr(self, "sched_on", False)
         self.home_sched.set(on)
         self.home["schedule"][0].set("On" if on else "Off")
-        self.home["schedule"][1].set(f"New mail is sorted every {cfg.interval_minutes} minutes." if on
-                                     else "Nothing is sorted until you turn it on.")
+        self.home["schedule"][1].set(f"TacoSort files new mail every {cfg.interval_minutes} minutes." if on
+                                     else "Flip the switch and TacoSort files new mail for you.")
         try:
             run, today = sort_status(cfg)
         except Exception:  # noqa: BLE001 - the Home page still opens when the memory file can't be read
             run, today = None, 0
+        done = {"account": bool(cfg.accounts), "preview": bool(run) or self.previewed, "auto": on}
+        for key, (dot, shown, title) in self.steps.items():
+            self.look.follow(dot, "dot-on" if done[key] else "dot-off")
+            shown.set(f"{title} (done)" if done[key] else title)
+        if all(done.values()):
+            self.welcome.pack_forget()
+        else:
+            self.welcome.pack(fill="x", pady=(0, px(PAD)), before=self.tiles)
         value, day = when_text(run["started"] if run else None)
         self.home["last"][0].set(value)
         if not run:
@@ -504,16 +586,17 @@ class App:
             name = providers[a.provider].name if a.provider in providers else a.provider
             ttk.Label(row, text=name if a.enabled else f"{name}, off", style="Card.Small.TLabel").pack(side="right")
         if not cfg.accounts:
-            ttk.Label(self.home_accounts, text="No accounts yet.", style="Card.Muted.TLabel").pack(anchor="w")
+            ttk.Label(self.home_accounts, text="None yet. Step 1 above adds one.",
+                      style="Card.Muted.TLabel").pack(anchor="w")
 
     def toggle_schedule(self) -> None:
         """The Home page's switch: background sorting on or off, with the saved number of minutes."""
         want_on = self.home_sched.get()
         if want_on and not enabled_accounts(self.cfg):
             self.home_sched.set(False)
-            self.home_note.set("Add an account before turning on background sorting.")
+            self.home_note.set("Add an account before turning on automatic sorting.")
             return
-        if not want_on and not messagebox.askyesno("Background sorting", "Turn off background sorting?\n\nNew "
+        if not want_on and not messagebox.askyesno("Automatic sorting", "Turn off automatic sorting?\n\nNew "
                                                    "mail stays in the Inbox until you turn it on again."):
             self.home_sched.set(True)
             return
@@ -521,7 +604,7 @@ class App:
         minutes, path = self.cfg.interval_minutes, self.path.resolve()
 
         def done(result: Any, error: BaseException | None) -> None:
-            self.home_note.set(str(result) if error is None else "The background schedule couldn't be changed: "
+            self.home_note.set(str(result) if error is None else "Automatic sorting couldn't be changed: "
                                f"{plain_error(error)}")
             self.sched_var.set(schedule_is_on()[0])
 
@@ -532,19 +615,23 @@ class App:
     def _build_accounts(self) -> None:
         px = self.look.px
         tab = self._page_body("accounts")
-        self.look.wrapped(tab, "Add each email account you want sorted. TacoSort checks the login works before it saves "
-                     "anything.", "Muted.TLabel").pack(fill="x", pady=(0, px(PAD * 1.5)))
+        self.look.wrapped(tab, "These are the email addresses TacoSort tidies. To change one, click it in the list, "
+                          "then press a button underneath.", "Muted.TLabel").pack(fill="x", pady=(0, px(PAD * 1.5)))
         self.acct_list = self._table(tab, ("name", "email", "provider", "status"),
-                                     ("Short name", "Email", "Provider", "Status"), (160, 300, 160, 100), 8,
-                                     selectmode="browse")
-        row = ttk.Frame(tab, padding=(0, px(PAD * 1.5), 0, 0))
-        row.pack(fill="x")
-        self._button(row, "Add account...", self.add_account, "Primary").pack(side="left")
-        self._button(row, "Test login", self.test_account).pack(side="left", padx=px(PAD))
-        self._button(row, "Turn on / off", self.toggle_account).pack(side="left")
-        self._button(row, "Remove", self.remove_account, "Danger").pack(side="left", padx=px(PAD))
+                                     ("Nickname", "Email address", "Mail service", "Tidied?"), (160, 300, 160, 100),
+                                     6, selectmode="browse")
         self.acct_note = tk.StringVar()
         self.look.wrapped(tab, "", textvariable=self.acct_note).pack(fill="x", pady=(px(PAD), 0))
+        self._actions(tab, (
+            ("Add an email account", self.add_account, "Primary",
+             "Connect another email address. TacoSort checks the password works before it saves anything."),
+            ("Check it works", self.test_account, "Plain",
+             "Click an account in the list first. TacoSort tries to sign in and tells you if it worked."),
+            ("Turn on / off", self.toggle_account, "Plain",
+             "Click an account first. Off means TacoSort leaves that account alone. Nothing is deleted."),
+            ("Remove", self.remove_account, "Danger",
+             "Click an account first. TacoSort forgets it. Your mail and your folders stay as they are."),
+        )).pack(fill="x", pady=(px(PAD), 0))
 
     def _fill_accounts(self) -> None:
         self.acct_list.delete(*self.acct_list.get_children())
@@ -554,13 +641,14 @@ class App:
             self.acct_list.insert("", "end", iid=a.id, values=(a.id, a.email, name, "On" if a.enabled else "Off"),
                                   tags=("odd",) if i % 2 else ())
         if not self.cfg.accounts:
-            self.acct_note.set("No accounts yet. Click Add account... to start.")
+            self.acct_note.set("No accounts yet. Press Add an email account to start.")
 
     def _selected(self) -> AccountConfig | None:
         sel = self.acct_list.selection()
         acct = next((a for a in self.cfg.accounts if sel and a.id == sel[0]), None)
         if acct is None:
-            messagebox.showinfo("TacoSort", "Click an account in the list first.")
+            messagebox.showinfo("TacoSort", "Click an account in the list first, so TacoSort knows which one "
+                                "you mean.")
         return acct
 
     def add_account(self) -> None:
@@ -613,12 +701,21 @@ class App:
         bar = ttk.Frame(page, padding=(px(PAD * 3), px(PAD), px(PAD * 3), 0))
         bar.pack(side="bottom", fill="x")
         ttk.Frame(page, style="Line.TFrame", height=max(1, px(1))).pack(side="bottom", fill="x")
-        self._button(bar, "Save settings", self.save_options, "Primary").pack(side="left")
-        self._button(bar, "Undo changes", self.reload).pack(side="left", padx=px(PAD))
+        save = self._button(bar, "Save settings", self.save_options, "Primary")
+        save.pack(side="left")
+        Tip(save, self.look, "Keeps the switches the way they are now. Nothing changes until you press this.")
+        back = self._button(bar, "Undo changes", self.reload)
+        back.pack(side="left", padx=px(PAD))
+        Tip(back, self.look, "Puts every switch back to how it was the last time you saved.")
         self.opt_note = tk.StringVar()
         self.look.column(bar, 1.0, 300)
         self.look.wrapped(bar, "", textvariable=self.opt_note).pack(side="left", fill="x", expand=True)
 
+        head = ttk.Frame(page, padding=(px(PAD * 3), 0, px(PAD * 3), px(PAD)))
+        head.pack(fill="x")
+        self.look.wrapped(head, "Each switch is one choice: coloured means on, grey means off. Change what you like, "
+                          "then press Save settings at the bottom. Nothing changes until you do.",
+                          "Muted.TLabel").pack(fill="x")
         scroll = ScrollFrame(page, self.look)
         scroll.pack(fill="both", expand=True)
         body = ttk.Frame(scroll.inner, padding=(px(PAD * 3), 0, px(PAD * 3), px(PAD)))
@@ -641,34 +738,40 @@ class App:
                 self._switch_row(box, o.label, ticked, o.help, number, o.unit, o.low, o.high)
                 self.opt_vars[o.field] = (ticked, number)
 
-        cats = self._card(right, "Folders to sort into")
+        cats = self._card(right, "Folders")
         cats.pack(fill="x", pady=(0, px(PAD * 1.5)))
-        self.look.wrapped(cats, "Switch a folder off and that kind of mail stays in the Inbox.", "Small.TLabel").pack(
+        self.look.wrapped(cats, "Each switch is one folder. On: that kind of mail goes into it. Off: that kind of "
+                          "mail stays in your Inbox.", "Small.TLabel").pack(
             fill="x", pady=(0, px(4)))
         self.cats_box = ttk.Frame(cats, style="Card.TFrame")
         self.cats_box.pack(fill="x")
         self.cat_vars: dict[str, tk.BooleanVar] = {}
 
-        bg = self._card(right, "In the background")
+        bg = self._card(right, "Automatic sorting")
         bg.pack(fill="x", pady=(0, px(PAD * 1.5)))
         self.sched_var = tk.BooleanVar()
         self.interval_var = tk.StringVar()
-        self._switch_row(bg, "Sort new mail automatically every", self.sched_var,
-                         "Runs while you are logged in to this computer, even with this window closed.",
+        self._switch_row(bg, "Sort new mail by itself, every", self.sched_var,
+                         "TacoSort checks for new mail this often and files it. It works while you are signed in "
+                         "to this computer, even with this window closed.",
                          self.interval_var, "minutes", 5, 1439)
 
-        ph = self._card(right, "On your phone (over Tailscale)")
+        ph = self._card(right, "On your phone")
         ph.pack(fill="x", pady=(0, px(PAD * 1.5)))
-        self.look.wrapped(ph, "Use TacoSort from your phone's browser: status, preview, sort, undo and these settings. "
-                    "Only your own devices signed in to Tailscale can open it. It starts with Windows while it "
-                    "is on.", "Small.TLabel").pack(fill="x")
+        self.look.wrapped(ph, "Open TacoSort on your phone to see what it did, sort, or undo. You need the free "
+                    "Tailscale app on this computer and on your phone, signed in as you. Nobody else can open "
+                    "it.", "Small.TLabel").pack(fill="x")
         self.phone_note = tk.StringVar(value="Checking...")
         self.look.wrapped(ph, "", textvariable=self.phone_note).pack(fill="x", pady=(px(PAD), 0))
         row = ttk.Frame(ph, style="Card.TFrame")
         row.pack(fill="x", pady=(px(PAD), 0))
         self.phone_button = self._button(row, "Turn on", self.toggle_phone)
         self.phone_button.pack(side="left")
-        self._button(row, "Copy address", self.copy_phone_address, "Quiet").pack(side="left", padx=px(PAD))
+        Tip(self.phone_button, self.look, "Turns the phone page on or off. Your mail is not touched.")
+        copy = self._button(row, "Copy address", self.copy_phone_address, "Quiet")
+        copy.pack(side="left", padx=px(PAD))
+        Tip(copy, self.look, "Copies the web address of the phone page, so you can send it to your phone and open "
+                             "it there.")
         self.phone_on = False
         self.phone_address = ""
 
@@ -705,7 +808,7 @@ class App:
         self.phone_note.set(text)
         self.phone_button.configure(text="Turn off" if on else "Turn on")
         self.home["phone"][0].set("On" if on else "Off")
-        self.home["phone"][1].set("Your own Tailscale devices can open it." if on
+        self.home["phone"][1].set("You can open TacoSort on your phone." if on
                                   else "Turn it on in Settings to use TacoSort from your phone.")
 
     def toggle_phone(self) -> None:
@@ -749,7 +852,7 @@ class App:
         # Switched on: set the task up again every time, so it uses this interval and this copy of the app
         # (after the app file was moved, opening it and saving once fixes the schedule).
         if want_on and not enabled_accounts(new):
-            self.opt_note.set("Saved. Add an account before turning on background sorting.")
+            self.opt_note.set("Saved. Add an account before turning on automatic sorting.")
             self.sched_var.set(False)
             return
         sched = cli._schedule()
@@ -763,7 +866,7 @@ class App:
             if error is None:
                 self.opt_note.set(f"Saved. {result}")
             else:
-                self.opt_note.set(f"Saved, but the background schedule couldn't be changed: {plain_error(error)}")
+                self.opt_note.set(f"Saved, but automatic sorting couldn't be changed: {plain_error(error)}")
             self.sched_var.set(schedule_is_on()[0])
 
         self.jobs.start(work, done)
@@ -772,19 +875,23 @@ class App:
     def _build_sort(self) -> None:
         px = self.look.px
         tab = self._page_body("sort")
-        self.look.wrapped(tab, "Start with a preview: it shows where each email in your Inbox would go and moves nothing. "
-                     "Happy with it? Sort my Inbox now moves them. Undo last sort puts them back.",
-                "Muted.TLabel").pack(fill="x", pady=(0, px(PAD * 1.5)))
-        row = ttk.Frame(tab)
-        row.pack(fill="x", pady=(0, px(PAD * 1.5)))
-        self._button(row, "Preview (moves nothing)", self.preview, "Primary").pack(side="left")
-        self._button(row, "Sort my Inbox now", self.sort_now).pack(side="left", padx=px(PAD))
-        self._button(row, "Undo last sort", self.undo).pack(side="left")
-        self._button(row, "Show every move", self.report, "Quiet").pack(side="right")
-        self._button(row, "Learn from my folders", self.learn, "Quiet").pack(side="right", padx=px(PAD))
+        self.look.wrapped(tab, "Not sure what will happen? Press Preview first. It only looks, and moves nothing.",
+                          "Muted.TLabel").pack(fill="x", pady=(0, px(PAD * 1.5)))
+        self._actions(tab, (
+            ("Preview", self.preview, "Primary",
+             "Look first. Shows where each email in your Inbox would go. Nothing is moved."),
+            ("Sort my Inbox now", self.sort_now, "Plain",
+             "Moves those emails into their folders. Mail from people stays in your Inbox."),
+            ("Undo last sort", self.undo, "Plain",
+             "Changed your mind? Puts the emails from the last sort back where they were."),
+            ("Learn from my folders", self.learn, "Plain",
+             "Looks at the folders you already made, so TacoSort files mail the way you do. Nothing is moved."),
+            ("Show every move", self.report, "Plain",
+             "Opens a page listing every email TacoSort has moved, and why."),
+        )).pack(fill="x", pady=(0, px(PAD * 1.5)))
 
-        self.summary = tk.StringVar(value="No preview yet.")
-        ttk.Label(tab, textvariable=self.summary, style="H2.TLabel").pack(anchor="w", pady=(0, px(PAD)))
+        self.summary = tk.StringVar(value="Nothing to show yet. Press Preview to see where your mail would go.")
+        self.look.wrapped(tab, "", "H2.TLabel", textvariable=self.summary).pack(fill="x", pady=(0, px(PAD)))
 
         self.log_card = self._card(tab, pad=PAD)
         self.log_box = tk.Text(self.log_card, height=7, wrap="word", state="disabled", relief="flat",
@@ -798,9 +905,26 @@ class App:
         self.log_toggle = ttk.Button(tab, style="Quiet.TButton", cursor="hand2",
                                      command=lambda: self._show_log(not self.log_open))
         self.log_toggle.pack(side="bottom", anchor="w", pady=(px(PAD / 2), 0))
+        Tip(self.log_toggle, self.look, "The notes TacoSort wrote while it worked, step by step.")
         self.moves = self._table(tab, ("account", "sender", "subject", "folder", "why"),
-                                 ("Account", "From", "Subject", "Goes to", "Why"), (80, 150, 230, 160, 200), 10)
+                                 ("Account", "From", "Subject", "Goes to folder", "Why"), (80, 150, 230, 160, 200),
+                                 6)
         self._show_log(False)
+
+    def _build_help(self) -> None:
+        px = self.look.px
+        scroll = ScrollFrame(self.pages["help"], self.look)
+        scroll.pack(fill="both", expand=True)
+        body = ttk.Frame(scroll.inner, padding=(px(PAD * 3), 0, px(PAD * 3), px(PAD)))
+        body.pack(fill="both", expand=True)
+        self.look.column(body, 1.0, PAD * 2 + 6)
+        self.look.wrapped(body, "Short answers to the things people ask most. Tip: rest the mouse on a button or "
+                          "switch anywhere in TacoSort and a small note says what it does.",
+                          "Muted.TLabel").pack(fill="x", pady=(0, px(PAD * 1.5)))
+        for question, answer in HELP:
+            card = self._card(body, question)
+            card.pack(fill="x", pady=(0, px(PAD)))
+            self.look.wrapped(card, answer, "Muted.TLabel").pack(fill="x")
 
     def _show_log(self, show: bool) -> None:
         """Fold the "what it did" lines open or shut, under the list of moves."""
@@ -861,6 +985,7 @@ class App:
                 return
             moves, scanned, kept, problems = result
             self._show_moves(moves)
+            self.previewed = True
             self.summary.set(f"Preview: {len(moves)} of {scanned} emails would go into folders; {kept} would "
                              "stay in the Inbox. Nothing was moved.")
             for p in problems:
@@ -950,8 +1075,10 @@ class AddAccount:
     def _step_email(self) -> None:
         px = self.px
         self._clear()
-        ttk.Label(self.body, text="Add an email account", style="H2.TLabel").pack(anchor="w", pady=(0, px(PAD * 2)))
-        ttk.Label(self.body, text="Your email address", style="Muted.TLabel").pack(anchor="w")
+        ttk.Label(self.body, text="Step 1 of 2: which email?", style="H2.TLabel").pack(anchor="w",
+                                                                                   pady=(0, px(PAD)))
+        self.app.look.wrapped(self.body, "Type the email address you want TacoSort to tidy, then press Next.",
+                              "Muted.TLabel").pack(fill="x", pady=(0, px(PAD)))
         entry = ttk.Entry(self.body, textvariable=self.email, width=46)
         entry.pack(anchor="w", pady=(px(4), px(PAD * 1.5)))
         entry.focus_set()
@@ -1003,18 +1130,19 @@ class AddAccount:
             ttk.Checkbutton(grid, text="  Uses SSL/TLS (almost always yes for port 993)", variable=self.ssl,
                             style="Switch.TCheckbutton").grid(row=2, column=1, sticky="w", padx=px(8), pady=px(3))
         else:
-            ttk.Label(b, text=f"This looks like a {p.name} account.", style="H2.TLabel").pack(
+            ttk.Label(b, text=f"Step 2 of 2: this looks like a {p.name} account.", style="H2.TLabel").pack(
                 anchor="w", pady=(0, px(PAD * 1.5)))
         if self.existing is None:
             line = ttk.Frame(b)
             line.pack(anchor="w", pady=(0, px(PAD * 1.5)))
-            ttk.Label(line, text="Short name for this account", style="Muted.TLabel").pack(side="left")
+            ttk.Label(line, text="A nickname for this account", style="Muted.TLabel").pack(side="left")
             ttk.Entry(line, textvariable=self.short, width=24).pack(side="left", padx=px(8))
 
         row = ttk.Frame(b)               # packed below the explanation; its buttons are made inside it
         if p.auth == "password":
-            self.app.look.wrapped(b, f"TacoSort needs an app password for {p.name}: a separate password just for TacoSort, "
-                       "which you can cancel at any time without changing your normal password.").pack(fill="x")
+            self.app.look.wrapped(b, f"TacoSort needs an app password for {p.name}. That is a second password made just for "
+                       "TacoSort. Your normal password stays secret, and you can cancel the app password at any "
+                       "time. Make one, copy it, and paste it below.").pack(fill="x")
             notes = (getattr(p, "notes", "") or "").strip()
             if notes:
                 self.app.look.wrapped(b, notes, "Muted.TLabel").pack(fill="x", pady=(px(6), 0))
@@ -1023,9 +1151,9 @@ class AddAccount:
                            command=lambda: webbrowser.open(p.app_password_url)).pack(anchor="w", pady=px(PAD * 1.5))
             line = ttk.Frame(b)
             line.pack(anchor="w", pady=(0, px(PAD)))
-            ttk.Label(line, text="App password", style="Muted.TLabel").pack(side="left")
+            ttk.Label(line, text="Paste the app password here", style="Muted.TLabel").pack(side="left")
             ttk.Entry(line, textvariable=self.password, show="•", width=30).pack(side="left", padx=px(8))
-            self.save_button = ttk.Button(row, text="Test and save", command=self._save_password,
+            self.save_button = ttk.Button(row, text="Check it and save", command=self._save_password,
                                           style="Primary.TButton", cursor="hand2")
         elif p.auth == "oauth2-microsoft":
             self.app.look.wrapped(b, "Microsoft doesn't let mail programs sign in to Outlook.com / Hotmail with a password. "
@@ -1103,7 +1231,7 @@ class AddAccount:
                 save_config(self.app.cfg, self.app.path)
             self.app.reload()
             self.app.acct_note.set(f"Connected! {acct.email} has {folders} folders. "
-                                   + ("Next: look over Settings, then Preview on the Sort page." if is_new
+                                   + ("Next: press Preview on the Sort page to see where your mail would go." if is_new
                                       else "The new password is saved."))
             self.win.destroy()
 

@@ -136,6 +136,9 @@ ICONS: dict[str, list[tuple]] = {
                  ("line", 18.5, 17.5, 19.5, 20.5)],
     "settings": [("line", 4, 7, 20, 7), ("line", 4, 12, 20, 12), ("line", 4, 17, 20, 17), ("dot", 9, 7, 2.6),
                  ("dot", 15.5, 12, 2.6), ("dot", 8, 17, 2.6)],
+    "help": [("ring", 12, 12, 8.2), ("line", 9.6, 9.6, 10.4, 8), ("line", 10.4, 8, 12, 7.3),
+             ("line", 12, 7.3, 13.6, 8), ("line", 13.6, 8, 14.3, 9.5), ("line", 14.3, 9.5, 13.5, 11),
+             ("line", 13.5, 11, 12, 12.2), ("line", 12, 12.2, 12, 13.6), ("dot", 12, 16.6, 1.15)],
 }
 
 
@@ -563,3 +566,41 @@ class ScrollFrame(ttk.Frame):
         if (self.winfo_ismapped() and str(event.widget).startswith(str(self))
                 and self.inner.winfo_reqheight() > self.canvas.winfo_height()):
             self.canvas.yview_scroll(int(-event.delta / 120) or (-1 if event.delta > 0 else 1), "units")
+
+
+class Tip:
+    """A small note shown while the mouse rests on a widget: what the thing does, in a few words."""
+
+    def __init__(self, widget: tk.Misc, look: Look, text: str):
+        self.widget, self.look, self.text = widget, look, text
+        self.win: tk.Toplevel | None = None
+        self.timer: str | None = None
+        widget.bind("<Enter>", self._soon, add="+")
+        widget.bind("<Leave>", self._hide, add="+")
+        widget.bind("<ButtonPress>", self._hide, add="+")
+
+    def _soon(self, _event: Any = None) -> None:
+        self._hide()
+        self.timer = self.widget.after(450, self._show)
+
+    def _show(self) -> None:
+        self.timer = None
+        c, px = self.look.c, self.look.px
+        self.win = win = tk.Toplevel(self.widget)
+        win.wm_overrideredirect(True)
+        with contextlib.suppress(tk.TclError):
+            win.attributes("-topmost", True)
+        tk.Label(win, text=self.text, justify="left", wraplength=px(280), background=c["text"],
+                 foreground=c["bg"], font=self.look.fonts["small"], padx=px(8), pady=px(5)).pack()
+        win.wm_geometry(f"+{self.widget.winfo_rootx()}+"
+                        f"{self.widget.winfo_rooty() + self.widget.winfo_height() + px(4)}")
+
+    def _hide(self, _event: Any = None) -> None:
+        if self.timer is not None:
+            with contextlib.suppress(tk.TclError):
+                self.widget.after_cancel(self.timer)
+            self.timer = None
+        if self.win is not None:
+            with contextlib.suppress(tk.TclError):
+                self.win.destroy()
+            self.win = None

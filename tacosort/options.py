@@ -28,37 +28,59 @@ class Option:
 
 GROUPS: list[tuple[str, list[Option]]] = [
     ("New mail", [
-        Option("hold_hours", "Leave new mail in the Inbox for a while first", "So you see it there before it "
-               "is filed.", unit="hours", default=24, high=720),
+        Option("hold_hours", "Wait before filing new mail", "New mail stays in your Inbox this long, so you "
+               "see it there first.", unit="hours", default=24, high=720),
         Option("recheck_inbox", "Look again once a day at mail left in the Inbox",
-               "What TacoSort learned since then may place it now."),
+               "TacoSort keeps learning. Once a day it checks the Inbox again and files what it now knows a "
+               "folder for."),
     ]),
     ("What stays in the Inbox", [
-        Option("keep_flagged", "Starred or flagged mail"),
-        Option("keep_contacts", "Mail from people you have written to"),
+        Option("keep_flagged", "Keep mail you starred or flagged",
+               "A star means \"this matters\", so TacoSort never moves it."),
+        Option("keep_contacts", "Keep mail from people you have written to",
+               "If you have sent someone an email, mail from them stays in your Inbox."),
     ]),
     ("Folders", [
-        Option("company_folders", "Give a company its own folder inside a category",
-               "For example Promotions/Crunchyroll, once it has sent a few emails."),
-        Option("unsure_to_company", "Robot mail TacoSort isn't sure about joins its company's folder"),
-        Option("unsure_to_folder", "Other robot mail it isn't sure about goes to its best-guess folder"),
-        Option("look_alike_min", "Treat an address that keeps sending look-alike emails as a robot",
-               "Counts once it has sent this many of the same kind.", unit="emails", default=5, low=2,
-               high=1000),
+        Option("company_folders", "Give a company that writes a lot its own folder",
+               "For example a Crunchyroll folder inside Promotions, once it has sent a few emails."),
+        Option("unsure_to_company", "Not sure what kind? Put it with that company's other mail",
+               "When TacoSort can't tell what kind of email a company sent, it goes into that company's folder."),
+        Option("unsure_to_folder", "Not sure what kind? Use the best guess",
+               "Other company mail TacoSort can't place for certain goes to the folder that fits best."),
+        Option("look_alike_min", "Spot senders that send the same kind of email again and again",
+               "After this many look-alike emails, TacoSort treats the sender as a company, not a person.",
+               unit="emails", default=5, low=2, high=1000),
     ]),
     ("Tidy old mail", [
-        Option("security_keep_days", "Move security emails to Security after", "Codes, sign-in alerts and "
-               "\"verify your email\" stay in the Inbox until then.", unit="days", default=3, high=365),
-        Option("business_keep_days", "Move people's business emails to Business after", unit="days",
+        Option("security_keep_days", "Put away security emails after a few days", "Codes and sign-in alerts "
+               "stay in the Inbox while they are fresh, then move to the Security folder.", unit="days",
                default=3, high=365),
-        Option("old_mail_days", "Move read emails left in the Inbox to Old mail after",
-               "Starred and unread mail always stays.", unit="days", default=180),
+        Option("business_keep_days", "Put away business emails from people after a few days", "They stay in "
+               "the Inbox first so you can answer, then move to the Business folder.", unit="days", default=3,
+               high=365),
+        Option("old_mail_days", "Put away old emails you have already read", "Read emails left in the Inbox "
+               "this long move to the Old mail folder. Unread and starred mail always stays.", unit="days",
+               default=180),
     ]),
     ("Learning", [
-        Option("learn_from_corrections", "Learn when I move an email TacoSort filed",
-               "Drag one back to the Inbox and that sender's mail stays there from then on."),
+        Option("learn_from_corrections", "Learn when I move an email back",
+               "Drag an email back to your Inbox and TacoSort leaves that sender's mail there from then on."),
     ]),
 ]
+
+# What each folder is for, in everyday words (models.DEFAULT_CATEGORIES has the exact wording the sorter uses).
+FOLDER_WORDS = {
+    "receipts": "Things you bought: orders, receipts and delivery updates.",
+    "finance": "Money: bank and card statements, bills and payments.",
+    "travel": "Trips: flights, hotels and bookings.",
+    "newsletters": "Newsletters you signed up for.",
+    "promotions": "Adverts: sales, coupons and deals.",
+    "social": "Social apps and forums telling you something happened.",
+    "notifications": "Automatic notices from apps and websites.",
+    "accounts": "Notes about your accounts: new terms, welcome emails, plan changes. Security codes stay in "
+                "the Inbox.",
+    "business": "Paperwork for running a business: tax forms, seller sign-ups, payouts.",
+}
 
 ALL_OPTIONS: list[Option] = [o for _, group in GROUPS for o in group]
 
@@ -70,7 +92,7 @@ def categories(cfg: AppConfig) -> list[tuple[str, str, str]]:
     out = []
     for key in keys:
         default_name, about = DEFAULT_CATEGORIES.get(key, (key.title(), ""))
-        out.append((key, cfg.categories.get(key) or default_name, about))
+        out.append((key, cfg.categories.get(key) or default_name, FOLDER_WORDS.get(key, about)))
     return out
 
 
@@ -132,7 +154,7 @@ def apply(cfg: AppConfig, values: Values) -> tuple[AppConfig, list[str]]:
     except (TypeError, ValueError):
         interval = 0
     if not 5 <= interval <= 1439:
-        problems.append("Sort every: pick between 5 and 1439 minutes.")
+        problems.append("Automatic sorting: pick between 5 and 1439 minutes.")
     else:
         changes["interval_minutes"] = interval
     if values.theme:

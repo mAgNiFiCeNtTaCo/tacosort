@@ -94,6 +94,8 @@ p { margin: 0 0 8px; }
 .btn.primary:active { filter: brightness(0.92); }
 .btn.quiet { border-color: transparent; background: transparent; color: var(--accent); }
 .btn:disabled { opacity: 0.5; }
+.hint { font-size: 13px; color: var(--muted); margin: 4px 2px 12px; }
+.intro { margin: 0 4px 12px; }
 .btn:focus-visible, .tabs button:focus-visible, .look:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
 
 .switch { position: relative; width: 52px; height: 32px; flex: none; }

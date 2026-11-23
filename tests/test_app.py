@@ -24,6 +24,14 @@ def test_every_option_is_a_real_setting():
     assert len({o.field for o in options.ALL_OPTIONS}) == len(options.ALL_OPTIONS)
 
 
+def test_every_switch_and_folder_says_what_it_does():
+    """Plain words beside each thing: no switch without a line of explanation."""
+    assert all(o.label and o.help for o in options.ALL_OPTIONS)
+    described = {key: about for key, _folder, about in options.categories(AppConfig())}
+    assert all(described.values()) and set(options.FOLDER_WORDS) <= set(described)
+    assert described["receipts"] == options.FOLDER_WORDS["receipts"]
+
+
 def test_read_shows_off_numbers_with_a_sensible_default():
     values = options.read(cfg(hold_hours=0, old_mail_days=180))
     assert values.options["hold_hours"] == (False, 24)          # unticked, 24 ready when ticked
@@ -264,6 +272,40 @@ def test_a_new_person_starts_on_accounts_with_a_welcome(window, tmp_path):
     assert w.page == "accounts" and w.status.get().startswith("No email accounts yet")
     assert w.welcome.winfo_manager() == "pack"
     assert w.home["last"][0].get() == "Not yet" and w.home["schedule"][0].get() == "Off"
+
+
+def test_the_start_guide_ticks_off_each_step(window, tmp_path, monkeypatch):
+    app, root = window
+    path = tmp_path / "config.yaml"
+    save_config(cfg(), path)
+    monkeypatch.setattr(app, "schedule_is_on", lambda: (False, "off"))
+    monkeypatch.setattr(app, "sort_status", lambda c: (None, 0))
+    w = app.App(root, path)
+    said = {key: shown.get() for key, (_dot, shown, _title) in w.steps.items()}
+    assert said["account"].endswith("(done)") and "(done)" not in said["preview"] + said["auto"]
+    assert w.welcome.winfo_manager() == "pack"           # two steps to go
+    w.previewed = True
+    w.sched_on = True
+    w._fill_home()
+    assert not w.welcome.winfo_manager()                 # all three done: the guide steps aside
+
+
+def test_help_page_and_tips(window, tmp_path):
+    app, root = window
+    from tacosort.widgets import ICONS, Tip
+
+    assert {name for name, _ in app.PAGES} == set(app.NAV_TIPS) and "help" in ICONS
+    assert len(app.HELP) >= 5 and all(q.endswith("?") and a for q, a in app.HELP)
+    path = tmp_path / "config.yaml"
+    save_config(cfg(), path)
+    w = app.App(root, path)
+    w.show("help")
+    assert w.title.get() == "Help"
+    tip = Tip(w.nav["help"], w.look, "Short answers.")
+    tip._show()
+    assert tip.win is not None
+    tip._hide()
+    assert tip.win is None and tip.timer is None
 
 
 def test_when_text():
