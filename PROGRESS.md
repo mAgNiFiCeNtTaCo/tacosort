@@ -21,13 +21,14 @@ server, Outlook through OAuth2) into one shared folder scheme and keeps it sorte
   owner's own programs, and stops through `POST /api/stop`.
 - **Live copy** (2026-11-01): the owner's task, phone page and Desktop + Start menu shortcuts run from
   `%LOCALAPPDATA%\Programs\TacoSort\venv`, not the project folder; update it after a change (CLAUDE.md).
-  It is at 0.2.1 (commit ed4b910) since 2026-11-23.
+  It is at 0.2.1 (commit ed4b910) since 2026-11-23, with imapclient 4.3.0 and PyYAML 6.0.4, on Python
+  3.14.10.
 - Security audit and slop check 2026-11-01: all findings fixed (b7fa6d0); releases from 0.2.0 on carry
   `SHA256SUMS.txt` and a build attestation.
 - Start: `tacosort setup` → `tacosort preview` → `tacosort run --backlog --yes` (old mail) →
   `tacosort schedule on` (keeps new mail sorted).
 - Tests: `.venv\Scripts\python -m pytest -q`: 745 passed, 2 skipped (POSIX-only), ruff clean.
-  GitHub CI green on Windows, macOS and Linux (2026-11-23, commit ed4b910). CI jobs stop after 20 minutes.
+  GitHub CI green on Windows, macOS and Linux (2026-11-23, commit a4136f0). CI jobs stop after 20 minutes.
 - In real use on three of the owner's accounts (app passwords, background schedule every 15 min):
   personal Gmail Inbox 59 -> 1, business Gmail 299 -> 18, Yahoo "Main"
   ~10,600 -> 174 (since 2026-10-29), plus mail younger than 24 hours. What stays: recent mail from
@@ -39,6 +40,40 @@ server, Outlook through OAuth2) into one shared folder scheme and keeps it sorte
 - Untested for real: Outlook/Google OAuth, AI sorting against the live API, the Windows at-logon trigger.
 
 ## Log
+### 2026-11-23: Updates (packages, GitHub actions, Python 3.14.10) and release-tag protection
+- Owner's asks: "do all updates and tag protection", then "update yes", "python update now".
+- **Build packages (a4136f0):** `packaging/requirements-build.txt` remade with `uv pip compile --universal
+  --upgrade`: imapclient 4.3.0, PyYAML 6.0.4, pyinstaller-hooks-contrib 2026.10. Its comments named a temp
+  path with the PC's user name; they now name `packaging/requirements-build.in`.
+- **Dependabot's two imapclient requests (#5, #6) not used:** they remade the pinned list on Linux only,
+  which dropped pefile, pywin32-ctypes and macholib and would have broken the Windows and macOS builds.
+  #5's failed check was a macOS 3.10 job that hit the time limit, not the change. CLAUDE.md says how to
+  remake the list.
+- **GitHub actions:** checkout 7.0.1, setup-python 7.1.0, upload-artifact 7.0.2, download-artifact 8.0.2,
+  pinned by commit and each checked against its tag. Requests #1-#4 closed themselves. A trial build
+  (run 45131683368) passed on Windows, macOS and Linux; the download step only runs on a real release, so
+  the next tag is its first real run (its inputs are unchanged).
+- **Tag protection:** GitHub ruleset "Release tags stay put" (id 27881516): `v*` tags can't be deleted,
+  moved or force-updated, no bypass. A bad release gets a new version number.
+- **Live copy:** imapclient 4.3.0 and PyYAML 6.0.4 installed; a read-only preview read all four mailboxes.
+  pip left a `~aml` folder in its site-packages (the phone page had the old file open); harmless.
+- **Python 3.14.7 -> 3.14.10 on this PC** (owner chose "Yes, stop and restart all", then "Yes, stop the
+  bot too"). Stopped: TacoVault server, Bathroom, Ship Desk, Document Vault, tacocam, the BabyG panel,
+  TacoSort's phone page, and the BabyG bot (through its keeper: `panel_stop.request`, wait for "The bot
+  is off", then the task). The first try failed with "files are still in use": the bot and its keeper run
+  hidden in session 0 and show no program path, so the first check missed them. All eight started again
+  (bot offline about 35 s; tacocam closed itself after its first start and stayed up on the second, no
+  error in its log). TacoSort's schedule was held off during the update. 745 tests pass on 3.14.10.
+- **Outside this project, at the owner's request:** on taco-server, winget updates (Git 2.56.1, Python
+  Launcher 3.15.2, Teams, App Installer); the subscriber bot kept running, no restart needed. Python there
+  was already 3.14.10 and the bot's code current. Left alone: three optional driver / firmware updates
+  (best done with a screen attached) and the bot's pinned davey / numpy (for the BabyG project's next
+  update, davey with a voice test). Tailscale on this PC 1.104.6 -> 1.104.7; it kept the name `taco`.
+  Not recorded in those projects' own notes.
+- **Open:** written release notes for 0.2.0 / 0.2.1; phone autostart on macOS / Linux.
+- Resources (2026-11-23 12:51, task + phone page running): 2 processes, 36 MB RAM, 0% CPU, port 8747,
+  disk 178 MB; whole PC CPU 5% of 32 threads, RAM 27.5 of 64 GB, GPU 28%.
+
 ### 2026-11-23: Plain words everywhere, a start guide and a Help page; release 0.2.1
 - Owner's ask: "lets make this super easy for a dum person or 5 year old could understand how to use each
   thing in the app". Done for everyone, with no "easy mode" switch (c90e261).

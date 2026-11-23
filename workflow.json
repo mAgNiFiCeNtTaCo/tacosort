@@ -527,6 +527,38 @@
       "lessons": [
         "Explanations beside the controls beat a manual: one line per button, written for someone who has never used the tool."
       ]
+    },
+    {
+      "title": "Updates (packages, GitHub actions, Python 3.14.10) and release-tag protection",
+      "date": "2026-11-23",
+      "summary": "One session updated the build's packages and GitHub actions, protected release tags, updated the live copy's mail library and, after stopping eight programs with the owner's OK, Python itself.",
+      "stages": [
+        {
+          "name": "Updates",
+          "kind": "solo",
+          "sessions": [
+            {
+              "id": "979da9f6",
+              "role": "Solo (continued)",
+              "start": "2026-11-23T01:32",
+              "end": "2026-11-23T12:55",
+              "did": "Pinned list remade with uv, four actions bumped, trial build green, tag ruleset, live copy on imapclient 4.3.0, Python 3.14.10 (eight programs stopped and restarted), server and Tailscale app updates at the owner's request",
+              "outcome": "done",
+              "files": 5
+            }
+          ]
+        }
+      ],
+      "events": [
+        {
+          "at": "2026-11-23T12:37",
+          "what": "Python update refused: the BabyG bot ran hidden on the same Python; the owner approved stopping it too"
+        }
+      ],
+      "lessons": [
+        "Before updating a shared Python, list its users from the scheduled tasks as well as the process list: tasks that run before sign-in are hidden.",
+        "Dependabot can't remake a pinned list built for all platforms; remake it by hand and build everywhere."
+      ]
     }
   ]
 }
