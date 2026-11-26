@@ -4,8 +4,8 @@ TacoSort (called TidyInbox until 2026-10-28) is an open-source (MIT) Python tool
 server, Outlook through OAuth2) into one shared folder scheme and keeps it sorted in the background.
 
 ## Where it stands (2026-11-26)
-- Public at https://github.com/mAgNiFiCeNtTaCo/tacosort. **Release 0.2.1** (2026-11-23,
-  https://github.com/mAgNiFiCeNtTaCo/tacosort/releases/tag/v0.2.1; 0.2.0 the same day, 0.1.0 2026-10-29): a one-file app
+- Public at https://github.com/mAgNiFiCeNtTaCo/tacosort. **Release 0.2.2** (2026-11-26,
+  https://github.com/mAgNiFiCeNtTaCo/tacosort/releases/tag/v0.2.2; 0.2.0 and 0.2.1 2026-11-23, 0.1.0 2026-10-29): a one-file app
   for Windows (15 MB), macOS Apple silicon (zip) and Linux, with `SHA256SUMS.txt`. With Python: `pipx
   install git+https://github.com/mAgNiFiCeNtTaCo/tacosort` (it is not on PyPI); `tacosort app` opens the
   window.
@@ -21,14 +21,14 @@ server, Outlook through OAuth2) into one shared folder scheme and keeps it sorte
   owner's own programs, and stops through `POST /api/stop`.
 - **Live copy** (2026-11-01): the owner's task, phone page and Desktop + Start menu shortcuts run from
   `%LOCALAPPDATA%\Programs\TacoSort\venv`, not the project folder; update it after a change (CLAUDE.md).
-  It is at 0.2.1 (commit ed4b910) since 2026-11-23, with imapclient 4.3.0 and PyYAML 6.0.4, on Python
+  It is at 0.2.2 (commit 54214b4) since 2026-11-26, with imapclient 4.3.0 and PyYAML 6.0.4, on Python
   3.14.10.
 - Security audit and slop check 2026-11-01: all findings fixed (b7fa6d0); releases from 0.2.0 on carry
   `SHA256SUMS.txt` and a build attestation.
 - Start: `tacosort setup` → `tacosort preview` → `tacosort run --backlog --yes` (old mail) →
   `tacosort schedule on` (keeps new mail sorted).
-- Tests: `.venv\Scripts\python -m pytest -q`: 745 passed, 2 skipped (POSIX-only), ruff clean.
-  GitHub CI green on Windows, macOS and Linux (2026-11-23, commit a4136f0). CI jobs stop after 20 minutes.
+- Tests: `.venv\Scripts\python -m pytest -q`: 748 passed, 2 skipped (POSIX-only), ruff clean.
+  GitHub CI green on Windows, macOS and Linux (2026-11-26, commit 54214b4). CI jobs stop after 20 minutes.
 - In real use on three of the owner's accounts (app passwords, background schedule every 15 min):
   personal Gmail Inbox 59 -> 1, business Gmail 299 -> 18, Yahoo "Main"
   ~10,600 -> 174 (since 2026-10-29), plus mail younger than 24 hours. What stays: recent mail from
@@ -40,6 +40,26 @@ server, Outlook through OAuth2) into one shared folder scheme and keeps it sorte
 - Untested for real: Outlook/Google OAuth, AI sorting against the live API, the Windows at-logon trigger.
 
 ## Log
+### 2026-11-26: Release 0.2.2: the phone page starts at sign-in on macOS and Linux
+- Owner's ask: "build next release and changes" (54214b4, tag `v0.2.2`).
+- **Phone page autostart beyond Windows:** `phone on` writes a LaunchAgent file on macOS
+  (`~/Library/LaunchAgents/com.tacosort.phone.plist`, RunAtLoad) or an XDG autostart entry on Linux
+  (`~/.config/autostart/tacosort-phone.desktop`); `phone off` removes it. Files only: no `launchctl` or
+  systemd call, because `phone on` already starts the page itself. The messages say "log in to your Mac"
+  / "log in to your desktop" there.
+- **Not tested for real:** only by tests (the file's contents, quoting of awkward paths, on / off twice),
+  which ran on GitHub's macOS and Linux machines. The release notes say so. A Linux box with no desktop
+  session won't start it (XDG autostart needs one).
+- Also in 0.2.2: the reduced-motion rule for the phone page, imapclient 4.3.0 and PyYAML 6.0.4 in the
+  built app, the newer GitHub actions. The release was the first real run of download-artifact 8 and it
+  worked. Release notes written (the draft's line about the Tailscale fix was removed: that shipped in
+  0.2.0).
+- **Owner: "update and restart yes":** live copy on 0.2.2, phone page off + on, answering over Tailscale.
+- Tests 748 passed, 2 skipped; ruff clean; CI and all three release builds green.
+- **Open:** someone with a Mac or a Linux desktop to confirm the sign-in start.
+- Resources (2026-11-26 04:42, task + phone page running): 2 processes, 36 MB RAM, 0% CPU, port 8747,
+  disk 182 MB; whole PC CPU 76% of 32 threads, RAM 29.5 of 64 GB, GPU 36%.
+
 ### 2026-11-26: The GitHub page: banner, pictures of every look, a diagram, release notes
 - Owner's ask: "update git to be super fancy with visuals and whatever you suggest" (5e84b40).
 - **README:** a banner (logo, the three promises, the window and the phone page), three live badges

@@ -585,6 +585,31 @@
         "Keep screenshot tools in the project (_team/tools), not the scratchpad: a restart empties it.",
         "Headless screenshots can catch a CSS transition mid-move: honour prefers-reduced-motion and force it."
       ]
+    },
+    {
+      "title": "Release 0.2.2: the phone page starts at sign-in on macOS and Linux",
+      "date": "2026-11-26",
+      "summary": "One session added the phone page's sign-in start for macOS and Linux as plain files, released 0.2.2 and updated the owner's live copy.",
+      "stages": [
+        {
+          "name": "Build and release",
+          "kind": "solo",
+          "sessions": [
+            {
+              "id": "979da9f6",
+              "role": "Solo (continued)",
+              "start": "2026-11-26T04:33",
+              "end": "2026-11-26T04:43",
+              "did": "LaunchAgent / XDG autostart files with tests, version 0.2.2, release notes, tag and builds green, live copy updated and phone page restarted",
+              "outcome": "done",
+              "files": 7
+            }
+          ]
+        }
+      ],
+      "lessons": [
+        "For a platform that can't be tried here, prefer a plain file the system reads at login over commands that must succeed, test the file's contents, and say in the release notes it is untested for real."
+      ]
     }
   ]
 }
