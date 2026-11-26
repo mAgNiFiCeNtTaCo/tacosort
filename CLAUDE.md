@@ -27,8 +27,9 @@ The owner isn't a programmer: explain in plain words.
   switches / icons drawn as PNGs in pure Python, fonts, text wrapping).
 - `tacosort/actions.py`: the mail work the window and the phone page share (preview, sort, undo, learn).
 - `tacosort/phone.py` + `tacosort/web/`: the phone page (`tacosort phone on|off|status|serve`): a stdlib
-  server on 127.0.0.1:8747 behind `tailscale serve`, answering only `phone_logins`; starts with Windows
-  through the HKCU Run value "TacoSort phone page".
+  server on 127.0.0.1:8747 behind `tailscale serve`, answering only `phone_logins`; starts at sign-in:
+  the HKCU Run value "TacoSort phone page" on Windows, a LaunchAgent file on macOS, an XDG autostart entry
+  on Linux (both written 2026-11-26, checked by tests only, never on a real Mac or Linux desktop).
 - `packaging/build.py` + `.github/workflows/build.yml`: the one-file app; a `v*` tag publishes a release.
 - `tests/`, `.github/workflows/ci.yml`, `examples/config.example.yaml`.
 - `_team/` (gitignored): station briefs and review reports; `_team/tools/` remakes the README's pictures

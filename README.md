@@ -417,7 +417,8 @@ is opened to the internet.
 3. On the phone, open the address it shows (like `https://your-pc.tailnet-name.ts.net:8747/`) and add it
    to your home screen (Safari: Share, Add to Home Screen).
 
-While it is on, it starts by itself when you sign in to Windows. **Turn off** (or `tacosort phone off`)
+While it is on, it starts by itself when you sign in (Windows, macOS, and Linux desktops such as GNOME
+or KDE). **Turn off** (or `tacosort phone off`)
 stops it and stops it starting. The computer has to be on for the phone page to work.
 
 **Who can use it:** only the Tailscale login that turned it on. Other people in your tailnet (a friend

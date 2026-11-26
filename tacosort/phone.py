@@ -19,6 +19,7 @@ import contextlib
 import http.client
 import json
 import os
+import plistlib
 import re
 import socket
 import subprocess
@@ -41,6 +42,8 @@ WEB = Path(__file__).parent / "web"
 ASSETS = Path(__file__).parent / "assets"
 RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
 RUN_VALUE = "TacoSort phone page"
+LAUNCHD_LABEL = "com.tacosort.phone"          # macOS: ~/Library/LaunchAgents/<label>.plist
+DESKTOP_FILE = "tacosort-phone.desktop"       # Linux: ~/.config/autostart/<file>
 MAX_BODY = 64_000
 MAX_LINES = 300
 LOCAL_NAMES = {"127.0.0.1", "localhost"}
@@ -440,7 +443,7 @@ def make_server(config_path: Path, port: int) -> Server:
 
 
 def serve(config_path: Path, port: int | None = None) -> None:
-    """Run the phone page until stopped (this is what starts with Windows)."""
+    """Run the phone page until stopped (this is what starts when you sign in)."""
     cfg = load_config(config_path)
     port = port or cfg.phone_port
     httpd = make_server(config_path, port)
@@ -512,13 +515,59 @@ def stop_running(port: int, wait: float = 5.0) -> bool:
     return False
 
 
+def autostart_kind() -> str:
+    if os.name == "nt":
+        return "windows"
+    return "macos" if sys.platform == "darwin" else "linux"
+
+
 def autostart_supported() -> bool:
-    return os.name == "nt"
+    return True
+
+
+def sign_in_words() -> str:
+    """How this computer's sign-in is called in a sentence ("... when you sign in to Windows")."""
+    return {"windows": "sign in to Windows", "macos": "log in to your Mac"}.get(autostart_kind(),
+                                                                              "log in to your desktop")
+
+
+def autostart_file() -> Path | None:
+    """The file that starts the phone page at login on macOS and Linux (Windows uses the registry)."""
+    kind = autostart_kind()
+    if kind == "macos":
+        return Path.home() / "Library" / "LaunchAgents" / f"{LAUNCHD_LABEL}.plist"
+    if kind == "linux":
+        base = os.environ.get("XDG_CONFIG_HOME") or str(Path.home() / ".config")
+        return Path(base) / "autostart" / DESKTOP_FILE
+    return None
+
+
+def build_launch_agent(command: list[str]) -> bytes:
+    """A LaunchAgent macOS loads at login. It is only a file: nothing is loaded now (turn_on starts the
+    page itself), so there is no launchctl call to go wrong."""
+    return plistlib.dumps({"Label": LAUNCHD_LABEL, "ProgramArguments": list(command), "RunAtLoad": True,
+                           "ProcessType": "Background"})
+
+
+def _desktop_quote(arg: str) -> str:
+    """One argument of a .desktop Exec line (Desktop Entry spec: quote, escape, and double the %)."""
+    for ch in ("\\", '"', "`", "$"):
+        arg = arg.replace(ch, "\\" + ch)
+    return '"' + arg.replace("%", "%%") + '"'
+
+
+def build_desktop_entry(command: list[str]) -> str:
+    """An XDG autostart entry: desktop sessions (GNOME, KDE, ...) run it at login."""
+    return ("[Desktop Entry]\nType=Application\nName=TacoSort phone page\n"
+            "Comment=Serves TacoSort to your own phone over Tailscale\n"
+            f"Exec={' '.join(_desktop_quote(a) for a in command)}\n"
+            "Terminal=false\nNoDisplay=true\nX-GNOME-Autostart-enabled=true\n")
 
 
 def autostart_is_on() -> bool:
-    if not autostart_supported():
-        return False
+    if autostart_kind() != "windows":
+        path = autostart_file()
+        return bool(path and path.is_file())
     import winreg
 
     try:
@@ -530,8 +579,23 @@ def autostart_is_on() -> bool:
 
 
 def set_autostart(config_path: Path | None, on: bool) -> None:
-    """Start the phone page when you sign in to Windows (your user only; nothing runs as administrator)."""
-    if not autostart_supported():
+    """Start the phone page when you sign in (your user only; nothing runs as administrator): a Run
+    value on Windows, a LaunchAgent file on macOS, an autostart entry on Linux."""
+    kind = autostart_kind()
+    if kind != "windows":
+        path = autostart_file()
+        if path is None:
+            return
+        if not on:
+            with contextlib.suppress(FileNotFoundError):
+                path.unlink()
+            return
+        command = serve_command(config_path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if kind == "macos":
+            path.write_bytes(build_launch_agent(command))
+        else:
+            path.write_text(build_desktop_entry(command), encoding="utf-8")
         return
     import winreg
 
@@ -651,8 +715,7 @@ def turn_on(config_path: Path) -> str:
     set_autostart(config_path, True)
     if not ping(cfg.phone_port) and not start_background(config_path, cfg.phone_port):
         raise PhoneError("The phone page didn't start. Try `tacosort phone serve` in a terminal to see why.")
-    later = " It starts by itself when you sign in to Windows." if autostart_supported() else (
-        " Run `tacosort phone serve` again after a restart.")
+    later = f" It starts by itself when you {sign_in_words()}."
     return (f"The phone page is on. On your phone (with Tailscale switched on, signed in as {login}) open "
             f"https://{name}:{cfg.phone_port}/ and add it to your home screen.{later}")
 
@@ -666,7 +729,8 @@ def turn_off(config_path: Path) -> str:
             tailscale_serve(cfg.phone_port, False)
     if not stopped:
         raise PhoneError("The phone page didn't stop. Restarting the computer stops it (it won't start again).")
-    return "The phone page is off, and it won't start with Windows."
+    return ("The phone page is off, and it won't start with Windows." if autostart_kind() == "windows"
+            else "The phone page is off, and it won't start when you log in.")
 
 
 def describe(config_path: Path) -> tuple[bool, str]:
@@ -676,9 +740,10 @@ def describe(config_path: Path) -> tuple[bool, str]:
     starts = autostart_is_on()
     if running:
         return True, f"The phone page is on at {address(cfg)}" + (
-            " and starts with Windows." if starts else " (it won't start again after a restart).")
+            (" and starts with Windows." if autostart_kind() == "windows" else " and starts when you log in.")
+            if starts else " (it won't start again after a restart).")
     if starts:
-        return False, "The phone page isn't running right now, but it starts when you sign in to Windows."
+        return False, f"The phone page isn't running right now, but it starts when you {sign_in_words()}."
     return False, "The phone page is off."
 
 

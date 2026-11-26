@@ -37,7 +37,7 @@ body:
     attributes:
       label: TacoSort version
       description: Output of `tacosort --version`
-      placeholder: tacosort 0.2.1
+      placeholder: tacosort 0.2.2
     validations:
       required: true
   - type: dropdown

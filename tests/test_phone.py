@@ -344,6 +344,38 @@ def test_windows_tools_by_full_path(monkeypatch):
         assert schedule.system32(r"C:\x\y.exe") == r"C:\x\y.exe"
 
 
+@pytest.mark.parametrize("kind", ["macos", "linux"])
+def test_autostart_file_on_mac_and_linux(monkeypatch, tmp_path, kind):
+    """Turning it on writes one file that the system runs at login; turning it off removes it."""
+    import plistlib
+
+    target = tmp_path / "deep" / ("agent.plist" if kind == "macos" else "tacosort-phone.desktop")
+    command = ["/opt/taco sort/python", "-P", "-m", "tacosort", "phone", "serve", "--config", "/home/a b/50%.yaml"]
+    monkeypatch.setattr(phone, "autostart_kind", lambda: kind)
+    monkeypatch.setattr(phone, "autostart_file", lambda: target)
+    monkeypatch.setattr(phone, "serve_command", lambda p: command)
+    assert not phone.autostart_is_on()
+    phone.set_autostart(tmp_path / "c.yaml", True)
+    assert phone.autostart_is_on()
+    if kind == "macos":
+        agent = plistlib.loads(target.read_bytes())
+        assert agent["ProgramArguments"] == command and agent["RunAtLoad"] is True
+        assert agent["Label"] == phone.LAUNCHD_LABEL
+    else:
+        text = target.read_text(encoding="utf-8")
+        assert text.startswith("[Desktop Entry]\n") and "Type=Application" in text
+        assert 'Exec="/opt/taco sort/python" "-P"' in text and '"/home/a b/50%%.yaml"' in text
+    assert "log in" in phone.sign_in_words()
+    phone.set_autostart(None, False)
+    phone.set_autostart(None, False)                       # off twice is fine
+    assert not phone.autostart_is_on() and not target.exists()
+
+
+def test_desktop_entry_quotes_awkward_arguments():
+    line = phone.build_desktop_entry(['a"b', "c$d", "e`f", "g\\h"]).splitlines()[4]
+    assert line == 'Exec="a\\"b" "c\\$d" "e\\`f" "g\\\\h"'
+
+
 @pytest.mark.skipif(os.name != "nt", reason="the Run key is Windows only")
 def test_autostart_registry(monkeypatch, tmp_path):
     import winreg
