@@ -5,6 +5,7 @@
 
 Writes to dist/:
   Windows  TacoSort-<version>-windows.exe   one file, double-click to open
+           TacoSort-<version>-windows-installer.zip   the same file plus "Install TacoSort" (packaging/windows/)
   macOS    TacoSort-<version>-macos.zip     TacoSort.app inside
   Linux    TacoSort-<version>-linux         one file (chmod +x, then run it)
 
@@ -67,6 +68,25 @@ def pyinstaller_args(kind: str) -> list[str]:
     return args
 
 
+INSTALLER_FILES = ("Install TacoSort.cmd", "install.ps1", "Uninstall TacoSort.cmd", "uninstall.ps1",
+                   "READ ME FIRST.txt")
+
+
+def windows_installer_zip(exe: Path, ver: str, out_dir: Path = DIST) -> Path:
+    """A zip holding one folder: TacoSort.exe and the scripts that install it for one person (no
+    administrator): a copy in %LOCALAPPDATA%\\Programs\\TacoSort plus Start menu and Desktop shortcuts."""
+    final = out_dir / f"TacoSort-{ver}-windows-installer.zip"
+    final.unlink(missing_ok=True)
+    folder = f"TacoSort-{ver}"
+    with zipfile.ZipFile(final, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as z:
+        z.write(exe, f"{folder}/TacoSort.exe")
+        for name in INSTALLER_FILES:
+            # Batch and PowerShell files need Windows line ends wherever the build's copy came from
+            text = (ROOT / "packaging" / "windows" / name).read_bytes().replace(b"\r\n", b"\n")
+            z.writestr(f"{folder}/{name}", text.replace(b"\n", b"\r\n"))
+    return final
+
+
 def smoke(app: Path) -> None:
     with tempfile.TemporaryDirectory() as tmp:
         out = Path(tmp) / "smoke.txt"
@@ -92,6 +112,8 @@ def main() -> int:
         final = DIST / f"TacoSort-{ver}-windows.exe"
         final.unlink(missing_ok=True)
         built.rename(final)
+        bundle = windows_installer_zip(final, ver)
+        print(f"Built {bundle} ({bundle.stat().st_size // (1024 * 1024)} MB)")
     elif kind == "macos":
         bundle = DIST / "TacoSort.app"
         smoke(bundle / "Contents" / "MacOS" / "TacoSort")

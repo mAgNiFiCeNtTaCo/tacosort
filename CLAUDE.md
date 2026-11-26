@@ -31,6 +31,10 @@ The owner isn't a programmer: explain in plain words.
   the HKCU Run value "TacoSort phone page" on Windows, a LaunchAgent file on macOS, an XDG autostart entry
   on Linux (both written 2026-11-26, checked by tests only, never on a real Mac or Linux desktop).
 - `packaging/build.py` + `.github/workflows/build.yml`: the one-file app; a `v*` tag publishes a release.
+  `packaging/windows/`: the Windows zip installer (`install.ps1` / `uninstall.ps1` behind two .cmd files;
+  per person, no administrator; uninstall removes only what it installed and switches the schedule and
+  phone page off only when they run that copy). Never try it with its default folder on the owner's PC:
+  that is the live copy's folder; tests pass `-Target` and `-ShortcutDirs`.
 - `tests/`, `.github/workflows/ci.yml`, `examples/config.example.yaml`.
 - `_team/` (gitignored): station briefs and review reports; `_team/tools/` remakes the README's pictures
   on made-up data (`demo_shots.py`, `phone_shots.py`, then `readme_art.py`; Windows, Edge and Pillow).

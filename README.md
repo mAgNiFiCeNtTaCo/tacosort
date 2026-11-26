@@ -122,17 +122,19 @@ No Python and no typing commands. Download one file from the
 
 | Your computer | File | Then |
 |---|---|---|
-| Windows 10 or 11 | `TacoSort-<version>-windows.exe` | Double-click it. |
+| Windows 10 or 11 | `TacoSort-<version>-windows-installer.zip` | Unzip it, then double-click **Install TacoSort**. It puts TacoSort in your own programs folder and adds Start menu and Desktop shortcuts. No administrator password needed. |
+| Windows, no installer | `TacoSort-<version>-windows.exe` | Double-click it. |
 | Mac with Apple silicon (M1 or newer) | `TacoSort-<version>-macos.zip` | Unzip it and drag TacoSort into Applications. |
 | Linux | `TacoSort-<version>-linux` | `chmod +x` it, then open it. |
 
-Keep the file where it is after the first start (Documents or Applications is fine): background
-sorting runs it from there. If you move it later, open it and click **Save settings** once.
+If you use a single file instead of the Windows installer, keep it where it is after the first start
+(Documents or Applications is fine): background sorting runs it from there. If you move it later, open it and click **Save settings** once.
 
 The app isn't signed (a signing certificate costs money every year), so the first start shows a
 warning:
 
-- **Windows** says *"Windows protected your PC"*: click **More info**, then **Run anyway**.
+- **Windows** says *"Windows protected your PC"*: click **More info**, then **Run anyway**. For
+  **Install TacoSort** it may ask *"Do you want to run this file?"*: click **Run**.
 - **macOS** says it *"can't be opened"*: right-click (or Control-click) TacoSort in Applications and
   choose **Open**, then **Open** again. Or: System Settings > Privacy & Security > **Open Anyway**.
 
@@ -481,6 +483,10 @@ you can cancel at your provider at any time.
 page, remove each
 account on the Accounts page (this also deletes its password from the keychain), then delete the
 TacoSort file. Optionally cancel the app passwords at your provider.
+
+If you used the Windows installer: after removing your accounts in the app, open
+`%LOCALAPPDATA%\Programs\TacoSort` and double-click **Uninstall TacoSort**. It switches off automatic
+sorting and the phone page, and removes the program and its shortcuts. Your settings stay.
 
 **The command line:**
 

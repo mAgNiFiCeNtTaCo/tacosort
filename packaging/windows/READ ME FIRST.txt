@@ -1,0 +1,27 @@
+TacoSort for Windows
+====================
+
+To install
+  1. Unzip this whole folder first (right-click the zip, "Extract All").
+  2. Double-click "Install TacoSort".
+     Windows may ask "Do you want to run this file?" because it came from the internet: click Run.
+     No administrator password is needed.
+
+What the installer does
+  - Copies TacoSort.exe to your own programs folder:
+      %LOCALAPPDATA%\Programs\TacoSort
+  - Adds a TacoSort shortcut to the Start menu and to your Desktop.
+  - Opens TacoSort.
+  It changes nothing else, and after it has finished you can delete this unzipped folder.
+
+To update
+  Download the newer zip and run "Install TacoSort" again. Your accounts and settings stay.
+
+To remove
+  Open %LOCALAPPDATA%\Programs\TacoSort and double-click "Uninstall TacoSort".
+  Your mail, your folders and your settings are not touched.
+
+Prefer no installer?
+  TacoSort.exe in this folder also runs by itself: put it somewhere it can stay and double-click it.
+
+Help and the full guide: https://github.com/mAgNiFiCeNtTaCo/tacosort
