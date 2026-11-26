@@ -60,7 +60,8 @@ server, Outlook through OAuth2) into one shared folder scheme and keeps it sorte
   fixed (two removed, the license one made live); a downloads badge was tried and dropped.
 - Checked: the rendered page looked at through a headless-browser picture
   (`_team/git-preview/github-page.png`); 745 tests pass; CI green.
-- **Open:** owner uploads the social preview picture; phone autostart on macOS / Linux; the next
+- The owner uploaded the social preview picture (2026-11-26, GitHub confirms a custom picture).
+- **Open:** phone autostart on macOS / Linux; the next
   release carries the reduced-motion rule.
 - Resources (2026-11-26 04:31, task + phone page running): 4 processes, 73 MB RAM, 0% CPU, port 8747,
   disk 181 MB; whole PC CPU 21% of 32 threads, RAM 41.2 of 64 GB, GPU 66%.
