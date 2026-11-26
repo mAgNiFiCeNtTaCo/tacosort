@@ -610,6 +610,31 @@
       "lessons": [
         "For a platform that can't be tried here, prefer a plain file the system reads at login over commands that must succeed, test the file's contents, and say in the release notes it is untested for real."
       ]
+    },
+    {
+      "title": "Release 0.2.3: a Windows installer in a zip",
+      "date": "2026-11-26",
+      "summary": "One session added a per-person Windows installer zip with an uninstaller, released 0.2.3 and drew a three-step install picture for the GitHub page.",
+      "stages": [
+        {
+          "name": "Build and release",
+          "kind": "solo",
+          "sessions": [
+            {
+              "id": "979da9f6",
+              "role": "Solo (continued)",
+              "start": "2026-11-26T04:43",
+              "end": "2026-11-26T13:05",
+              "did": "install.ps1 / uninstall.ps1 behind two .cmd files, the zip in the build, tests in scratch folders, version 0.2.3 released and its zip verified, install picture in the README and release notes",
+              "outcome": "done",
+              "files": 14
+            }
+          ]
+        }
+      ],
+      "lessons": [
+        "An installer whose default folder is the owner's live copy is tested with its folders passed in, and the report says the real double-click was not tried."
+      ]
     }
   ]
 }

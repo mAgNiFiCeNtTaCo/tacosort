@@ -127,6 +127,10 @@ No Python and no typing commands. Download one file from the
 | Mac with Apple silicon (M1 or newer) | `TacoSort-<version>-macos.zip` | Unzip it and drag TacoSort into Applications. |
 | Linux | `TacoSort-<version>-linux` | `chmod +x` it, then open it. |
 
+<p align="center">
+  <img src="docs/images/install-windows.png" width="820" alt="Install on Windows in three steps: download the installer zip from the Releases page, unzip it, double-click Install TacoSort">
+</p>
+
 If you use a single file instead of the Windows installer, keep it where it is after the first start
 (Documents or Applications is fine): background sorting runs it from there. If you move it later, open it and click **Save settings** once.
 

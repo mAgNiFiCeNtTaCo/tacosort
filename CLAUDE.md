@@ -37,7 +37,8 @@ The owner isn't a programmer: explain in plain words.
   that is the live copy's folder; tests pass `-Target` and `-ShortcutDirs`.
 - `tests/`, `.github/workflows/ci.yml`, `examples/config.example.yaml`.
 - `_team/` (gitignored): station briefs and review reports; `_team/tools/` remakes the README's pictures
-  on made-up data (`demo_shots.py`, `phone_shots.py`, then `readme_art.py`; Windows, Edge and Pillow).
+  on made-up data (`demo_shots.py`, `phone_shots.py`, then `readme_art.py`; `install_art.py` draws the three install
+  steps; Windows, Edge and Pillow).
 
 ## Commands
 - Tests: `.venv\Scripts\python -m pytest -q`; lint: `.venv\Scripts\ruff check .`

@@ -4,9 +4,10 @@ TacoSort (called TidyInbox until 2026-10-28) is an open-source (MIT) Python tool
 server, Outlook through OAuth2) into one shared folder scheme and keeps it sorted in the background.
 
 ## Where it stands (2026-11-26)
-- Public at https://github.com/mAgNiFiCeNtTaCo/tacosort. **Release 0.2.2** (2026-11-26,
-  https://github.com/mAgNiFiCeNtTaCo/tacosort/releases/tag/v0.2.2; 0.2.0 and 0.2.1 2026-11-23, 0.1.0 2026-10-29): a one-file app
-  for Windows (15 MB), macOS Apple silicon (zip) and Linux, with `SHA256SUMS.txt`. With Python: `pipx
+- Public at https://github.com/mAgNiFiCeNtTaCo/tacosort. **Release 0.2.3** (2026-11-26,
+  https://github.com/mAgNiFiCeNtTaCo/tacosort/releases/tag/v0.2.3; 0.2.2 the same day, 0.2.0 and 0.2.1 2026-11-23, 0.1.0 2026-10-29): a one-file app
+  for Windows (15 MB; since 0.2.3 also a zip with an installer, per person, no administrator), macOS Apple
+  silicon (zip) and Linux, with `SHA256SUMS.txt`. With Python: `pipx
   install git+https://github.com/mAgNiFiCeNtTaCo/tacosort` (it is not on PyPI); `tacosort app` opens the
   window.
 - **Plain words** (2026-11-23, in 0.2.1): every button has a line saying what it does, every switch and
@@ -21,14 +22,14 @@ server, Outlook through OAuth2) into one shared folder scheme and keeps it sorte
   owner's own programs, and stops through `POST /api/stop`.
 - **Live copy** (2026-11-01): the owner's task, phone page and Desktop + Start menu shortcuts run from
   `%LOCALAPPDATA%\Programs\TacoSort\venv`, not the project folder; update it after a change (CLAUDE.md).
-  It is at 0.2.2 (commit 54214b4) since 2026-11-26, with imapclient 4.3.0 and PyYAML 6.0.4, on Python
+  It is at 0.2.2 (commit 54214b4) since 2026-11-26 (0.2.3 changed only the packaging), with imapclient 4.3.0 and PyYAML 6.0.4, on Python
   3.14.10.
 - Security audit and slop check 2026-11-01: all findings fixed (b7fa6d0); releases from 0.2.0 on carry
   `SHA256SUMS.txt` and a build attestation.
 - Start: `tacosort setup` → `tacosort preview` → `tacosort run --backlog --yes` (old mail) →
   `tacosort schedule on` (keeps new mail sorted).
-- Tests: `.venv\Scripts\python -m pytest -q`: 748 passed, 2 skipped (POSIX-only), ruff clean.
-  GitHub CI green on Windows, macOS and Linux (2026-11-26, commit 54214b4). CI jobs stop after 20 minutes.
+- Tests: `.venv\Scripts\python -m pytest -q`: 751 passed, 2 skipped (POSIX-only), ruff clean.
+  GitHub CI green on Windows, macOS and Linux (2026-11-26, commit cc8b074). CI jobs stop after 20 minutes.
 - In real use on three of the owner's accounts (app passwords, background schedule every 15 min):
   personal Gmail Inbox 59 -> 1, business Gmail 299 -> 18, Yahoo "Main"
   ~10,600 -> 174 (since 2026-10-29), plus mail younger than 24 hours. What stays: recent mail from
@@ -37,9 +38,40 @@ server, Outlook through OAuth2) into one shared folder scheme and keeps it sorte
 - The owner's settings (not the defaults): `hold_hours: 24`, `unsure_to_folder: yes`,
   `security_keep_days: 3`, `business_keep_days: 3`, `old_mail_days: 180`, a rule for the school's domain ->
   `School` (Yahoo only).
-- Untested for real: Outlook/Google OAuth, AI sorting against the live API, the Windows at-logon trigger.
+- Untested for real: Outlook/Google OAuth, AI sorting against the live API, the Windows at-logon trigger, the phone
+  page's sign-in start on macOS / Linux, a real double-click of the Windows installer.
 
 ## Log
+### 2026-11-26: Release 0.2.3: a Windows installer in a zip
+- Owner's ask: "it also should have a zip installer" (cc8b074, tag `v0.2.3`), then "update git as needed
+  with fancyness".
+- **The zip** (`TacoSort-<ver>-windows-installer.zip`, 14.9 MB, made by `windows_installer_zip` in
+  `packaging/build.py`): one folder with `TacoSort.exe`, **Install TacoSort** and **Uninstall TacoSort**
+  (two `.cmd` files that call `install.ps1` / `uninstall.ps1` in `packaging/windows/`) and `READ ME
+  FIRST.txt`. Per person, no administrator: it copies the app to `%LOCALAPPDATA%\Programs\TacoSort`, adds
+  Start menu and Desktop shortcuts and opens it. Running a newer installer updates it.
+- **Uninstall removes only its own things:** its three files, the shortcuts that point at this copy, and
+  the folder when nothing else is in it. It switches the schedule and the phone page off only when the
+  task / the Run value run this copy. Settings and mail stay.
+- **Decided:** PowerShell scripts behind `.cmd` files, not a setup program (Inno Setup, MSI): no new build
+  tool and nothing to sign, and the scripts are short enough to read. The single exe stays as a download.
+- **Bugs found while testing:** a list passed after `powershell -File` arrives as one string (tests pass
+  one folder); shortcuts store the long form of a path, so a short `C:\Users\NAME~1` path never matched
+  (`Test-SamePath` compares full paths); the `.cmd` files need Windows line ends (`.gitattributes`, and the
+  build forces them).
+- **Checked:** 751 tests passed, 2 skipped; ruff clean; CI green on all three systems; install -> second
+  copy -> update -> uninstall in scratch folders with the real app; the published zip downloaded again
+  (checksum matches `SHA256SUMS.txt`, six files, the exe passes `--smoke-test`).
+- **Not checked:** a real double-click on the two `.cmd` files, and the default folders: on the owner's PC
+  that folder is the live copy's (rule added to CLAUDE.md). The live copy stays at 0.2.2; the app in 0.2.3
+  is the same.
+- **GitHub page:** `docs/images/install-windows.png` (three steps: download, unzip, double-click), drawn by
+  `_team/tools/install_art.py`, in the README's install section and at the top of the 0.2.3 release notes.
+  Slop scan of the README: no hits.
+- **Open:** someone to try the installer on a PC that is not the owner's.
+- Resources (2026-11-26 13:01, task + phone page running): 2 processes, 36 MB RAM, 0% CPU, port 8747,
+  disk 234 MB; whole PC CPU 5% of 32 threads, RAM 25.8 of 64 GB, GPU 28%.
+
 ### 2026-11-26: Release 0.2.2: the phone page starts at sign-in on macOS and Linux
 - Owner's ask: "build next release and changes" (54214b4, tag `v0.2.2`).
 - **Phone page autostart beyond Windows:** `phone on` writes a LaunchAgent file on macOS
