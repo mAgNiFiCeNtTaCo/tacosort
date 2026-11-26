@@ -1,3 +1,21 @@
+<p align="center">
+  <img src="docs/images/banner.png" width="880" alt="TacoSort: every inbox you have, tidy the same way. Never deletes mail, never marks it as read, and every move can be undone. The picture shows the TacoSort window and its phone page.">
+</p>
+
+<p align="center">
+  <a href="https://github.com/mAgNiFiCeNtTaCo/tacosort/releases/latest"><img alt="Download the latest release" src="https://img.shields.io/github/v/release/mAgNiFiCeNtTaCo/tacosort?label=download&color=0f766e"></a>
+  <a href="https://github.com/mAgNiFiCeNtTaCo/tacosort/actions/workflows/ci.yml"><img alt="Tests" src="https://github.com/mAgNiFiCeNtTaCo/tacosort/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/github/license/mAgNiFiCeNtTaCo/tacosort?color=0f766e"></a>
+</p>
+
+<p align="center">
+  <a href="#install"><b>Download</b></a> ·
+  <a href="#quick-start-about-5-minutes">Quick start</a> ·
+  <a href="#safety-promises">Safety promises</a> ·
+  <a href="#on-your-phone-optional-over-tailscale">On your phone</a> ·
+  <a href="#questions">Questions</a>
+</p>
+
 # TacoSort
 
 **Every email account you have, organized the same way, automatically, and kept that way.**
@@ -23,6 +41,27 @@ INBOX (2,341)                            INBOX (37)        <- people, replies, s
   ...                                      GitHub
                                          Accounts          <- terms of service, account changes
 ```
+
+## What it looks like
+
+Seven looks, picked with the coloured dots in the window: System (light or dark, like your computer),
+Light, Dark, Midnight, Taco, Rose and Contrast.
+
+<p align="center">
+  <img src="docs/images/looks.gif" width="820" alt="The Home page changing between the Light, Dark, Midnight, Taco, Rose and Contrast looks">
+</p>
+
+| Sort: look first, then move, and undo if you change your mind | Help: short answers to the usual questions |
+|:---:|:---:|
+| <img src="docs/images/app-sort.png" alt="The Sort page: five buttons, each with a line saying what it does, and a preview list showing which folder each email would go to and why"> | <img src="docs/images/app-help.png" alt="The Help page: questions such as Will it delete my email, each with a short answer"> |
+
+The same buttons on your phone, in the same looks ([how to turn it on](#on-your-phone-optional-over-tailscale)):
+
+<p align="center">
+  <img src="docs/images/phone.png" width="720" alt="The phone page: Home with automatic sorting on, Sort with its four buttons, and Settings in the Midnight look">
+</p>
+
+All pictures use made-up accounts and emails.
 
 ## What it does
 
@@ -124,7 +163,7 @@ resting the mouse on a button shows a short note.
 The coloured dots at the bottom of the bar change the look: System (light or dark, like your computer),
 Light, Dark, Midnight, Taco, Rose and Contrast (black and white with strong lines, the easiest to read).
 
-![The Settings page in the Dark look](docs/images/app-settings-dark.png)
+![The Settings page in the Midnight look: a switch for every setting with a line under it](docs/images/app-settings-midnight.png)
 
 ### With Python (for the command line)
 
@@ -257,7 +296,24 @@ Each run only looks at new mail.
   Inbox from now on, and that message is never moved again. Move it to another folder and future mail
   from that sender goes there. You just use your mail app as usual.
 
-How each decision is made is explained in [docs/how-it-works.md](docs/how-it-works.md).
+**How one email is decided.** The first question with a "yes" wins:
+
+```mermaid
+flowchart TD
+    A([A new email arrives]) --> B{"Starred, from someone you write to,<br>or a security code?"}
+    B -- yes --> INBOX["Stays in your Inbox"]
+    B -- no --> C{"Does one of your own rules fit?"}
+    C -- yes --> RULE["Does what your rule says"]
+    C -- no --> D{"Has TacoSort learned<br>where this sender goes?"}
+    D -- yes --> LEARNED["Goes to that folder"]
+    D -- no --> E{"Does it look like a receipt,<br>newsletter, promotion or notice?"}
+    E -- yes --> FOLDER["Goes to the matching folder"]
+    E -- "not sure" --> INBOX
+```
+
+Two things the picture leaves out: the optional AI (off unless you turn it on) gets a say just before
+"not sure", and automated mail TacoSort isn't sure about joins its company's folder once that company
+has sent 3 of them. The details are in [docs/how-it-works.md](docs/how-it-works.md).
 
 ## The folders, and changing them
 
