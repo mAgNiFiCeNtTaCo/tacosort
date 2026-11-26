@@ -31,7 +31,8 @@ The owner isn't a programmer: explain in plain words.
   through the HKCU Run value "TacoSort phone page".
 - `packaging/build.py` + `.github/workflows/build.yml`: the one-file app; a `v*` tag publishes a release.
 - `tests/`, `.github/workflows/ci.yml`, `examples/config.example.yaml`.
-- `_team/` (gitignored): station briefs and review reports.
+- `_team/` (gitignored): station briefs and review reports; `_team/tools/` remakes the README's pictures
+  on made-up data (`demo_shots.py`, `phone_shots.py`, then `readme_art.py`; Windows, Edge and Pillow).
 
 ## Commands
 - Tests: `.venv\Scripts\python -m pytest -q`; lint: `.venv\Scripts\ruff check .`

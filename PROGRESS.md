@@ -3,7 +3,7 @@
 TacoSort (called TidyInbox until 2026-10-28) is an open-source (MIT) Python tool that sorts every email account a person has (any IMAP
 server, Outlook through OAuth2) into one shared folder scheme and keeps it sorted in the background.
 
-## Where it stands (2026-11-23)
+## Where it stands (2026-11-26)
 - Public at https://github.com/mAgNiFiCeNtTaCo/tacosort. **Release 0.2.1** (2026-11-23,
   https://github.com/mAgNiFiCeNtTaCo/tacosort/releases/tag/v0.2.1; 0.2.0 the same day, 0.1.0 2026-10-29): a one-file app
   for Windows (15 MB), macOS Apple silicon (zip) and Linux, with `SHA256SUMS.txt`. With Python: `pipx
@@ -40,6 +40,31 @@ server, Outlook through OAuth2) into one shared folder scheme and keeps it sorte
 - Untested for real: Outlook/Google OAuth, AI sorting against the live API, the Windows at-logon trigger.
 
 ## Log
+### 2026-11-26: The GitHub page: banner, pictures of every look, a diagram, release notes
+- Owner's ask: "update git to be super fancy with visuals and whatever you suggest" (5e84b40).
+- **README:** a banner (logo, the three promises, the window and the phone page), three live badges
+  (release, tests, license), quick links, a "What it looks like" section (an animation of six looks, the
+  Sort and Help pages, three phone screens) and a Mermaid diagram of how one email is decided.
+- **Pictures** (`docs/images/`): banner.png, looks.gif, phone.png, app-home / app-sort / app-help /
+  app-settings-midnight.png, social-preview.png (1280x640). All are real screenshots on made-up data,
+  composed with Pillow (a tool on this PC, not a dependency). `app-settings-dark.png` removed.
+- **How to remake them** (`_team/tools/`, gitignored, kept because the scratchpad is emptied on a
+  restart): `demo_shots.py OUT themes pages` (the window), `phone_shots.py OUT themes tabs` (the phone
+  page, headless Edge), then `readme_art.py OUT`.
+- **On GitHub:** release notes written for 0.2.0 and 0.2.1; eight more topics; the repo's link points
+  to the latest release. The social preview picture has to be uploaded by the owner (Settings > Social
+  preview): GitHub has no API for it.
+- **Phone page:** `app.css` turns transitions off under `prefers-reduced-motion` (a switch was caught
+  mid-move in a picture). In `main`, not in the live copy or a release yet.
+- Slop check (`AI_SlopAgent/reports/2026-11-26-Email_Organization.md`): three static badges flagged and
+  fixed (two removed, the license one made live); a downloads badge was tried and dropped.
+- Checked: the rendered page looked at through a headless-browser picture
+  (`_team/git-preview/github-page.png`); 745 tests pass; CI green.
+- **Open:** owner uploads the social preview picture; phone autostart on macOS / Linux; the next
+  release carries the reduced-motion rule.
+- Resources (2026-11-26 04:31, task + phone page running): 4 processes, 73 MB RAM, 0% CPU, port 8747,
+  disk 181 MB; whole PC CPU 21% of 32 threads, RAM 41.2 of 64 GB, GPU 66%.
+
 ### 2026-11-23: Updates (packages, GitHub actions, Python 3.14.10) and release-tag protection
 - Owner's asks: "do all updates and tag protection", then "update yes", "python update now".
 - **Build packages (a4136f0):** `packaging/requirements-build.txt` remade with `uv pip compile --universal
